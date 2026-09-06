@@ -139,7 +139,7 @@ public class MediaConverter : IFormatConverter
 
         if (AudioFormats.Contains(src))
         {
-            List<string> list = ["mp3", "wav", "flac", "aac", "ogg", "m4a"];
+            List<string> list = ["mp3", "aac", "m4a", "wav", "flac", "ogg"];
             list.Remove(src);
             return list;
         }

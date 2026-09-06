@@ -1,4 +1,4 @@
-using JustConvert.Core.Converters;
+﻿using JustConvert.Core.Converters;
 
 namespace JustConvert.Core;
 
@@ -21,16 +21,21 @@ public class ConverterRegistry
 
     public IReadOnlyList<string> GetAvailableTargetFormats(string sourceExtension)
     {
-        var targets = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var targets = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var converter in _converters)
         {
             var formats = converter.GetSupportedTargetFormats(sourceExtension);
             foreach (var f in formats)
             {
-                targets.Add(f.ToLowerInvariant());
+                var lower = f.ToLowerInvariant();
+                if (seen.Add(lower))
+                {
+                    targets.Add(lower);
+                }
             }
         }
-        return targets.OrderBy(x => x).ToList();
+        return targets;
     }
 
     public IFormatConverter? FindConverter(string sourceExtension, string targetExtension)

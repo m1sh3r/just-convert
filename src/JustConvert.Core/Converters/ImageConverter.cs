@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 
 namespace JustConvert.Core.Converters;
@@ -11,6 +11,13 @@ public class ImageConverter : IFormatConverter
     {
         "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "avif", "heic"
     };
+
+    private static readonly string[] FormatsOrder =
+    [
+        "png", "jpg", "webp",
+        "ico", "bmp", "gif",
+        "tiff", "tga", "avif", "heic"
+    ];
 
     public bool CanConvert(string sourceExtension, string targetExtension)
     {
@@ -25,7 +32,7 @@ public class ImageConverter : IFormatConverter
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
         if (!SupportedFormats.Contains(src)) return [];
 
-        return SupportedFormats
+        return FormatsOrder
             .Where(f => !f.Equals(src, StringComparison.OrdinalIgnoreCase)
                 && !(src == "jpg" && f == "jpeg")
                 && !(src == "jpeg" && f == "jpg")

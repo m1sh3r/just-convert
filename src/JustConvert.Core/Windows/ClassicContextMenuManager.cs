@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
 
@@ -62,20 +62,57 @@ public class ClassicContextMenuManager
             key.SetValue("SubCommands", "");
         }
 
-        var subCommandsRoot = $@"{shellPath}\Shell";
-        foreach (var target in targetFormats)
+        try
         {
-            var verbKey = $@"{subCommandsRoot}\To_{target.ToUpperInvariant()}";
+            classesRoot.DeleteSubKeyTree($@"{shellPath}\Shell", false);
+        }
+        catch { }
+
+        var subCommandsRoot = $@"{shellPath}\Shell";
+        int? previousGroup = null;
+        for (int i = 0; i < targetFormats.Count; i++)
+        {
+            var target = targetFormats[i];
+            var verbKey = $@"{subCommandsRoot}\{i:D2}_To_{target.ToUpperInvariant()}";
             using var subKey = classesRoot.CreateSubKey(verbKey, true);
             if (subKey == null) continue;
 
             var title = I18n.GetSubMenuTitle(target);
 
             subKey.SetValue("MUIVerb", title);
-            
+
+            var currentGroup = GetFormatGroup(target);
+            if (previousGroup.HasValue && currentGroup != previousGroup.Value)
+            {
+                subKey.SetValue("SeparatorBefore", "");
+                subKey.SetValue("CommandFlags", 0x20, RegistryValueKind.DWord);
+            }
+            previousGroup = currentGroup;
+
             using var commandKey = subKey.CreateSubKey("command", true);
             commandKey?.SetValue("", $"\"{exePath}\" convert \"%1\" --to {target}");
         }
+    }
+
+    private static int GetFormatGroup(string format)
+    {
+        var fmt = format.TrimStart('.').ToLowerInvariant();
+        return fmt switch
+        {
+            "mp4-h264" or "mp4-h265" or "mp4" or "h264" or "h265" => 1,
+            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 2,
+            "frames" or "frames-png" or "frames-jpg" => 3,
+
+            "png" or "jpg" or "jpeg" or "webp" => 10,
+            "ico" or "bmp" or "gif" => 11,
+            "tiff" or "tif" or "tga" or "avif" or "heic" => 12,
+
+            "mp3" or "aac" or "m4a" => 20,
+            "wav" or "flac" => 21,
+            "ogg" => 22,
+
+            _ => 99
+        };
     }
 
     public void Unregister(InstallScope scope = InstallScope.CurrentUser)
