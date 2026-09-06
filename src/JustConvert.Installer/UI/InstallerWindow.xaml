@@ -14,7 +14,7 @@
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ui:ThemesDictionary />
+                <ui:ThemesDictionary Theme="Light" />
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
@@ -22,45 +22,39 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" MinHeight="48"/>
-            <RowDefinition/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ui:TitleBar x:Name="AppTitleBar" Title="{core:Loc SetupTitle}" ShowMaximize="False" ShowMinimize="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Height="48" VerticalAlignment="Center"/>
+        <ui:TitleBar Grid.Row="0" x:Name="AppTitleBar" Title="{core:Loc SetupTitle}" ShowMaximize="False" ShowMinimize="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Height="36"/>
 
-        <Grid Grid.Row="1" Margin="16,16,16,16">
-            <StackPanel x:Name="HeaderPanel" VerticalAlignment="Top" Margin="0,0,0,16"/>
-
-            <StackPanel x:Name="ConfigPanel" VerticalAlignment="Center">
-                <StackPanel Margin="0,0,0,16">
+        <Grid Grid.Row="1" Margin="24,12,24,16">
+            <StackPanel x:Name="ConfigPanel">
+                <StackPanel>
                     <TextBlock x:Name="TxtScopeLabel" Text="{core:Loc SetupScopeLabel}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,0,8"/>
                     <RadioButton x:Name="RadioCurrentUser" Content="{core:Loc SetupScopeCurrentUser}" IsChecked="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,0,6"/>
                     <RadioButton x:Name="RadioAllUsers" Content="{core:Loc SetupScopeAllUsers}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                 </StackPanel>
-
-                <StackPanel>
-                    <CheckBox x:Name="ChkFfmpeg" Content="{core:Loc SetupFfmpegCheckbox}" IsChecked="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Checked="ChkFfmpeg_Checked"/>
-                </StackPanel>
             </StackPanel>
 
-            <StackPanel x:Name="ProgressPanel" Visibility="Collapsed" VerticalAlignment="Center">
+            <StackPanel x:Name="ProgressPanel" Visibility="Collapsed">
                 <ProgressBar x:Name="ProgressBar" Height="6" IsIndeterminate="True" Margin="0,0,0,12"/>
-                <TextBlock x:Name="TxtStatus" FontSize="13" Foreground="{DynamicResource TextFillColorPrimaryBrush}" HorizontalAlignment="Center"/>
+                <TextBlock x:Name="TxtStatus" FontSize="13" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
             </StackPanel>
 
-            <StackPanel x:Name="SuccessPanel" Visibility="Collapsed" VerticalAlignment="Center">
-                <ui:InfoBar x:Name="InfoBarSuccess" Title="{core:Loc SetupSuccessHeader}" IsOpen="True" Severity="Success" IsClosable="False" Margin="0,0,0,12"/>
+            <StackPanel x:Name="SuccessPanel" Visibility="Collapsed">
+                <ui:InfoBar x:Name="InfoBarSuccess" Title="{core:Loc SetupSuccessHeader}" IsOpen="True" Severity="Success" IsClosable="False" Margin="0,0,0,16"/>
                 <TextBlock x:Name="TxtSuccessText" Text="{core:Loc SetupSuccessText}" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
             </StackPanel>
 
-            <StackPanel x:Name="ErrorPanel" Visibility="Collapsed" VerticalAlignment="Center">
+            <StackPanel x:Name="ErrorPanel" Visibility="Collapsed">
                 <ui:InfoBar x:Name="InfoBarError" Title="{core:Loc SetupErrorHeader}" IsOpen="True" Severity="Error" IsClosable="False" Margin="0,0,0,12"/>
                 <ui:TextBox x:Name="TxtErrorLog" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="120" VerticalScrollBarVisibility="Auto"/>
             </StackPanel>
         </Grid>
 
-        <Border Grid.Row="1" Background="Transparent" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="24,14" Margin="0,295,0,0">
+        <Border Grid.Row="2" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="24,14">
             <Grid>
                 <ui:Button x:Name="BtnUninstall" Content="{core:Loc SetupBtnUninstall}" Click="BtnUninstall_Click" HorizontalAlignment="Left" MinWidth="90"/>
 

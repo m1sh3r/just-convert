@@ -29,13 +29,6 @@ public partial class InstallerWindow : FluentWindow
             RadioCurrentUser.IsChecked = true;
         }
 
-        if (MediaConverter.FindFfmpegPath() != null)
-        {
-            ChkFfmpeg.IsChecked = false;
-            ChkFfmpeg.IsEnabled = false;
-            ChkFfmpeg.Content = I18n.T("SetupFfmpegFound");
-        }
-
         if (_startWithUninstall)
         {
             PerformUninstall();
@@ -46,7 +39,7 @@ public partial class InstallerWindow : FluentWindow
     {
         var scope = RadioAllUsers.IsChecked == true ? InstallScope.AllUsers : InstallScope.CurrentUser;
         var installDir = Program.GetInstallDirectory(scope);
-        var downloadFfmpeg = ChkFfmpeg.IsChecked == true;
+        var downloadFfmpeg = MediaConverter.FindFfmpegPath() == null;
 
         if (scope == InstallScope.AllUsers && !Program.IsAdministrator())
         {
@@ -60,11 +53,20 @@ public partial class InstallerWindow : FluentWindow
         BtnInstall.Visibility = Visibility.Collapsed;
         BtnUninstall.Visibility = Visibility.Collapsed;
 
-        var progress = new Progress<string>(msg =>
+        var progress = new Progress<(double? Percent, string Status)>(update =>
         {
             Dispatcher.Invoke(() =>
             {
-                TxtStatus.Text = msg;
+                TxtStatus.Text = update.Status;
+                if (update.Percent.HasValue && update.Percent.Value >= 0)
+                {
+                    ProgressBar.IsIndeterminate = false;
+                    ProgressBar.Value = update.Percent.Value;
+                }
+                else
+                {
+                    ProgressBar.IsIndeterminate = true;
+                }
             });
         });
 
@@ -113,11 +115,12 @@ public partial class InstallerWindow : FluentWindow
         BtnInstall.Visibility = Visibility.Collapsed;
         BtnUninstall.Visibility = Visibility.Collapsed;
 
-        var progress = new Progress<string>(msg =>
+        var progress = new Progress<(double? Percent, string Status)>(update =>
         {
             Dispatcher.Invoke(() =>
             {
-                TxtStatus.Text = msg;
+                TxtStatus.Text = update.Status;
+                ProgressBar.IsIndeterminate = true;
             });
         });
 
@@ -147,10 +150,5 @@ public partial class InstallerWindow : FluentWindow
     private void BtnClose_Click(object sender, RoutedEventArgs e)
     {
         Close();
-    }
-
-    private void ChkFfmpeg_Checked(object sender, RoutedEventArgs e)
-    {
-
     }
 }

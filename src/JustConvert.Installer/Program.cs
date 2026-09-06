@@ -46,7 +46,7 @@ public class Program
                 return 0;
             }
 
-            InstallCoreAsync(installDir, chosenScope, false).GetAwaiter().GetResult();
+            InstallCoreAsync(installDir, chosenScope, true).GetAwaiter().GetResult();
             return 0;
         }
 
@@ -62,9 +62,9 @@ public class Program
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "m1sh3r", "Just Convert");
     }
 
-    public static async Task InstallCoreAsync(string installDir, InstallScope scope, bool downloadFfmpeg, IProgress<string>? progress = null)
+    public static async Task InstallCoreAsync(string installDir, InstallScope scope, bool downloadFfmpeg, IProgress<(double? Percent, string Status)>? progress = null)
     {
-        progress?.Report(I18n.T("SetupCopying"));
+        progress?.Report((null, I18n.T("SetupCopying")));
 
         if (!Directory.Exists(installDir))
         {
@@ -104,19 +104,18 @@ public class Program
 
         if (downloadFfmpeg && MediaConverter.FindFfmpegPath() == null)
         {
-            progress?.Report(I18n.T("SetupDownloadingFfmpeg"));
-            await FfmpegInstaller.DownloadToDirectoryAsync(installDir);
+            await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress);
         }
 
-        progress?.Report(I18n.T("SetupRegistering"));
+        progress?.Report((null, I18n.T("SetupRegistering")));
         ClassicManager.Register(installedExe, scope);
         RegisterModernMenu(installDir, scope);
         RegisterUninstallEntry(installDir, scope);
     }
 
-    public static void UninstallCore(string installDir, InstallScope scope, IProgress<string>? progress = null)
+    public static void UninstallCore(string installDir, InstallScope scope, IProgress<(double? Percent, string Status)>? progress = null)
     {
-        progress?.Report(I18n.T("SetupUninstalling"));
+        progress?.Report((null, I18n.T("SetupUninstalling")));
 
         ClassicManager.Unregister(scope);
         UnregisterModernMenu();
