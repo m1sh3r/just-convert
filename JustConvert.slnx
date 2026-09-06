@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/JustConvert.Cli/JustConvert.Cli.csproj" />
+    <Project Path="src/JustConvert.Core/JustConvert.Core.csproj" />
+    <Project Path="src/JustConvert.Installer/JustConvert.Installer.csproj" />
+    <Project Path="src/JustConvert.ShellExtension/JustConvert.ShellExtension.csproj" />
+  </Folder>
+</Solution>
