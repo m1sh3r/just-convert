@@ -1,0 +1,24 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "JustConvert-Setup": {
+      "commandName": "Project"
+    },
+    "Silent Install": {
+      "commandName": "Project",
+      "commandLineArgs": "--silent"
+    },
+    "Silent Uninstall": {
+      "commandName": "Project",
+      "commandLineArgs": "--silent --uninstall"
+    },
+    "Silent Install (All Users)": {
+      "commandName": "Project",
+      "commandLineArgs": "--silent --allusers"
+    },
+    "Silent Uninstall (All Users)": {
+      "commandName": "Project",
+      "commandLineArgs": "--silent --uninstall --allusers"
+    }
+  }
+}
