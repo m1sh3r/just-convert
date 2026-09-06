@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Windows.Markup;
 
 namespace JustConvert.Core;
@@ -42,6 +42,8 @@ public static class I18n
             ["CliMissingArgs"] = "Error: Specify file path and target format (--to <format>).",
 
             ["FormatMp4"] = "MP4 (H.264, CQ 23)",
+            ["FormatMp4H264"] = "MP4 (H.264, CQ 23)",
+            ["FormatMp4H265"] = "MP4 (H.265, CQ 23)",
             ["FormatProRes422"] = "MOV (Apple ProRes 422)",
             ["FormatProRes4444"] = "MOV (Apple ProRes 4444)",
             ["FormatGif"] = "GIF (Animation)",
@@ -107,6 +109,8 @@ public static class I18n
             ["CliMissingArgs"] = "Ошибка: Укажите путь к файлу и целевой формат (--to <формат>).",
 
             ["FormatMp4"] = "MP4 (H.264, CQ 23)",
+            ["FormatMp4H264"] = "MP4 (H.264, CQ 23)",
+            ["FormatMp4H265"] = "MP4 (H.265, CQ 23)",
             ["FormatProRes422"] = "MOV (Apple ProRes 422)",
             ["FormatProRes4444"] = "MOV (Apple ProRes 4444)",
             ["FormatGif"] = "GIF (Анимация)",
@@ -176,7 +180,8 @@ public static class I18n
         return fmt switch
         {
             "frames" or "frames-png" or "frames-jpg" => T("MenuFrames"),
-            "mp4" or "mp4-h264" => T("FormatMp4"),
+            "mp4" or "mp4-h264" or "h264" => T("FormatMp4H264"),
+            "mp4-hevc" or "mp4-h265" or "hevc" or "h265" => T("FormatMp4H265"),
             "mov-prores422" or "prores422" or "prores" => T("FormatProRes422"),
             "mov-prores4444" or "prores4444" => T("FormatProRes4444"),
             "gif" => T("FormatGif"),

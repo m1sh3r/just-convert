@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.InteropServices;
 using JustConvert.Core;
 
@@ -182,7 +182,12 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
 
     public DynamicEnumExplorerCommand()
     {
-        string[] formats = ["mp4", "mov-prores422", "mov-prores4444", "frames", "png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic", "mp3", "wav", "flac", "aac", "ogg", "m4a"];
+        string[] formats =
+        [
+            "mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames",
+            "png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic",
+            "mp3", "wav", "flac", "aac", "ogg", "m4a"
+        ];
         _commands = formats.Select(f => (IExplorerCommand)new SubFormatExplorerCommand(f)).ToList();
         _index = 0;
     }

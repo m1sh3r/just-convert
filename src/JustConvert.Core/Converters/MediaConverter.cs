@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -20,7 +20,7 @@ public class MediaConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "mov-prores422", "mov-prores4444", "frames"
+        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "mov-prores422", "mov-prores4444", "frames"
     };
 
     public static string? FindFfmpegPath()
@@ -134,9 +134,7 @@ public class MediaConverter : IFormatConverter
 
         if (VideoFormats.Contains(src))
         {
-            List<string> list = ["mp4", "mov-prores422", "mov-prores4444", "frames"];
-            list.Remove(src);
-            return list;
+            return ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames"];
         }
 
         if (AudioFormats.Contains(src))
@@ -179,6 +177,7 @@ public class MediaConverter : IFormatConverter
         else if (targetExt.StartsWith("mov", StringComparison.OrdinalIgnoreCase)) outputExt = ".mov";
         else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase)) outputExt = ".webm";
         else if (targetExt.StartsWith("mkv", StringComparison.OrdinalIgnoreCase)) outputExt = ".mkv";
+        else if (targetExt is "h264" or "h265" or "hevc") outputExt = ".mp4";
         else outputExt = $".{targetExt}";
 
         if (string.IsNullOrWhiteSpace(outputPath))
@@ -195,9 +194,16 @@ public class MediaConverter : IFormatConverter
             {
                 outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_compressed.mp4");
             }
-            else if (targetExt is "mp4-hevc" or "hevc" or "h265")
+            else if (targetExt is "mp4-hevc" or "hevc" or "h265" or "mp4-h265")
             {
-                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_hevc.mp4");
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h265.mp4");
+            }
+            else if (targetExt is "mp4-h264" or "h264" or "mp4")
+            {
+                var isInputMp4 = string.Equals(Path.GetExtension(inputPath), ".mp4", StringComparison.OrdinalIgnoreCase);
+                outputPath = isInputMp4
+                    ? Path.Combine(dir, $"{fileNameWithoutExt}_h264.mp4")
+                    : Path.Combine(dir, $"{fileNameWithoutExt}.mp4");
             }
             else if (targetExt is "mov-prores422" or "prores422" or "prores")
             {
@@ -316,7 +322,7 @@ public class MediaConverter : IFormatConverter
             return $"-y -i \"{input}\" -c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k -movflags +faststart \"{output}\"";
         }
 
-        if (targetExt is "mp4" or "mp4-h264")
+        if (targetExt is "mp4" or "mp4-h264" or "h264")
         {
             return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart \"{output}\"";
         }
