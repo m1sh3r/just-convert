@@ -8,6 +8,8 @@ using JustConvert.Core.Converters;
 using JustConvert.Core.Windows;
 using JustConvert.Installer.UI;
 using Microsoft.Win32;
+using Wpf.Ui.Appearance;
+using Wpf.Ui.Markup;
 
 namespace JustConvert.Installer;
 
@@ -51,6 +53,8 @@ public class Program
         }
 
         var app = new Application();
+        app.Resources.MergedDictionaries.Add(new ThemesDictionary { Theme = ApplicationTheme.Light });
+        app.Resources.MergedDictionaries.Add(new ControlsDictionary());
         var window = new InstallerWindow(chosenScope, isUninstall);
         return app.Run(window);
     }
@@ -62,8 +66,9 @@ public class Program
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "m1sh3r", "Just Convert");
     }
 
-    public static async Task InstallCoreAsync(string installDir, InstallScope scope, bool downloadFfmpeg, IProgress<(double? Percent, string Status)>? progress = null)
+    public static async Task InstallCoreAsync(string installDir, InstallScope scope, bool downloadFfmpeg, IProgress<(double? Percent, string Status)>? progress = null, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         progress?.Report((null, I18n.T("SetupCopying")));
 
         if (!Directory.Exists(installDir))
@@ -102,10 +107,14 @@ public class Program
             throw new FileNotFoundException("just-convert executable or runtime files were not found in setup package.");
         }
 
+        ct.ThrowIfCancellationRequested();
+
         if (downloadFfmpeg && MediaConverter.FindFfmpegPath() == null)
         {
-            await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress);
+            await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
         }
+
+        ct.ThrowIfCancellationRequested();
 
         progress?.Report((null, I18n.T("SetupRegistering")));
         ClassicManager.Register(installedExe, scope);

@@ -10,6 +10,8 @@ namespace JustConvert.Installer.UI;
 public partial class InstallerWindow : FluentWindow
 {
     private readonly bool _startWithUninstall;
+    private bool _isWorking;
+  private CancellationTokenSource? _cts;
 
     public InstallerWindow(InstallScope initialScope = InstallScope.CurrentUser, bool startWithUninstall = false)
     {
@@ -48,10 +50,14 @@ public partial class InstallerWindow : FluentWindow
             return;
         }
 
+        _cts = new CancellationTokenSource();
+        _isWorking = true;
+
         ConfigPanel.Visibility = Visibility.Collapsed;
         ProgressPanel.Visibility = Visibility.Visible;
         BtnInstall.Visibility = Visibility.Collapsed;
         BtnUninstall.Visibility = Visibility.Collapsed;
+        BtnClose.Content = I18n.T("BtnCancel");
 
         var progress = new Progress<(double? Percent, string Status)>(update =>
         {
@@ -74,17 +80,29 @@ public partial class InstallerWindow : FluentWindow
         {
             await Task.Run(async () =>
             {
-                await Program.InstallCoreAsync(installDir, scope, downloadFfmpeg, progress);
-            });
+                await Program.InstallCoreAsync(installDir, scope, downloadFfmpeg, progress, _cts.Token);
+            }, _cts.Token);
 
+            _isWorking = false;
             ProgressPanel.Visibility = Visibility.Collapsed;
             SuccessPanel.Visibility = Visibility.Visible;
             InfoBarSuccess.Title = I18n.T("SetupSuccessHeader");
             TxtSuccessText.Text = I18n.T("SetupSuccessText");
             BtnClose.Content = I18n.T("BtnClose");
         }
+        catch (OperationCanceledException)
+        {
+            _isWorking = false;
+            try
+            {
+                Program.UninstallCore(installDir, scope);
+            }
+            catch { }
+            Close();
+        }
         catch (Exception ex)
         {
+            _isWorking = false;
             ProgressPanel.Visibility = Visibility.Collapsed;
             ErrorPanel.Visibility = Visibility.Visible;
             InfoBarError.Title = I18n.T("SetupErrorHeader");
@@ -147,8 +165,47 @@ public partial class InstallerWindow : FluentWindow
         }
     }
 
-    private void BtnClose_Click(object sender, RoutedEventArgs e)
+    private async void BtnClose_Click(object sender, RoutedEventArgs e)
     {
+        if (_isWorking)
+        {
+            if (await ConfirmCancelAsync())
+            {
+                _cts?.Cancel();
+            }
+            return;
+        }
+
         Close();
+    }
+
+    protected override async void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        if (_isWorking)
+        {
+            e.Cancel = true;
+            if (await ConfirmCancelAsync())
+            {
+                _cts?.Cancel();
+            }
+            return;
+        }
+
+        base.OnClosing(e);
+    }
+
+    private async Task<bool> ConfirmCancelAsync()
+    {
+        var msgBox = new Wpf.Ui.Controls.MessageBox
+        {
+            Title = I18n.T("SetupCancelConfirmTitle"),
+            Content = I18n.T("SetupCancelConfirmText"),
+            PrimaryButtonText = I18n.T("BtnYes"),
+            CloseButtonText = I18n.T("BtnNo"),
+            Owner = this
+        };
+
+        var result = await msgBox.ShowDialogAsync();
+        return result == Wpf.Ui.Controls.MessageBoxResult.Primary;
     }
 }

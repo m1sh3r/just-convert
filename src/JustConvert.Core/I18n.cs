@@ -21,6 +21,8 @@ public static class I18n
             ["BtnCopied"] = "Copied",
             ["BtnCancel"] = "Cancel",
             ["BtnClose"] = "Close",
+            ["BtnYes"] = "Yes",
+            ["BtnNo"] = "No",
 
             ["ImageLoading"] = "Loading image...",
             ["EncodingTo"] = "Encoding to {0}...",
@@ -66,7 +68,9 @@ public static class I18n
             ["SetupSuccessText"] = "Just Convert is ready. Right-click any supported file in File Explorer to convert.",
             ["SetupUninstallSuccessHeader"] = "Uninstallation Completed",
             ["SetupUninstallSuccessText"] = "Just Convert has been removed from your system.",
-            ["SetupErrorHeader"] = "Setup failed"
+            ["SetupErrorHeader"] = "Setup failed",
+            ["SetupCancelConfirmTitle"] = "Cancel Installation",
+            ["SetupCancelConfirmText"] = "Are you sure you want to cancel the installation?"
         },
         ["ru"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -82,6 +86,8 @@ public static class I18n
             ["BtnCopied"] = "Скопировано",
             ["BtnCancel"] = "Отмена",
             ["BtnClose"] = "Закрыть",
+            ["BtnYes"] = "Да",
+            ["BtnNo"] = "Нет",
 
             ["ImageLoading"] = "Загрузка изображения...",
             ["EncodingTo"] = "Кодирование в {0}...",
@@ -127,7 +133,9 @@ public static class I18n
             ["SetupSuccessText"] = "Just Convert успешно установлен. Для конвертации поддерживаемых файлов откройте контекстное меню и выберите «Конвертировать в...».",
             ["SetupUninstallSuccessHeader"] = "Удаление завершено",
             ["SetupUninstallSuccessText"] = "Just Convert был успешно удален с компьютера.",
-            ["SetupErrorHeader"] = "Ошибка установки"
+            ["SetupErrorHeader"] = "Ошибка установки",
+            ["SetupCancelConfirmTitle"] = "Отмена установки",
+            ["SetupCancelConfirmText"] = "Вы действительно хотите отменить установку?"
         }
     };
 
