@@ -125,9 +125,29 @@ public class Program
         {
             try
             {
+                foreach (var file in Directory.GetFiles(installDir, "*.*", SearchOption.AllDirectories))
+                {
+                    try { File.Delete(file); } catch { }
+                }
+
                 Directory.Delete(installDir, true);
             }
-            catch { }
+            catch
+            {
+                try
+                {
+                    var currentPid = Environment.ProcessId;
+                    var script = $"Wait-Process -Id {currentPid} -ErrorAction SilentlyContinue; Start-Sleep -Milliseconds 500; Remove-Item -LiteralPath '{installDir}' -Recurse -Force -ErrorAction SilentlyContinue";
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    });
+                }
+                catch { }
+            }
         }
     }
 
