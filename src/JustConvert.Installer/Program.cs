@@ -41,15 +41,50 @@ public class Program
 
         if (isSilent)
         {
-            var installDir = GetInstallDirectory(chosenScope);
-            if (isUninstall)
+            AttachConsole(ATTACH_PARENT_PROCESS);
+
+            try
             {
-                UninstallCore(installDir, chosenScope);
+                if (chosenScope == InstallScope.AllUsers && !IsAdministrator())
+                {
+                    return ElevateProcess(args);
+                }
+
+                var installDir = GetInstallDirectory(chosenScope);
+                if (isUninstall)
+                {
+                    Console.WriteLine("Uninstalling Just Convert...");
+                    var uninstallProgress = new Progress<(double? Percent, string Status)>(report =>
+                    {
+                        Console.WriteLine(report.Status);
+                    });
+                    UninstallCore(installDir, chosenScope, uninstallProgress);
+                    Console.WriteLine("Uninstall complete.");
+                    return 0;
+                }
+
+                Console.WriteLine("Installing Just Convert...");
+                var silentProgress = new Progress<(double? Percent, string Status)>(report =>
+                {
+                    if (report.Percent.HasValue)
+                    {
+                        Console.WriteLine($"{report.Status} ({report.Percent.Value:F0}%)");
+                    }
+                    else
+                    {
+                        Console.WriteLine(report.Status);
+                    }
+                });
+
+                InstallCoreAsync(installDir, chosenScope, true, silentProgress).GetAwaiter().GetResult();
+                Console.WriteLine("Installation complete.");
                 return 0;
             }
-
-            InstallCoreAsync(installDir, chosenScope, true).GetAwaiter().GetResult();
-            return 0;
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine($"Setup failed: {ex.Message}");
+                return 1;
+            }
         }
 
         var app = new Application();
@@ -195,6 +230,10 @@ public class Program
             return 1;
         }
     }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool AttachConsole(int dwProcessId);
+    private const int ATTACH_PARENT_PROCESS = -1;
 
     [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
     private static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
