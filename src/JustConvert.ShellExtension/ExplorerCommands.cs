@@ -307,7 +307,8 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
 
         string[] imageGroup1 = ["png", "jpg", "webp"];
         string[] imageGroup2 = ["ico", "bmp", "gif"];
-        string[] imageGroup3 = ["tiff", "tga", "avif", "heic"];
+        string[] imageGroup3 = ["jp2", "tiff", "tga"];
+        string[] imageGroup4 = ["pcx", "ppm", "avif"];
 
         string[] audioGroup1 = ["mp3", "aac", "m4a"];
         string[] audioGroup2 = ["wav", "flac"];
@@ -316,7 +317,7 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
         string[] allStandardFormats =
         [
             "mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames",
-            "png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic",
+            "png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif",
             "mp3", "aac", "m4a", "wav", "flac", "ogg"
         ];
         string[] reencodeGroup = ["reencode"];
@@ -339,10 +340,13 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
             new SubFormatExplorerCommand("bmp"),
             new SubFormatExplorerCommand("gif"),
             new SeparatorExplorerCommand(imageGroup2, imageGroup3),
-            new SubFormatExplorerCommand("tiff", hasSeparatorBefore: true),
+            new SubFormatExplorerCommand("jp2", hasSeparatorBefore: true),
+            new SubFormatExplorerCommand("tiff"),
             new SubFormatExplorerCommand("tga"),
+            new SeparatorExplorerCommand(imageGroup3, imageGroup4),
+            new SubFormatExplorerCommand("pcx", hasSeparatorBefore: true),
+            new SubFormatExplorerCommand("ppm"),
             new SubFormatExplorerCommand("avif"),
-            new SubFormatExplorerCommand("heic"),
 
             new SubFormatExplorerCommand("mp3"),
             new SubFormatExplorerCommand("aac"),

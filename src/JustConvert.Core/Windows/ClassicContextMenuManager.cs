@@ -17,7 +17,7 @@ public class ClassicContextMenuManager
 
     private static readonly string[] KnownExtensions =
     [
-        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico",
+        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic",
         "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v",
         "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus"
     ];
@@ -26,7 +26,7 @@ public class ClassicContextMenuManager
     {
         ["audio"] = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"],
         ["video"] = ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames", "reencode"],
-        ["image"] = ["png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic", "reencode"]
+        ["image"] = ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
     };
 
     private readonly ConverterRegistry _registry;

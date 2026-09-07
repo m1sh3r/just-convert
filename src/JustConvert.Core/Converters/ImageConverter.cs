@@ -9,14 +9,14 @@ public class ImageConverter : IFormatConverter
 
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "avif", "heic"
+        "png", "jpg", "jpeg", "webp", "ico", "bmp", "gif", "jp2", "jpeg2000", "tiff", "tif", "tga", "pcx", "ppm", "avif", "heic"
     };
 
     private static readonly string[] FormatsOrder =
     [
         "png", "jpg", "webp",
-        "ico", "bmp", "gif",
-        "tiff", "tga", "avif", "heic"
+        "ico", "bmp", "gif", "jp2",
+        "tiff", "tga", "pcx", "ppm", "avif"
     ];
 
     public bool CanConvert(string sourceExtension, string targetExtension)
@@ -26,10 +26,12 @@ public class ImageConverter : IFormatConverter
 
         if (tgt == "reencode")
         {
-            return SupportedFormats.Contains(src);
+            return SupportedFormats.Contains(src) && src is not "heic";
         }
 
-        return SupportedFormats.Contains(src) && SupportedFormats.Contains(tgt) && !src.Equals(tgt, StringComparison.OrdinalIgnoreCase);
+        if (src is "heic" && tgt is "heic") return false;
+
+        return SupportedFormats.Contains(src) && SupportedFormats.Contains(tgt) && !src.Equals(tgt, StringComparison.OrdinalIgnoreCase) && tgt is not "heic";
     }
 
     public IReadOnlyList<string> GetSupportedTargetFormats(string sourceExtension)
@@ -42,10 +44,16 @@ public class ImageConverter : IFormatConverter
                 && !(src == "jpg" && f == "jpeg")
                 && !(src == "jpeg" && f == "jpg")
                 && !(src == "tiff" && f == "tif")
-                && !(src == "tif" && f == "tiff"))
+                && !(src == "tif" && f == "tiff")
+                && !(src == "jp2" && f == "jpeg2000")
+                && !(src == "jpeg2000" && f == "jp2"))
             .ToList();
 
-        list.Add("reencode");
+        if (src is not "heic")
+        {
+            list.Add("reencode");
+        }
+
         return list;
     }
 
@@ -77,7 +85,13 @@ public class ImageConverter : IFormatConverter
             targetExt = sourceExt;
         }
 
-        var outputExt = (targetExt == "jpeg" ? "jpg" : targetExt == "tif" ? "tiff" : targetExt);
+        var outputExt = targetExt switch
+        {
+            "jpeg" => "jpg",
+            "jpeg2000" => "jp2",
+            "tif" => "tiff",
+            _ => targetExt
+        };
 
         if (string.IsNullOrWhiteSpace(outputPath))
         {
@@ -181,10 +195,11 @@ public class ImageConverter : IFormatConverter
     {
         return targetExt switch
         {
-            "jpg" or "jpeg" => $"-y -i \"{input}\" -q:v 2 \"{output}\"",
-            "webp" => $"-y -i \"{input}\" -c:v libwebp -quality 85 \"{output}\"",
-            "ico" => $"-y -i \"{input}\" -vf \"scale=256:256:force_original_aspect_ratio=decrease\" \"{output}\"",
-            _ => $"-y -i \"{input}\" \"{output}\""
+            "jpg" or "jpeg" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -vf \"split[s0][s1];[s0]drawbox=c=white:t=fill[bg];[bg][s1]overlay=format=auto\" -pix_fmt yuvj444p -q:v 2 -map_metadata 0 \"{output}\"",
+            "webp" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -c:v libwebp -quality 85 -map_metadata 0 \"{output}\"",
+            "ico" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -vf \"scale=256:256:force_original_aspect_ratio=decrease\" -map_metadata 0 \"{output}\"",
+            "jp2" or "jpeg2000" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -c:v libopenjpeg -map_metadata 0 \"{output}\"",
+            _ => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -map_metadata 0 \"{output}\""
         };
     }
 }
