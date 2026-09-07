@@ -233,7 +233,13 @@ public class MediaConverter : IFormatConverter
 
         try
         {
-            var arguments = BuildArguments(inputPath, outputPath, targetExt);
+            AudioStreamInfo? audioInfo = null;
+            if (AudioFormats.Contains(targetExt))
+            {
+                audioInfo = await ProbeAudioInfoAsync(ffmpeg, inputPath, ct);
+            }
+
+            var arguments = BuildArguments(inputPath, outputPath, targetExt, audioInfo);
             var startInfo = new ProcessStartInfo
             {
                 FileName = ffmpeg,
@@ -374,7 +380,7 @@ public class MediaConverter : IFormatConverter
         }
     }
 
-    private static string BuildArguments(string input, string output, string targetExt)
+    private static string BuildArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null)
     {
         if (targetExt is "frames" or "frames-png")
         {
@@ -429,29 +435,208 @@ public class MediaConverter : IFormatConverter
 
         if (targetExt == "mp3")
         {
-            return $"-y -i \"{input}\" -vn -ar 44100 -ac 2 -b:a 192k \"{output}\"";
+            var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
+            var hasAttachedPic = audioInfo?.HasAttachedPic ?? true;
+            if (hasAttachedPic)
+            {
+                return $"-y -i \"{input}\" -map 0:a:0 -map 0:v? -c:a libmp3lame -b:a {bitrate}k -c:v copy -disposition:v:0 attached_pic -id3v2_version 3 -metadata:s:v title=\"Album cover\" -metadata:s:v comment=\"Cover (front)\" -map_metadata 0 \"{output}\"";
+            }
+
+            return $"-y -i \"{input}\" -map 0:a:0 -c:a libmp3lame -b:a {bitrate}k -id3v2_version 3 -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "wav")
         {
-            return $"-y -i \"{input}\" -vn -c:a pcm_s16le \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:a:0 -c:a pcm_s16le -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "flac")
         {
-            return $"-y -i \"{input}\" -vn -c:a flac \"{output}\"";
+            var hasAttachedPic = audioInfo?.HasAttachedPic ?? true;
+            if (hasAttachedPic)
+            {
+                return $"-y -i \"{input}\" -map 0:a:0 -map 0:v? -c:a flac -c:v copy -disposition:v:0 attached_pic -map_metadata 0 \"{output}\"";
+            }
+
+            return $"-y -i \"{input}\" -map 0:a:0 -c:a flac -map_metadata 0 \"{output}\"";
         }
 
-        if (targetExt is "aac" or "m4a")
+        if (targetExt == "m4a")
         {
-            return $"-y -i \"{input}\" -vn -c:a aac -b:a 192k \"{output}\"";
+            var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
+            var aacCodec = string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase) ? "-c:a copy" : $"-c:a aac -b:a {bitrate}k";
+            var hasAttachedPic = audioInfo?.HasAttachedPic ?? true;
+            if (hasAttachedPic)
+            {
+                return $"-y -i \"{input}\" -map 0:a:0 -map 0:v? {aacCodec} -c:v copy -disposition:v:0 attached_pic -map_metadata 0 \"{output}\"";
+            }
+
+            return $"-y -i \"{input}\" -map 0:a:0 {aacCodec} -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt == "aac")
+        {
+            var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
+            var aacCodec = string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase) ? "-c:a copy" : $"-c:a aac -b:a {bitrate}k";
+            return $"-y -i \"{input}\" -map 0:a:0 {aacCodec} -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "ogg")
         {
-            return $"-y -i \"{input}\" -vn -c:a libvorbis -q:a 5 \"{output}\"";
+            var vorbisQuality = ResolveVorbisQuality(audioInfo);
+            return $"-y -i \"{input}\" -map 0:a:0 -c:a libvorbis -q:a {vorbisQuality} -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt == "opus")
+        {
+            var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
+            return $"-y -i \"{input}\" -map 0:a:0 -c:a libopus -b:a {bitrate}k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt == "wma")
+        {
+            var bitrate = ResolveAudioBitrate(audioInfo, 192, 320);
+            return $"-y -i \"{input}\" -map 0:a:0 -c:a wmav2 -b:a {bitrate}k -map_metadata 0 \"{output}\"";
         }
 
         return $"-y -i \"{input}\" \"{output}\"";
     }
+
+    private static async Task<AudioStreamInfo?> ProbeAudioInfoAsync(string ffmpegPath, string inputPath, CancellationToken ct)
+    {
+        try
+        {
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(3));
+
+            var psi = new ProcessStartInfo
+            {
+                FileName = ffmpegPath,
+                Arguments = $"-hide_banner -i \"{inputPath}\"",
+                UseShellExecute = false,
+                RedirectStandardError = true,
+                RedirectStandardOutput = true,
+                CreateNoWindow = true
+            };
+
+            using var proc = new Process { StartInfo = psi };
+            var stderr = new System.Text.StringBuilder();
+
+            proc.ErrorDataReceived += (_, e) =>
+            {
+                if (e.Data != null)
+                {
+                    lock (stderr)
+                    {
+                        stderr.AppendLine(e.Data);
+                    }
+                }
+            };
+
+            proc.Start();
+            proc.BeginErrorReadLine();
+
+            using var reg = cts.Token.Register(() =>
+            {
+                try
+                {
+                    if (!proc.HasExited)
+                    {
+                        proc.Kill();
+                    }
+                }
+                catch { }
+            });
+
+            await proc.WaitForExitAsync(CancellationToken.None);
+
+            return ParseAudioInfo(stderr.ToString());
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static AudioStreamInfo ParseAudioInfo(string output)
+    {
+        string? codec = null;
+        int? bitrate = null;
+
+        var streamMatch = Regex.Match(output, @"Stream #\d+:\d+.*?: Audio:\s*([a-zA-Z0-9_\-]+)(?:.*?,\s*(\d+)\s*kb/s)?", RegexOptions.IgnoreCase);
+        if (streamMatch.Success)
+        {
+            codec = streamMatch.Groups[1].Value.ToLowerInvariant();
+            if (streamMatch.Groups[2].Success && int.TryParse(streamMatch.Groups[2].Value, CultureInfo.InvariantCulture, out var parsedStreamBitrate) && parsedStreamBitrate > 0)
+            {
+                bitrate = parsedStreamBitrate;
+            }
+        }
+
+        if (bitrate == null)
+        {
+            var durationMatch = Regex.Match(output, @"Duration:.*?, bitrate:\s*(\d+)\s*kb/s", RegexOptions.IgnoreCase);
+            if (durationMatch.Success && int.TryParse(durationMatch.Groups[1].Value, CultureInfo.InvariantCulture, out var parsedDurationBitrate) && parsedDurationBitrate > 0)
+            {
+                bitrate = parsedDurationBitrate;
+            }
+        }
+
+        var hasAttachedPic = Regex.IsMatch(output, @"Stream #\d+:\d+.*?: Video:", RegexOptions.IgnoreCase);
+
+        var isLossless = (codec != null && (codec.StartsWith("pcm", StringComparison.OrdinalIgnoreCase) ||
+                                            codec is "flac" or "alac" or "wavpack" or "ape" or "truehd"))
+                         || (bitrate.HasValue && bitrate.Value > 320);
+
+        return new AudioStreamInfo(bitrate, hasAttachedPic, codec, isLossless);
+    }
+
+    private static int ResolveAudioBitrate(AudioStreamInfo? info, int defaultKbps, int maxKbps)
+    {
+        if (info?.BitrateKbps is { } kbps && kbps > 0)
+        {
+            if (info.IsLossless || kbps >= maxKbps)
+            {
+                return maxKbps;
+            }
+
+            int[] standardBitrates = [64, 96, 128, 160, 192, 224, 256, 320];
+            var closest = standardBitrates[0];
+            var minDiff = Math.Abs(kbps - closest);
+
+            for (int i = 1; i < standardBitrates.Length; i++)
+            {
+                var diff = Math.Abs(kbps - standardBitrates[i]);
+                if (diff < minDiff)
+                {
+                    minDiff = diff;
+                    closest = standardBitrates[i];
+                }
+            }
+
+            return Math.Min(closest, maxKbps);
+        }
+
+        return defaultKbps;
+    }
+
+    private static int ResolveVorbisQuality(AudioStreamInfo? info)
+    {
+        if (info == null || info.IsLossless || info.BitrateKbps == null || info.BitrateKbps >= 320)
+        {
+            return 9;
+        }
+
+        return info.BitrateKbps switch
+        {
+            >= 256 => 8,
+            >= 192 => 6,
+            >= 160 => 5,
+            >= 128 => 4,
+            >= 96 => 3,
+            _ => 2
+        };
+    }
+
+    private sealed record AudioStreamInfo(int? BitrateKbps, bool HasAttachedPic, string? Codec, bool IsLossless);
 }
