@@ -21,6 +21,7 @@ public class Program
         string? inputPath = null;
         string? targetFormat = null;
         string? outputPath = null;
+        bool isSilent = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -38,6 +39,10 @@ public class Program
             {
                 outputPath = args[++i];
             }
+            else if (arg is "--silent" or "-s" or "/silent" or "/s" or "--no-gui")
+            {
+                isSilent = true;
+            }
             else if (!arg.StartsWith('-') && !arg.StartsWith('/'))
             {
                 if (inputPath == null)
@@ -53,31 +58,46 @@ public class Program
 
         if (string.IsNullOrWhiteSpace(inputPath) || string.IsNullOrWhiteSpace(targetFormat))
         {
-            ShowErrorWindow(inputPath ?? "", targetFormat ?? "", I18n.T("CliMissingArgs"), null);
-            return 1;
+            if (isSilent)
+            {
+                Console.Error.WriteLine(I18n.T("CliMissingArgs"));
+                return 1;
+            }
+            return RunWindow(() => ConversionProgressWindow.CreateForError(inputPath ?? "", targetFormat ?? "", I18n.T("CliMissingArgs"), null));
         }
 
         if (!File.Exists(inputPath))
         {
-            ShowErrorWindow(inputPath, targetFormat, I18n.T("FileNotFound", inputPath), null);
-            return 1;
+            if (isSilent)
+            {
+                Console.Error.WriteLine(I18n.T("FileNotFound", inputPath));
+                return 1;
+            }
+            return RunWindow(() => ConversionProgressWindow.CreateForError(inputPath, targetFormat, I18n.T("FileNotFound", inputPath), null));
         }
 
-        var result = Registry.ConvertFileAsync(inputPath, targetFormat, outputPath).GetAwaiter().GetResult();
-        if (!result.Success)
+        if (isSilent)
         {
-            ShowErrorWindow(inputPath, targetFormat, result.ErrorMessage ?? I18n.T("ErrorDefault"), result.FullLog);
-            return 1;
+            var result = Registry.ConvertFileAsync(inputPath, targetFormat, outputPath).GetAwaiter().GetResult();
+            if (!result.Success)
+            {
+                Console.Error.WriteLine(result.ErrorMessage ?? I18n.T("ErrorDefault"));
+                return 1;
+            }
+            return 0;
         }
 
-        return 0;
+        return RunWindow(() => new ConversionProgressWindow(inputPath, targetFormat, outputPath));
     }
 
-    private static void ShowErrorWindow(string inputPath, string targetFormat, string errorMessage, string? errorLog)
+    private static int RunWindow(Func<ConversionProgressWindow> windowFactory)
     {
         var app = new Application();
-        var window = new ErrorWindow(inputPath, targetFormat, errorMessage, errorLog);
+        app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
+        app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
+        var window = windowFactory();
         app.Run(window);
+        return window.ExitCode;
     }
 }
 
