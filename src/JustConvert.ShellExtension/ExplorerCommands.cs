@@ -279,7 +279,6 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
 
         _commands =
         [
-            // Video
             new SubFormatExplorerCommand("mp4-h264"),
             new SubFormatExplorerCommand("mp4-h265"),
             new SeparatorExplorerCommand(videoGroup1, videoGroup2),
@@ -288,7 +287,6 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
             new SeparatorExplorerCommand(videoGroup2, videoGroup3),
             new SubFormatExplorerCommand("frames", hasSeparatorBefore: true),
 
-            // Images
             new SubFormatExplorerCommand("png"),
             new SubFormatExplorerCommand("jpg"),
             new SubFormatExplorerCommand("webp"),
@@ -302,7 +300,6 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
             new SubFormatExplorerCommand("avif"),
             new SubFormatExplorerCommand("heic"),
 
-            // Audio
             new SubFormatExplorerCommand("mp3"),
             new SubFormatExplorerCommand("aac"),
             new SubFormatExplorerCommand("m4a"),
