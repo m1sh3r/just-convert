@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using JustConvert.Core;
 
@@ -37,17 +37,20 @@ public class TopLevelExplorerCommand : IExplorerCommand
 
     public int GetState(IntPtr psiItemArray, bool fOkToBeSlow, out EXPCMDSTATE pCmdState)
     {
-        var filePath = GetFirstFilePath(psiItemArray);
-        if (string.IsNullOrEmpty(filePath))
+        var paths = GetFilePaths(psiItemArray);
+        if (paths.Count == 0)
         {
             pCmdState = EXPCMDSTATE.ECS_HIDDEN;
             return 0;
         }
 
-        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        var available = Registry.GetAvailableTargetFormats(ext);
+        var isAnyConvertible = paths.Any(p =>
+        {
+            var ext = Path.GetExtension(p).TrimStart('.').ToLowerInvariant();
+            return Registry.GetAvailableTargetFormats(ext).Count > 0;
+        });
 
-        pCmdState = available.Count > 0 ? EXPCMDSTATE.ECS_ENABLED : EXPCMDSTATE.ECS_HIDDEN;
+        pCmdState = isAnyConvertible ? EXPCMDSTATE.ECS_ENABLED : EXPCMDSTATE.ECS_HIDDEN;
         return 0;
     }
 
@@ -65,28 +68,38 @@ public class TopLevelExplorerCommand : IExplorerCommand
         return 0;
     }
 
-    public static string? GetFirstFilePath(IntPtr psiItemArray)
+    public static List<string> GetFilePaths(IntPtr psiItemArray)
     {
-        if (psiItemArray == IntPtr.Zero) return null;
+        var list = new List<string>();
+        if (psiItemArray == IntPtr.Zero) return list;
 
         try
         {
             var array = (IShellItemArray)Marshal.GetObjectForIUnknown(psiItemArray);
             if (array.GetCount(out var count) == 0 && count > 0)
             {
-                if (array.GetItemAt(0, out var item) == 0 && item != null)
+                const uint SIGDN_FILESYSPATH = 0x80058000;
+                for (uint i = 0; i < count; i++)
                 {
-                    const uint SIGDN_FILESYSPATH = 0x80058000;
-                    if (item.GetDisplayName(SIGDN_FILESYSPATH, out var path) == 0)
+                    if (array.GetItemAt(i, out var item) == 0 && item != null)
                     {
-                        return path;
+                        if (item.GetDisplayName(SIGDN_FILESYSPATH, out var path) == 0 && !string.IsNullOrEmpty(path))
+                        {
+                            list.Add(path);
+                        }
                     }
                 }
             }
         }
         catch { }
 
-        return null;
+        return list;
+    }
+
+    public static string? GetFirstFilePath(IntPtr psiItemArray)
+    {
+        var paths = GetFilePaths(psiItemArray);
+        return paths.Count > 0 ? paths[0] : null;
     }
 }
 
@@ -132,42 +145,50 @@ public class SubFormatExplorerCommand : IExplorerCommand
 
     public int GetState(IntPtr psiItemArray, bool fOkToBeSlow, out EXPCMDSTATE pCmdState)
     {
-        var filePath = TopLevelExplorerCommand.GetFirstFilePath(psiItemArray);
-        if (string.IsNullOrEmpty(filePath))
+        var paths = TopLevelExplorerCommand.GetFilePaths(psiItemArray);
+        if (paths.Count == 0)
         {
             pCmdState = EXPCMDSTATE.ECS_HIDDEN;
             return 0;
         }
 
-        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        var converter = Registry.FindConverter(ext, _targetFormat);
-        pCmdState = converter != null ? EXPCMDSTATE.ECS_ENABLED : EXPCMDSTATE.ECS_HIDDEN;
+        var isAnyConvertible = paths.Any(p =>
+        {
+            var ext = Path.GetExtension(p).TrimStart('.').ToLowerInvariant();
+            return Registry.FindConverter(ext, _targetFormat) != null;
+        });
+
+        pCmdState = isAnyConvertible ? EXPCMDSTATE.ECS_ENABLED : EXPCMDSTATE.ECS_HIDDEN;
         return 0;
     }
 
     public int Invoke(IntPtr psiItemArray, IntPtr pbc)
     {
-        var filePath = TopLevelExplorerCommand.GetFirstFilePath(psiItemArray);
-        if (string.IsNullOrEmpty(filePath)) return 0;
+        var paths = TopLevelExplorerCommand.GetFilePaths(psiItemArray);
+        if (paths.Count == 0) return 0;
 
+        var isBatch = paths.Count > 1;
         var exePath = Path.Combine(AppContext.BaseDirectory, "just-convert.exe");
         if (!File.Exists(exePath))
         {
             exePath = "just-convert.exe";
         }
 
-        var startInfo = new ProcessStartInfo
+        foreach (var filePath in paths)
         {
-            FileName = exePath,
-            Arguments = $"convert \"{filePath}\" --to {_targetFormat}",
-            UseShellExecute = true
-        };
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = exePath,
+                Arguments = $"convert \"{filePath}\" --to {_targetFormat}",
+                UseShellExecute = true
+            };
 
-        try
-        {
-            Process.Start(startInfo);
+            try
+            {
+                Process.Start(startInfo);
+            }
+            catch { }
         }
-        catch { }
 
         return 0;
     }
@@ -226,16 +247,24 @@ public class SeparatorExplorerCommand : IExplorerCommand
 
     public int GetState(IntPtr psiItemArray, bool fOkToBeSlow, out EXPCMDSTATE pCmdState)
     {
-        var filePath = TopLevelExplorerCommand.GetFirstFilePath(psiItemArray);
-        if (string.IsNullOrEmpty(filePath))
+        var paths = TopLevelExplorerCommand.GetFilePaths(psiItemArray);
+        if (paths.Count == 0)
         {
             pCmdState = EXPCMDSTATE.ECS_HIDDEN;
             return 0;
         }
 
-        var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-        var hasBefore = _beforeFormats.Any(f => Registry.FindConverter(ext, f) != null);
-        var hasAfter = _afterFormats.Any(f => Registry.FindConverter(ext, f) != null);
+        var hasBefore = paths.Any(p =>
+        {
+            var ext = Path.GetExtension(p).TrimStart('.').ToLowerInvariant();
+            return _beforeFormats.Any(f => Registry.FindConverter(ext, f) != null);
+        });
+
+        var hasAfter = paths.Any(p =>
+        {
+            var ext = Path.GetExtension(p).TrimStart('.').ToLowerInvariant();
+            return _afterFormats.Any(f => Registry.FindConverter(ext, f) != null);
+        });
 
         pCmdState = (hasBefore && hasAfter) ? EXPCMDSTATE.ECS_ENABLED : EXPCMDSTATE.ECS_HIDDEN;
         return 0;

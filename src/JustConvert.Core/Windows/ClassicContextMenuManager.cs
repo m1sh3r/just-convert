@@ -1,4 +1,4 @@
-﻿using System.Runtime.InteropServices;
+using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Win32;
 
@@ -22,6 +22,13 @@ public class ClassicContextMenuManager
         "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus"
     ];
 
+    private static readonly Dictionary<string, string[]> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["audio"] = ["mp3", "aac", "m4a", "wav", "flac", "ogg"],
+        ["video"] = ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames"],
+        ["image"] = ["png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic"]
+    };
+
     private readonly ConverterRegistry _registry;
 
     public ClassicContextMenuManager(ConverterRegistry registry)
@@ -39,20 +46,23 @@ public class ClassicContextMenuManager
 
         if (classesRoot == null) return;
 
+        foreach (var (category, formats) in CategoryTargetFormats)
+        {
+            RegisterKey(classesRoot, $@"SystemFileAssociations\{category}\shell\{VerbRoot}", formats, executablePath);
+        }
+
         foreach (var ext in KnownExtensions)
         {
             var targets = _registry.GetAvailableTargetFormats(ext);
             if (targets.Count == 0) continue;
 
-            RegisterForExtension(classesRoot, ext, targets, executablePath);
+            var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
+            RegisterKey(classesRoot, $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}", targets, executablePath);
         }
     }
 
-    private static void RegisterForExtension(RegistryKey classesRoot, string ext, IReadOnlyList<string> targetFormats, string exePath)
+    private static void RegisterKey(RegistryKey classesRoot, string shellPath, IReadOnlyList<string> targetFormats, string exePath)
     {
-        var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
-        var shellPath = $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}";
-
         using (var key = classesRoot.CreateSubKey(shellPath, true))
         {
             if (key == null) return;
@@ -60,6 +70,7 @@ public class ClassicContextMenuManager
             key.SetValue("MUIVerb", I18n.MenuTitle);
             key.SetValue("Icon", $"\"{exePath}\",0");
             key.SetValue("SubCommands", "");
+            key.SetValue("MultiSelectModel", "Player");
         }
 
         try
@@ -80,6 +91,7 @@ public class ClassicContextMenuManager
             var title = I18n.GetSubMenuTitle(target);
 
             subKey.SetValue("MUIVerb", title);
+            subKey.SetValue("MultiSelectModel", "Player");
 
             var currentGroup = GetFormatGroup(target);
             if (previousGroup.HasValue && currentGroup != previousGroup.Value)
@@ -124,6 +136,16 @@ public class ClassicContextMenuManager
             : Registry.CurrentUser.OpenSubKey(@"Software\Classes", true);
 
         if (classesRoot == null) return;
+
+        foreach (var category in CategoryTargetFormats.Keys)
+        {
+            var shellPath = $@"SystemFileAssociations\{category}\shell\{VerbRoot}";
+            try
+            {
+                classesRoot.DeleteSubKeyTree(shellPath, false);
+            }
+            catch { }
+        }
 
         foreach (var ext in KnownExtensions)
         {
