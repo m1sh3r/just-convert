@@ -120,15 +120,18 @@ public class Program
         ClassicManager.Register(installedExe, scope);
         RegisterModernMenu(installDir, scope);
         RegisterUninstallEntry(installDir, scope);
+        NotifyShell();
     }
 
     public static void UninstallCore(string installDir, InstallScope scope, IProgress<(double? Percent, string Status)>? progress = null)
     {
         progress?.Report((null, I18n.T("SetupUninstalling")));
 
+        KillRunningProcesses(installDir);
         ClassicManager.Unregister(scope);
         UnregisterModernMenu();
         RemoveUninstallEntry(scope);
+        NotifyShell();
 
         if (Directory.Exists(installDir))
         {
@@ -191,6 +194,41 @@ public class Program
         {
             return 1;
         }
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
+    public static void NotifyShell()
+    {
+        try
+        {
+            SHChangeNotify(0x08000000, 0x0000, IntPtr.Zero, IntPtr.Zero);
+        }
+        catch { }
+    }
+
+    private static void KillRunningProcesses(string? installDir = null)
+    {
+        try
+        {
+            foreach (var name in new[] { "just-convert", "ffmpeg" })
+            {
+                foreach (var proc in Process.GetProcessesByName(name))
+                {
+                    try
+                    {
+                        if (installDir == null || (proc.MainModule?.FileName?.StartsWith(installDir, StringComparison.OrdinalIgnoreCase) ?? true))
+                        {
+                            proc.Kill();
+                            proc.WaitForExit(2000);
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
     }
 
     private static void CopyDirectoryFiles(string source, string destination)
