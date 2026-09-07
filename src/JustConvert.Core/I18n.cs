@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Windows.Markup;
 
 namespace JustConvert.Core;
@@ -59,6 +59,7 @@ public static class I18n
             ["FormatM4a"] = "M4A (Audio)",
 
             ["SetupTitle"] = "Just Convert Setup",
+            ["SetupTitleWithVersion"] = "Just Convert Setup v{0}",
             ["SetupScopeLabel"] = "Install for:",
             ["SetupScopeCurrentUser"] = "Current user (AppData\\Roaming)",
             ["SetupScopeAllUsers"] = "All users (Program Files)",
@@ -130,6 +131,7 @@ public static class I18n
             ["FormatM4a"] = "M4A (Аудио)",
 
             ["SetupTitle"] = "Установка Just Convert",
+            ["SetupTitleWithVersion"] = "Установка Just Convert v{0}",
             ["SetupScopeLabel"] = "Установить для:",
             ["SetupScopeCurrentUser"] = "Текущего пользователя (AppData\\Roaming)",
             ["SetupScopeAllUsers"] = "Всех пользователей (Program Files)",

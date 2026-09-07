@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using JustConvert.Core;
 using JustConvert.Core.Converters;
 using JustConvert.Core.Windows;
@@ -17,6 +17,12 @@ public partial class InstallerWindow : FluentWindow
     {
         InitializeComponent();
         _startWithUninstall = startWithUninstall;
+
+        var title = string.IsNullOrWhiteSpace(Program.AppVersion)
+            ? I18n.T("SetupTitle")
+            : I18n.T("SetupTitleWithVersion", Program.AppVersion.TrimStart('v'));
+        Title = title;
+        AppTitleBar.Title = title;
 
         ApplicationThemeManager.ApplySystemTheme();
         ApplicationAccentColorManager.ApplySystemAccent();
