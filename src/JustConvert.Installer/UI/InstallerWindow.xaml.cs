@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using JustConvert.Core;
 using JustConvert.Core.Converters;
 using JustConvert.Core.Windows;
@@ -19,6 +19,7 @@ public partial class InstallerWindow : FluentWindow
         _startWithUninstall = startWithUninstall;
 
         ApplicationThemeManager.ApplySystemTheme();
+        ApplicationAccentColorManager.ApplySystemAccent();
         ApplicationThemeManager.Apply(this);
         SystemThemeWatcher.Watch(this);
 
