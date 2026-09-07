@@ -299,12 +299,14 @@ public class MediaConverter : IFormatConverter
                     {
                         var pct = Math.Clamp((currentTime.TotalSeconds / totalDuration.TotalSeconds) * 100.0, 0, 99);
                         var status = isCompress ? I18n.T("VideoCompressing") : isExtractFrames ? I18n.T("VideoExtractingFrames") : I18n.T("MediaConverting");
-                        progress?.Report(new ConversionProgress(pct, status, $"{currentTime:mm\\:ss} / {totalDuration:mm\\:ss}"));
+                        var timeFormat = totalDuration.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss";
+                        progress?.Report(new ConversionProgress(pct, status, $"{currentTime.ToString(timeFormat)} / {totalDuration.ToString(timeFormat)}"));
                     }
                     else
                     {
                         var timeLabel = I18n.T("TimeLabel");
-                        progress?.Report(new ConversionProgress(50, I18n.T("FfmpegProcessing"), $"{timeLabel}{currentTime:mm\\:ss}"));
+                        var timeFormat = currentTime.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss";
+                        progress?.Report(new ConversionProgress(50, I18n.T("FfmpegProcessing"), $"{timeLabel}{currentTime.ToString(timeFormat)}"));
                     }
                 }
             };
