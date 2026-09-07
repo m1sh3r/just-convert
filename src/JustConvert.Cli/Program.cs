@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using JustConvert.Cli.UI;
@@ -22,6 +23,7 @@ public class Program
         string? targetFormat = null;
         string? outputPath = null;
         bool isSilent = false;
+        bool isBatch = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -43,6 +45,10 @@ public class Program
             {
                 isSilent = true;
             }
+            else if (arg is "--batch" or "-b" or "/batch" or "/b")
+            {
+                isBatch = true;
+            }
             else if (!arg.StartsWith('-') && !arg.StartsWith('/'))
             {
                 if (inputPath == null)
@@ -54,6 +60,15 @@ public class Program
                     targetFormat = arg;
                 }
             }
+        }
+
+        if (!isBatch)
+        {
+            try
+            {
+                isBatch = Process.GetProcessesByName("just-convert").Length > 1;
+            }
+            catch { }
         }
 
         if (string.IsNullOrWhiteSpace(inputPath) || string.IsNullOrWhiteSpace(targetFormat))
@@ -78,7 +93,7 @@ public class Program
 
         if (isSilent)
         {
-            var result = Registry.ConvertFileAsync(inputPath, targetFormat, outputPath).GetAwaiter().GetResult();
+            var result = Registry.ConvertFileAsync(inputPath, targetFormat, outputPath, null, default, isBatch).GetAwaiter().GetResult();
             if (!result.Success)
             {
                 Console.Error.WriteLine(result.ErrorMessage ?? I18n.T("ErrorDefault"));
@@ -87,7 +102,7 @@ public class Program
             return 0;
         }
 
-        return RunWindow(() => new ConversionProgressWindow(inputPath, targetFormat, outputPath));
+        return RunWindow(() => new ConversionProgressWindow(inputPath, targetFormat, outputPath, isBatch));
     }
 
     private static int RunWindow(Func<ConversionProgressWindow> windowFactory)

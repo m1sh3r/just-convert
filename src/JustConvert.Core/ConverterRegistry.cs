@@ -48,7 +48,8 @@ public class ConverterRegistry
         string targetExtension,
         string? outputPath = null,
         IProgress<ConversionProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        bool isBatch = false)
     {
         if (!File.Exists(inputPath))
         {
@@ -67,6 +68,12 @@ public class ConverterRegistry
         var converter = FindConverter(sourceExt, targetExt);
         if (converter == null)
         {
+            if (isBatch)
+            {
+                progress?.Report(new ConversionProgress(100, I18n.T("StatusSkipped")));
+                return new ConversionResult(true, inputPath, null, null, TimeSpan.Zero, Skipped: true);
+            }
+
             return new ConversionResult(false, null, I18n.T("NoConverterFound", sourceExt, targetExt));
         }
 

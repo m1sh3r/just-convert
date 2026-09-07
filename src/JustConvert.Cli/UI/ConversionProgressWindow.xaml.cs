@@ -17,17 +17,19 @@ public partial class ConversionProgressWindow : FluentWindow
     private readonly ConverterRegistry _registry = new();
     private readonly CancellationTokenSource _cts = new();
 
+    private readonly bool _isBatch;
     private bool _isRunning;
     private bool _isDirectError;
 
     public int ExitCode { get; private set; }
 
-    public ConversionProgressWindow(string inputPath, string targetFormat, string? outputPath = null)
+    public ConversionProgressWindow(string inputPath, string targetFormat, string? outputPath = null, bool isBatch = false)
     {
         InitializeComponent();
         _inputPath = inputPath;
         _targetFormat = targetFormat;
         _outputPath = outputPath;
+        _isBatch = isBatch;
 
         ApplicationThemeManager.ApplySystemTheme();
         ApplicationAccentColorManager.ApplySystemAccent();
@@ -71,6 +73,23 @@ public partial class ConversionProgressWindow : FluentWindow
     {
         if (_isDirectError) return;
 
+        var sourceExt = Path.GetExtension(_inputPath).TrimStart('.').ToLowerInvariant();
+        var targetExt = _targetFormat.TrimStart('.').ToLowerInvariant();
+
+        if (_isBatch && _registry.FindConverter(sourceExt, targetExt) == null)
+        {
+            ExitCode = 0;
+            Close();
+            return;
+        }
+
+        if (targetExt != "reencode" && sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
+        {
+            ExitCode = 0;
+            Close();
+            return;
+        }
+
         _isRunning = true;
         TxtStatus.Text = I18n.T("StatusPreparing");
 
@@ -111,7 +130,7 @@ public partial class ConversionProgressWindow : FluentWindow
         {
             var result = await Task.Run(async () =>
             {
-                return await _registry.ConvertFileAsync(_inputPath, _targetFormat, _outputPath, progress, _cts.Token);
+                return await _registry.ConvertFileAsync(_inputPath, _targetFormat, _outputPath, progress, _cts.Token, _isBatch);
             });
 
             _isRunning = false;

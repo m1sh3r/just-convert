@@ -176,10 +176,17 @@ public class SubFormatExplorerCommand : IExplorerCommand
 
         foreach (var filePath in paths)
         {
+            var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+            if (isBatch && Registry.FindConverter(ext, _targetFormat) == null)
+            {
+                continue;
+            }
+
+            var batchArg = isBatch ? " --batch" : "";
             var startInfo = new ProcessStartInfo
             {
                 FileName = exePath,
-                Arguments = $"convert \"{filePath}\" --to {_targetFormat}",
+                Arguments = $"convert \"{filePath}\" --to {_targetFormat}{batchArg}",
                 UseShellExecute = true
             };
 
