@@ -21,6 +21,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -69,7 +71,7 @@ jobs:
       - name: Bundle Payload with Installer
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF -like "refs/tags/*") { $env:GITHUB_REF.Substring(10) } else { "0.0.1" }
+          $version = (Get-Item "dist/installer/JustConvert-Setup.exe").VersionInfo.ProductVersion.Split('+')[0]
           
           # Copy app files into installer distribution folder
           Copy-Item -Path "dist/app/*" -Destination "dist/installer/" -Force -Recurse
