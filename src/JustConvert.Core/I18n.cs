@@ -35,6 +35,10 @@ public static class I18n
             ["FfmpegProcessing"] = "Processing with FFmpeg...",
             ["FfmpegExitError"] = "FFmpeg exited with error code {0}.",
             ["StatusDone"] = "Done",
+            ["StatusCancelling"] = "Cancelling...",
+            ["StatusCancelled"] = "Conversion cancelled",
+            ["StatusPreparing"] = "Preparing...",
+            ["TitleConverting"] = "Converting...",
             ["TimeLabel"] = "Time: ",
 
             ["FileNotFound"] = "Source file does not exist: {0}",
@@ -102,6 +106,10 @@ public static class I18n
             ["FfmpegProcessing"] = "Обработка FFmpeg...",
             ["FfmpegExitError"] = "FFmpeg завершился с кодом ошибки {0}.",
             ["StatusDone"] = "Готово",
+            ["StatusCancelling"] = "Отмена...",
+            ["StatusCancelled"] = "Конвертация отменена",
+            ["StatusPreparing"] = "Подготовка...",
+            ["TitleConverting"] = "Конвертация...",
             ["TimeLabel"] = "Время: ",
 
             ["FileNotFound"] = "Исходный файл не существует: {0}",

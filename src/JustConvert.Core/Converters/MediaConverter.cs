@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text.RegularExpressions;
 
@@ -289,10 +289,24 @@ public class MediaConverter : IFormatConverter
             proc.Start();
             proc.BeginErrorReadLine();
 
-            await proc.WaitForExitAsync(ct);
+            using var registration = ct.Register(() =>
+            {
+                try
+                {
+                    if (!proc.HasExited)
+                    {
+                        proc.Kill();
+                    }
+                }
+                catch { }
+            });
+
+            await proc.WaitForExitAsync(CancellationToken.None);
             sw.Stop();
 
             var logs = fullLog.ToString();
+
+            ct.ThrowIfCancellationRequested();
 
             if (proc.ExitCode == 0)
             {
@@ -300,11 +314,62 @@ public class MediaConverter : IFormatConverter
                 return new ConversionResult(true, outputPath, null, logs, sw.Elapsed);
             }
 
+            try
+            {
+                if (outputPath != null)
+                {
+                    if (isExtractFrames && Directory.Exists(outputPath))
+                    {
+                        Directory.Delete(outputPath, true);
+                    }
+                    else if (File.Exists(outputPath))
+                    {
+                        File.Delete(outputPath);
+                    }
+                }
+            }
+            catch { }
+
             return new ConversionResult(false, null, I18n.T("FfmpegExitError", proc.ExitCode), logs, sw.Elapsed);
+        }
+        catch (OperationCanceledException)
+        {
+            sw.Stop();
+            try
+            {
+                if (outputPath != null)
+                {
+                    if (isExtractFrames && Directory.Exists(outputPath))
+                    {
+                        Directory.Delete(outputPath, true);
+                    }
+                    else if (File.Exists(outputPath))
+                    {
+                        File.Delete(outputPath);
+                    }
+                }
+            }
+            catch { }
+            return new ConversionResult(false, null, I18n.T("StatusCancelled"), null, sw.Elapsed);
         }
         catch (Exception ex)
         {
             sw.Stop();
+            try
+            {
+                if (outputPath != null)
+                {
+                    if (isExtractFrames && Directory.Exists(outputPath))
+                    {
+                        Directory.Delete(outputPath, true);
+                    }
+                    else if (File.Exists(outputPath))
+                    {
+                        File.Delete(outputPath);
+                    }
+                }
+            }
+            catch { }
             return new ConversionResult(false, null, ex.Message, ex.ToString(), sw.Elapsed);
         }
     }
