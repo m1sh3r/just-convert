@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
@@ -107,6 +107,8 @@ public class Program
         ct.ThrowIfCancellationRequested();
         progress?.Report((null, I18n.T("SetupCopying")));
 
+        KillRunningProcesses(installDir);
+
         if (!Directory.Exists(installDir))
         {
             Directory.CreateDirectory(installDir);
@@ -127,9 +129,8 @@ public class Program
         }
 
         var installedExe = Path.Combine(installDir, "just-convert.exe");
-        var installedDll = Path.Combine(installDir, "just-convert.dll");
 
-        if (!File.Exists(installedExe) || !File.Exists(installedDll))
+        if (!File.Exists(installedExe))
         {
             string[] fallbackDirs =
             [
@@ -149,9 +150,9 @@ public class Program
             }
         }
 
-        if (!File.Exists(installedExe) || !File.Exists(installedDll))
+        if (!File.Exists(installedExe))
         {
-            throw new FileNotFoundException("just-convert executable or runtime files were not found in setup package.");
+            throw new FileNotFoundException("just-convert executable was not found in setup package.");
         }
 
         ct.ThrowIfCancellationRequested();

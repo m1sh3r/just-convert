@@ -25,19 +25,38 @@
     <PropertyGroup>
       <PayloadStagingDir>$(IntermediateOutputPath)payload\</PayloadStagingDir>
       <PayloadZipFile>$(IntermediateOutputPath)Payload.zip</PayloadZipFile>
+      <RepoDistAppDir>$(MSBuildThisFileDirectory)..\..\dist\app</RepoDistAppDir>
     </PropertyGroup>
-
-    <ItemGroup>
-      <CliPayloadFiles Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\*.*" Exclude="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\*.pdb" />
-      <ShellExPayloadFiles Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\*.*" Exclude="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\*.pdb" />
-      <ManifestFile Include="$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml" />
-    </ItemGroup>
 
     <RemoveDir Directories="$(PayloadStagingDir)" />
     <MakeDir Directories="$(PayloadStagingDir)" />
-    <Copy SourceFiles="@(CliPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" />
-    <Copy SourceFiles="@(ShellExPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" />
-    <Copy SourceFiles="@(ManifestFile)" DestinationFolder="$(PayloadStagingDir)" />
+
+    <ItemGroup Condition="'$(PayloadDir)' != '' And Exists('$(PayloadDir)')">
+      <CustomPayloadFiles Include="$(PayloadDir)\**\*.*" Exclude="$(PayloadDir)\**\*.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CustomPayloadFiles)" DestinationFolder="$(PayloadStagingDir)%(RecursiveDir)" Condition="'@(CustomPayloadFiles)' != ''" />
+
+    <ItemGroup Condition="'@(CustomPayloadFiles)' == '' And Exists('$(RepoDistAppDir)\just-convert.exe')">
+      <DistPayloadFiles Include="$(RepoDistAppDir)\**\*.*" Exclude="$(RepoDistAppDir)\**\*.pdb" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DistPayloadFiles)" DestinationFolder="$(PayloadStagingDir)%(RecursiveDir)" Condition="'@(DistPayloadFiles)' != ''" />
+
+    <ItemGroup Condition="'@(CustomPayloadFiles)' == '' And '@(DistPayloadFiles)' == ''">
+      <CliPayloadFiles Condition="Exists('..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\publish\just-convert.exe')" Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\publish\*.*" Exclude="*.pdb" />
+      <CliPayloadFiles Condition="'@(CliPayloadFiles)' == '' And Exists('..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\just-convert.exe')" Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\*.*" Exclude="*.pdb" />
+      <CliPayloadFiles Condition="'@(CliPayloadFiles)' == '' And Exists('..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\just-convert.exe')" Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\*.*" Exclude="*.pdb" />
+
+      <ShellExPayloadFiles Condition="Exists('..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\publish\JustConvert.ShellExtension.dll')" Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\publish\*.*" Exclude="*.pdb" />
+      <ShellExPayloadFiles Condition="'@(ShellExPayloadFiles)' == '' And Exists('..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\JustConvert.ShellExtension.dll')" Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\*.*" Exclude="*.pdb" />
+      <ShellExPayloadFiles Condition="'@(ShellExPayloadFiles)' == '' And Exists('..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\JustConvert.ShellExtension.dll')" Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\*.*" Exclude="*.pdb" />
+
+      <ManifestFile Include="$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" Condition="'@(CliPayloadFiles)' != ''" />
+    <Copy SourceFiles="@(ShellExPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" Condition="'@(ShellExPayloadFiles)' != ''" />
+    <Copy SourceFiles="@(ManifestFile)" DestinationFolder="$(PayloadStagingDir)" Condition="'@(ManifestFile)' != ''" />
+
+    <Error Condition="!Exists('$(PayloadStagingDir)just-convert.exe')" Text="Payload staging directory is missing just-convert.exe. Build or publish JustConvert.Cli first." />
 
     <ZipDirectory SourceDirectory="$(PayloadStagingDir)" DestinationFile="$(PayloadZipFile)" Overwrite="true" />
 
