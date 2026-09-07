@@ -21,7 +21,7 @@
     <PackageReference Include="WPF-UI" Version="4.3.0" />
   </ItemGroup>
 
-  <Target Name="PreparePayloadZip" BeforeTargets="AssignTargetPaths;PrepareResourceNames">
+  <Target Name="PreparePayloadZip" BeforeTargets="AssignTargetPaths;PrepareResourceNames" DependsOnTargets="MinVer">
     <PropertyGroup>
       <PayloadStagingDir>$(IntermediateOutputPath)payload\</PayloadStagingDir>
       <PayloadZipFile>$(IntermediateOutputPath)Payload.zip</PayloadZipFile>
@@ -57,6 +57,12 @@
     <Copy SourceFiles="@(ManifestFile)" DestinationFolder="$(PayloadStagingDir)" Condition="'@(ManifestFile)' != ''" />
 
     <Error Condition="!Exists('$(PayloadStagingDir)just-convert.exe')" Text="Payload staging directory is missing just-convert.exe. Build or publish JustConvert.Cli first." />
+
+    <XmlPoke XmlInputPath="$(PayloadStagingDir)AppxManifest.xml"
+             Query="/ns:Package/ns:Identity/@Version"
+             Value="$(FileVersion)"
+             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;"
+             Condition="Exists('$(PayloadStagingDir)AppxManifest.xml') And '$(FileVersion)' != ''" />
 
     <ZipDirectory SourceDirectory="$(PayloadStagingDir)" DestinationFile="$(PayloadZipFile)" Overwrite="true" />
 
