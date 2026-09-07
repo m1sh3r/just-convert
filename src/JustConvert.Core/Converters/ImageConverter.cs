@@ -24,6 +24,11 @@ public class ImageConverter : IFormatConverter
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
         var tgt = targetExtension.TrimStart('.').ToLowerInvariant();
 
+        if (tgt == "reencode")
+        {
+            return SupportedFormats.Contains(src);
+        }
+
         return SupportedFormats.Contains(src) && SupportedFormats.Contains(tgt) && !src.Equals(tgt, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -32,13 +37,16 @@ public class ImageConverter : IFormatConverter
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
         if (!SupportedFormats.Contains(src)) return [];
 
-        return FormatsOrder
+        var list = FormatsOrder
             .Where(f => !f.Equals(src, StringComparison.OrdinalIgnoreCase)
                 && !(src == "jpg" && f == "jpeg")
                 && !(src == "jpeg" && f == "jpg")
                 && !(src == "tiff" && f == "tif")
                 && !(src == "tif" && f == "tiff"))
             .ToList();
+
+        list.Add("reencode");
+        return list;
     }
 
     public async Task<ConversionResult> ConvertAsync(
@@ -62,7 +70,13 @@ public class ImageConverter : IFormatConverter
             );
         }
 
+        var sourceExt = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = targetExtension.TrimStart('.').ToLowerInvariant();
+        if (targetExt == "reencode")
+        {
+            targetExt = sourceExt;
+        }
+
         var outputExt = (targetExt == "jpeg" ? "jpg" : targetExt == "tif" ? "tiff" : targetExt);
 
         if (string.IsNullOrWhiteSpace(outputPath))

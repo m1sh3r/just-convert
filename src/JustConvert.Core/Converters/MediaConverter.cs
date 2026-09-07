@@ -113,6 +113,11 @@ public class MediaConverter : IFormatConverter
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
         var tgt = targetExtension.TrimStart('.').ToLowerInvariant();
 
+        if (tgt == "reencode")
+        {
+            return VideoFormats.Contains(src) || AudioFormats.Contains(src);
+        }
+
         if (src == tgt && tgt is not "frames") return false;
 
         if (VideoFormats.Contains(src))
@@ -134,13 +139,14 @@ public class MediaConverter : IFormatConverter
 
         if (VideoFormats.Contains(src))
         {
-            return ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames"];
+            return ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames", "reencode"];
         }
 
         if (AudioFormats.Contains(src))
         {
             List<string> list = ["mp3", "aac", "m4a", "wav", "flac", "ogg"];
             list.Remove(src);
+            list.Add("reencode");
             return list;
         }
 
@@ -168,7 +174,14 @@ public class MediaConverter : IFormatConverter
             );
         }
 
+        var sourceExt = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = targetExtension.TrimStart('.').ToLowerInvariant();
+        var isReencode = targetExt == "reencode";
+        if (isReencode)
+        {
+            targetExt = sourceExt;
+        }
+
         var isExtractFrames = targetExt is "frames" or "frames-png" or "frames-jpg";
         var isCompress = targetExt is "compress" or "compressed";
 
@@ -185,7 +198,11 @@ public class MediaConverter : IFormatConverter
             var dir = Path.GetDirectoryName(inputPath) ?? "";
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
 
-            if (isExtractFrames)
+            if (isReencode)
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}{outputExt}");
+            }
+            else if (isExtractFrames)
             {
                 outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_frames");
                 Directory.CreateDirectory(outputPath);
@@ -239,7 +256,7 @@ public class MediaConverter : IFormatConverter
                 audioInfo = await ProbeAudioInfoAsync(ffmpeg, inputPath, ct);
             }
 
-            var arguments = BuildArguments(inputPath, outputPath, targetExt, audioInfo);
+            var arguments = BuildArguments(inputPath, outputPath, targetExt, audioInfo, isReencode);
             var startInfo = new ProcessStartInfo
             {
                 FileName = ffmpeg,
@@ -380,7 +397,7 @@ public class MediaConverter : IFormatConverter
         }
     }
 
-    private static string BuildArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null)
+    private static string BuildArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false)
     {
         if (targetExt is "frames" or "frames-png")
         {
@@ -428,6 +445,26 @@ public class MediaConverter : IFormatConverter
             return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -map_metadata 0 \"{output}\"";
         }
 
+        if (targetExt == "avi")
+        {
+            return $"-y -i \"{input}\" -c:v mpeg4 -qscale:v 3 -c:a mp3 -b:a 192k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt == "wmv")
+        {
+            return $"-y -i \"{input}\" -c:v wmv2 -b:v 2M -c:a wmav2 -b:a 192k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt == "flv")
+        {
+            return $"-y -i \"{input}\" -c:v flv1 -qscale:v 3 -c:a mp3 -b:a 128k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt == "m4v")
+        {
+            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
         if (targetExt == "gif")
         {
             return $"-y -i \"{input}\" -vf \"fps=15,scale=480:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse\" \"{output}\"";
@@ -464,7 +501,7 @@ public class MediaConverter : IFormatConverter
         if (targetExt == "m4a")
         {
             var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
-            var aacCodec = string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase) ? "-c:a copy" : $"-c:a aac -b:a {bitrate}k";
+            var aacCodec = (!isReencode && string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase)) ? "-c:a copy" : $"-c:a aac -b:a {bitrate}k";
             var hasAttachedPic = audioInfo?.HasAttachedPic ?? true;
             if (hasAttachedPic)
             {
@@ -477,7 +514,7 @@ public class MediaConverter : IFormatConverter
         if (targetExt == "aac")
         {
             var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
-            var aacCodec = string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase) ? "-c:a copy" : $"-c:a aac -b:a {bitrate}k";
+            var aacCodec = (!isReencode && string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase)) ? "-c:a copy" : $"-c:a aac -b:a {bitrate}k";
             return $"-y -i \"{input}\" -map 0:a:0 {aacCodec} -map_metadata 0 \"{output}\"";
         }
 

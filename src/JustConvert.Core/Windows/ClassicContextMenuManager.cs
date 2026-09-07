@@ -24,9 +24,9 @@ public class ClassicContextMenuManager
 
     private static readonly Dictionary<string, string[]> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["audio"] = ["mp3", "aac", "m4a", "wav", "flac", "ogg"],
-        ["video"] = ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames"],
-        ["image"] = ["png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic"]
+        ["audio"] = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"],
+        ["video"] = ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames", "reencode"],
+        ["image"] = ["png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic", "reencode"]
     };
 
     private readonly ConverterRegistry _registry;

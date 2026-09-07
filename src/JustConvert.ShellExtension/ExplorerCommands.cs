@@ -306,6 +306,14 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
         string[] audioGroup2 = ["wav", "flac"];
         string[] audioGroup3 = ["ogg"];
 
+        string[] allStandardFormats =
+        [
+            "mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames",
+            "png", "jpg", "webp", "ico", "bmp", "gif", "tiff", "tga", "avif", "heic",
+            "mp3", "aac", "m4a", "wav", "flac", "ogg"
+        ];
+        string[] reencodeGroup = ["reencode"];
+
         _commands =
         [
             new SubFormatExplorerCommand("mp4-h264"),
@@ -336,7 +344,10 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
             new SubFormatExplorerCommand("wav", hasSeparatorBefore: true),
             new SubFormatExplorerCommand("flac"),
             new SeparatorExplorerCommand(audioGroup2, audioGroup3),
-            new SubFormatExplorerCommand("ogg", hasSeparatorBefore: true)
+            new SubFormatExplorerCommand("ogg", hasSeparatorBefore: true),
+
+            new SeparatorExplorerCommand(allStandardFormats, reencodeGroup),
+            new SubFormatExplorerCommand("reencode", hasSeparatorBefore: true)
         ];
         _index = 0;
     }

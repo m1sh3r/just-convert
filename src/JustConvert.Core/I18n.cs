@@ -13,6 +13,7 @@ public static class I18n
             ["MenuToolTip"] = "Quick file format conversion",
             ["MenuCompress"] = "Compress video (H.264)",
             ["MenuFrames"] = "Extract frames (PNG)",
+            ["MenuReencode"] = "Re-encode file",
             ["MenuConvertTo"] = "Convert to {0}",
 
             ["TitleError"] = "Conversion error",
@@ -86,6 +87,7 @@ public static class I18n
             ["MenuToolTip"] = "Быстрая конвертация файла в другой формат",
             ["MenuCompress"] = "Сжать видео (H.264)",
             ["MenuFrames"] = "Разбить на кадры (PNG)",
+            ["MenuReencode"] = "Перекодировать файл",
             ["MenuConvertTo"] = "Конвертировать в {0}",
 
             ["TitleError"] = "Ошибка конвертации",
@@ -191,6 +193,7 @@ public static class I18n
         var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
         return fmt switch
         {
+            "reencode" => T("MenuReencode"),
             "frames" or "frames-png" or "frames-jpg" => T("MenuFrames"),
             "mp4" or "mp4-h264" or "h264" => T("FormatMp4H264"),
             "mp4-hevc" or "mp4-h265" or "hevc" or "h265" => T("FormatMp4H265"),
@@ -209,6 +212,11 @@ public static class I18n
 
     public static string GetSubMenuToolTip(string targetFormat)
     {
+        if (targetFormat.Equals("reencode", StringComparison.OrdinalIgnoreCase))
+        {
+            return T("MenuReencode");
+        }
+
         var title = GetSubMenuTitle(targetFormat);
         return T("MenuConvertTo", title);
     }
