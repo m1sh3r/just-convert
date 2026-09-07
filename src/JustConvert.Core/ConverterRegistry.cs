@@ -1,4 +1,4 @@
-﻿using JustConvert.Core.Converters;
+using JustConvert.Core.Converters;
 
 namespace JustConvert.Core;
 
@@ -57,6 +57,12 @@ public class ConverterRegistry
 
         var sourceExt = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = targetExtension.TrimStart('.').ToLowerInvariant();
+
+        if (sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
+        {
+            progress?.Report(new ConversionProgress(100, I18n.T("StatusSkipped")));
+            return new ConversionResult(true, inputPath, null, null, TimeSpan.Zero, Skipped: true);
+        }
 
         var converter = FindConverter(sourceExt, targetExt);
         if (converter == null)

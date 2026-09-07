@@ -5,7 +5,8 @@ public record ConversionResult(
     string? OutputPath = null,
     string? ErrorMessage = null,
     string? FullLog = null,
-    TimeSpan Duration = default
+    TimeSpan Duration = default,
+    bool Skipped = false
 );
 
 public record ConversionProgress(

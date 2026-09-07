@@ -118,6 +118,13 @@ public partial class ConversionProgressWindow : FluentWindow
 
             if (result.Success)
             {
+                if (result.Skipped)
+                {
+                    ExitCode = 0;
+                    Close();
+                    return;
+                }
+
                 StopIconRotation();
                 ProgressBar.IsIndeterminate = false;
                 ProgressBar.Value = 100;
