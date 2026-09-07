@@ -1,35 +1,30 @@
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "build",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "build",
-        "${workspaceFolder}/JustConvert.slnx",
-        "/property:GenerateFullPaths=true",
-        "/consoleloggerparameters:NoSummary"
-      ],
-      "problemMatcher": "$msCompile",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
-    },
-    {
-      "label": "publish-installer",
-      "command": "dotnet",
-      "type": "process",
-      "args": [
-        "publish",
-        "${workspaceFolder}/src/JustConvert.Installer/JustConvert.Installer.csproj",
-        "-c", "Release",
-        "-r", "win-x64",
-        "--self-contained", "true",
-        "-o", "${workspaceFolder}/dist/installer"
-      ],
-      "problemMatcher": "$msCompile"
-    }
-  ]
+﻿{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Solution",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "build",
+                "JustConvert.slnx"
+            ],
+            "problemMatcher": "$msCompile",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
+            "label": "Publish Single-File Installer",
+            "command": "dotnet",
+            "type": "process",
+            "args": [
+                "publish",
+                "src/JustConvert.Installer/JustConvert.Installer.csproj",
+                "/p:PublishProfile=FolderProfile"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
 }

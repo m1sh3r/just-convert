@@ -1,5 +1,6 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows;
@@ -111,8 +112,19 @@ public class Program
             Directory.CreateDirectory(installDir);
         }
 
-        var sourceDir = AppContext.BaseDirectory;
-        CopyDirectoryFiles(sourceDir, installDir);
+        var payloadExtracted = TryExtractEmbeddedPayload(installDir);
+        if (!payloadExtracted)
+        {
+            var sourceDir = AppContext.BaseDirectory;
+            CopyDirectoryFiles(sourceDir, installDir);
+        }
+
+        var currentExe = Environment.ProcessPath;
+        if (!string.IsNullOrEmpty(currentExe) && File.Exists(currentExe))
+        {
+            var destSetup = Path.Combine(installDir, "JustConvert-Setup.exe");
+            try { File.Copy(currentExe, destSetup, true); } catch { }
+        }
 
         var installedExe = Path.Combine(installDir, "just-convert.exe");
         var installedDll = Path.Combine(installDir, "just-convert.dll");
@@ -121,10 +133,10 @@ public class Program
         {
             string[] fallbackDirs =
             [
-                Path.Combine(sourceDir, "..", "..", "..", "..", "JustConvert.Cli", "bin", "Release", "net10.0-windows"),
-                Path.Combine(sourceDir, "..", "..", "..", "..", "JustConvert.Cli", "bin", "Debug", "net10.0-windows"),
-                Path.Combine(sourceDir, "..", "JustConvert.Cli", "bin", "Release", "net10.0-windows"),
-                Path.Combine(sourceDir, "..", "JustConvert.Cli", "bin", "Debug", "net10.0-windows")
+                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "JustConvert.Cli", "bin", "Release", "net10.0-windows"),
+                Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "JustConvert.Cli", "bin", "Debug", "net10.0-windows"),
+                Path.Combine(AppContext.BaseDirectory, "..", "JustConvert.Cli", "bin", "Release", "net10.0-windows"),
+                Path.Combine(AppContext.BaseDirectory, "..", "JustConvert.Cli", "bin", "Debug", "net10.0-windows")
             ];
 
             foreach (var fbDir in fallbackDirs)
@@ -268,6 +280,37 @@ public class Program
             }
         }
         catch { }
+    }
+
+    private static bool TryExtractEmbeddedPayload(string destinationDir)
+    {
+        try
+        {
+            using var stream = typeof(Program).Assembly.GetManifestResourceStream("Payload.zip");
+            if (stream == null) return false;
+
+            using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+            foreach (var entry in archive.Entries)
+            {
+                if (string.IsNullOrEmpty(entry.Name)) continue;
+                var destPath = Path.Combine(destinationDir, entry.FullName);
+                var destSubDir = Path.GetDirectoryName(destPath);
+                if (!string.IsNullOrEmpty(destSubDir) && !Directory.Exists(destSubDir))
+                {
+                    Directory.CreateDirectory(destSubDir);
+                }
+                try
+                {
+                    entry.ExtractToFile(destPath, true);
+                }
+                catch { }
+            }
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     private static void CopyDirectoryFiles(string source, string destination)

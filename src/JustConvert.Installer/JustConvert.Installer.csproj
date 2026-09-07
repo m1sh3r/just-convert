@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -7,15 +7,13 @@
     <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <PublishSingleFile Condition="'$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(RuntimeIdentifier)' != ''">true</IncludeNativeLibrariesForSelfExtract>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\JustConvert.Cli\JustConvert.Cli.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
-    <ProjectReference Include="..\JustConvert.ShellExtension\JustConvert.ShellExtension.csproj">
-      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
-    </ProjectReference>
+    <ProjectReference Include="..\JustConvert.Cli\JustConvert.Cli.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" Publish="false" />
+    <ProjectReference Include="..\JustConvert.ShellExtension\JustConvert.ShellExtension.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" Publish="false" />
     <ProjectReference Include="..\JustConvert.Core\JustConvert.Core.csproj" />
   </ItemGroup>
 
@@ -23,7 +21,36 @@
     <PackageReference Include="WPF-UI" Version="4.3.0" />
   </ItemGroup>
 
-  <Target Name="CopyPayloadFiles" AfterTargets="Build">
+  <Target Name="PreparePayloadZip" BeforeTargets="AssignTargetPaths;PrepareResourceNames">
+    <PropertyGroup>
+      <PayloadStagingDir>$(IntermediateOutputPath)payload\</PayloadStagingDir>
+      <PayloadZipFile>$(IntermediateOutputPath)Payload.zip</PayloadZipFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <CliPayloadFiles Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\*.*" Exclude="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\*.pdb" />
+      <ShellExPayloadFiles Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\*.*" Exclude="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\*.pdb" />
+      <ManifestFile Include="$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml" />
+    </ItemGroup>
+
+    <RemoveDir Directories="$(PayloadStagingDir)" />
+    <MakeDir Directories="$(PayloadStagingDir)" />
+    <Copy SourceFiles="@(CliPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" />
+    <Copy SourceFiles="@(ShellExPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" />
+    <Copy SourceFiles="@(ManifestFile)" DestinationFolder="$(PayloadStagingDir)" />
+
+    <ZipDirectory SourceDirectory="$(PayloadStagingDir)" DestinationFile="$(PayloadZipFile)" Overwrite="true" />
+
+    <ItemGroup>
+      <EmbeddedResource Include="$(PayloadZipFile)">
+        <LogicalName>Payload.zip</LogicalName>
+        <WithCulture>false</WithCulture>
+        <Type>Non-Resx</Type>
+      </EmbeddedResource>
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CopyPayloadFiles" AfterTargets="Build" Condition="'$(RuntimeIdentifier)' == ''">
     <ItemGroup>
       <CliOutputFiles Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\just-convert.*" />
       <ShellExOutputFiles Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\JustConvert.ShellExtension.*" />
