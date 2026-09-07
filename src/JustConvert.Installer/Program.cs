@@ -16,7 +16,7 @@ namespace JustConvert.Installer;
 
 public class Program
 {
-    public const string AppVersion = "0.0.1";
+    public static readonly string AppVersion = FileVersionInfo.GetVersionInfo(Environment.ProcessPath ?? typeof(Program).Assembly.Location).ProductVersion?.Split('+')[0] ?? string.Empty;
     public const string AppPublisher = "m1sh3r";
     public const string AppName = "Just Convert";
 
