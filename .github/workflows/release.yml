@@ -59,6 +59,7 @@ jobs:
           --self-contained true
           -p:PublishSingleFile=true
           -p:IncludeNativeLibrariesForSelfExtract=true
+          -p:PayloadDir=${{ github.workspace }}/dist/app
           -o dist/installer
 
       - name: Bundle Payload with Installer
