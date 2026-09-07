@@ -390,42 +390,42 @@ public class MediaConverter : IFormatConverter
 
         if (targetExt is "compress" or "compressed")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k -movflags +faststart \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k -movflags +faststart -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4" or "mp4-h264" or "h264")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-hevc" or "mp4-h265" or "h265" or "hevc")
         {
-            return $"-y -i \"{input}\" -c:v libx265 -crf 23 -preset medium -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libx265 -crf 23 -preset medium -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mov-prores422" or "prores422" or "prores")
         {
-            return $"-y -i \"{input}\" -c:v prores_ks -profile:v 2 -c:a pcm_s16le \"{output}\"";
+            return $"-y -i \"{input}\" -c:v prores_ks -profile:v 2 -c:a pcm_s16le -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mov-prores4444" or "prores4444")
         {
-            return $"-y -i \"{input}\" -c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le -c:a pcm_s16le \"{output}\"";
+            return $"-y -i \"{input}\" -c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le -c:a pcm_s16le -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mov" or "mov-h264")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "webm")
         {
-            return $"-y -i \"{input}\" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "mkv")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "gif")
