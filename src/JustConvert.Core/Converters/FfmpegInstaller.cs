@@ -27,7 +27,9 @@ public static class FfmpegInstaller
 
             using (var httpClient = new HttpClient())
             {
-                httpClient.DefaultRequestHeaders.Add("User-Agent", "m1sh3r-JustConvert-Installer/0.0.1");
+                var version = typeof(FfmpegInstaller).Assembly.GetName().Version?.ToString(3);
+                var userAgent = string.IsNullOrEmpty(version) ? "m1sh3r-JustConvert-Installer" : $"m1sh3r-JustConvert-Installer/{version}";
+                httpClient.DefaultRequestHeaders.Add("User-Agent", userAgent);
                 using var response = await httpClient.GetAsync("https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip", HttpCompletionOption.ResponseHeadersRead, ct);
                 response.EnsureSuccessStatusCode();
 
