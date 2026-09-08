@@ -4,10 +4,10 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
         Height="440" Width="560"
-        MinHeight="440" MaxHeight="440"
+        MinHeight="400" MaxHeight="960"
         MinWidth="560" MaxWidth="560"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         ExtendsContentIntoTitleBar="True"
         WindowBackdropType="Mica"
         Foreground="{DynamicResource TextFillColorPrimaryBrush}">
@@ -87,7 +87,7 @@
                                             <RowDefinition Height="Auto"/>
                                         </Grid.RowDefinitions>
 
-                                        <ProgressBar Grid.Row="0" Height="2" Minimum="0" Maximum="100" Value="{Binding ProgressPercentage}" IsIndeterminate="{Binding IsIndeterminate}" Foreground="{DynamicResource AccentFillColorDefaultBrush}" Visibility="{Binding ProgressBarVisibility}"/>
+                                        <ProgressBar Grid.Row="0" Height="4" Minimum="0" Maximum="100" Value="{Binding ProgressPercentage}" IsIndeterminate="{Binding IsIndeterminate}" Foreground="{Binding ProgressBarBrush}" Visibility="Visible" Margin="0,4,0,3"/>
 
                                         <Grid Grid.Row="1" Margin="0,2,0,0">
                                             <TextBlock Text="{Binding DisplayStatus}" FontSize="11" Foreground="{Binding StatusTextBrush}" HorizontalAlignment="Left"/>
@@ -125,8 +125,20 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{core:Loc LabelParallelConversions}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,8,0"/>
-                    <ui:NumberBox x:Name="NumParallel" Minimum="1" Maximum="16" SmallChange="1" MaxDecimalPlaces="0" SpinButtonPlacementMode="Inline" Width="80" Value="1" ValueChanged="NumParallel_ValueChanged"/>
+                    <TextBlock Text="{core:Loc LabelParallelConversions}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,10,0"/>
+                    <Border Background="{DynamicResource ControlFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="2">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <ui:Button x:Name="BtnParallelDec" Appearance="Transparent" Padding="6,4" Click="BtnParallelDec_Click">
+                                <ui:SymbolIcon Symbol="Subtract16" FontSize="12"/>
+                            </ui:Button>
+
+                            <TextBlock x:Name="TxtParallelValue" Text="1" Width="26" TextAlignment="Center" VerticalAlignment="Center" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                            <ui:Button x:Name="BtnParallelInc" Appearance="Transparent" Padding="6,4" Click="BtnParallelInc_Click">
+                                <ui:SymbolIcon Symbol="Add16" FontSize="12"/>
+                            </ui:Button>
+                        </StackPanel>
+                    </Border>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">

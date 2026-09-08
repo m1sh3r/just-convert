@@ -52,6 +52,8 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
         if (string.IsNullOrEmpty(FileName)) FileName = inputPath;
         TargetFormatDisplay = $"→ {I18n.GetSubMenuTitle(targetFormat)}";
         _statusText = I18n.T("StatusQueued");
+        _isIndeterminate = false;
+        _progressPercentage = 0;
     }
 
     public Process? RunningProcess => _runningProcess;
@@ -77,6 +79,7 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
                 OnPropertyChanged(nameof(StatusSymbol));
                 OnPropertyChanged(nameof(StatusBrush));
                 OnPropertyChanged(nameof(StatusTextBrush));
+                OnPropertyChanged(nameof(ProgressBarBrush));
                 OnPropertyChanged(nameof(ProgressBarVisibility));
                 OnPropertyChanged(nameof(PauseResumeSymbol));
                 OnPropertyChanged(nameof(PauseResumeTooltip));
@@ -192,11 +195,16 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
         _ => (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush")
     };
 
-    public Visibility ProgressBarVisibility => _status switch
+    public Brush ProgressBarBrush => _status switch
     {
-        QueueItemStatus.Converting or QueueItemStatus.Paused or QueueItemStatus.Queued => Visibility.Visible,
-        _ => Visibility.Collapsed
+        QueueItemStatus.Converting => (Brush)Application.Current.FindResource("AccentFillColorDefaultBrush"),
+        QueueItemStatus.Done => (Brush)Application.Current.FindResource("AccentFillColorDefaultBrush"),
+        QueueItemStatus.Error => (Brush)Application.Current.FindResource("SystemFillColorCriticalBrush"),
+        QueueItemStatus.Paused => (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush"),
+        _ => (Brush)Application.Current.FindResource("TextFillColorTertiaryBrush")
     };
+
+    public Visibility ProgressBarVisibility => Visibility.Visible;
 
     public SymbolRegular PauseResumeSymbol => _status == QueueItemStatus.Converting ? SymbolRegular.Pause16 : SymbolRegular.Play16;
 
@@ -221,6 +229,7 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
         if (_status is QueueItemStatus.Done or QueueItemStatus.Error or QueueItemStatus.Cancelled) return;
 
         AutoPaused = isAuto;
+        IsIndeterminate = false;
         Status = QueueItemStatus.Paused;
 
         if (_runningProcess != null)

@@ -17,6 +17,7 @@ public partial class ConversionProgressWindow : FluentWindow
     private bool _isDirectError;
     private int _maxParallel = 1;
     private readonly object _queueLock = new();
+    private CancellationTokenSource? _autoCloseCts;
 
     public ObservableCollection<ConversionQueueItem> Items { get; } = [];
     public int ExitCode { get; private set; }
@@ -37,6 +38,9 @@ public partial class ConversionProgressWindow : FluentWindow
         EnqueueFiles(initialFiles, targetFormat, outputPath);
 
         StartIconRotation();
+        TxtParallelValue.Text = _maxParallel.ToString();
+        BtnParallelDec.IsEnabled = _maxParallel > 1;
+        BtnParallelInc.IsEnabled = _maxParallel < 16;
         Loaded += OnLoaded;
     }
 
@@ -59,6 +63,9 @@ public partial class ConversionProgressWindow : FluentWindow
             Dispatcher.Invoke(() => EnqueueFiles(files, targetFormat, outputPath));
             return;
         }
+
+        _autoCloseCts?.Cancel();
+        _autoCloseCts = null;
 
         foreach (var file in files)
         {
@@ -125,10 +132,10 @@ public partial class ConversionProgressWindow : FluentWindow
         var sourceExt = Path.GetExtension(item.InputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = item.TargetFormat.TrimStart('.').ToLowerInvariant();
 
-        if (_isBatch && _registry.FindConverter(sourceExt, targetExt) == null)
+        if (_registry.FindConverter(sourceExt, targetExt) == null)
         {
             item.Status = QueueItemStatus.Done;
-            item.StatusText = I18n.T("StatusSkipped");
+            item.StatusText = I18n.T("StatusSkippedUnsupported");
             item.ProgressPercentage = 100;
             item.IsIndeterminate = false;
             return;
@@ -137,7 +144,7 @@ public partial class ConversionProgressWindow : FluentWindow
         if (targetExt != "reencode" && sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
         {
             item.Status = QueueItemStatus.Done;
-            item.StatusText = I18n.T("StatusSkipped");
+            item.StatusText = I18n.T("StatusSkippedAlreadyTarget");
             item.ProgressPercentage = 100;
             item.IsIndeterminate = false;
             return;
@@ -188,7 +195,7 @@ public partial class ConversionProgressWindow : FluentWindow
                         item.ProgressPercentage = 100;
                         item.IsIndeterminate = false;
                         item.Status = QueueItemStatus.Done;
-                        item.StatusText = result.Skipped ? I18n.T("StatusSkipped") : I18n.T("StatusDone");
+                        item.StatusText = result.Skipped ? (result.ErrorMessage ?? I18n.T("StatusSkipped")) : I18n.T("StatusDone");
                         item.Detail = "100%";
                     }
                     else if (item.Cts.IsCancellationRequested)
@@ -238,13 +245,29 @@ public partial class ConversionProgressWindow : FluentWindow
         });
     }
 
-    private void NumParallel_ValueChanged(object sender, NumberBoxValueChangedEventArgs args)
+    private void BtnParallelDec_Click(object sender, RoutedEventArgs e)
     {
-        var newVal = (int)Math.Max(1, Math.Round(args.NewValue ?? 1));
-        var oldVal = _maxParallel;
-        if (newVal == oldVal) return;
+        if (_maxParallel > 1)
+        {
+            UpdateMaxParallel(_maxParallel - 1);
+        }
+    }
 
+    private void BtnParallelInc_Click(object sender, RoutedEventArgs e)
+    {
+        if (_maxParallel < 16)
+        {
+            UpdateMaxParallel(_maxParallel + 1);
+        }
+    }
+
+    private void UpdateMaxParallel(int newVal)
+    {
+        var oldVal = _maxParallel;
         _maxParallel = newVal;
+        TxtParallelValue.Text = _maxParallel.ToString();
+        BtnParallelDec.IsEnabled = _maxParallel > 1;
+        BtnParallelInc.IsEnabled = _maxParallel < 16;
 
         if (newVal > oldVal)
         {
@@ -297,11 +320,41 @@ public partial class ConversionProgressWindow : FluentWindow
         else if (total > 0 && completed == total)
         {
             StopIconRotation();
-            TxtOverallStatus.Text = errors > 0
-                ? I18n.T("StatusCompletedWithErrors", completed - errors, errors)
-                : I18n.T("StatusAllDone");
-            BtnCancelAll.Content = I18n.T("BtnClose");
-            BtnPauseAll.IsEnabled = false;
+            bool allSuccessful = errors == 0 && Items.All(i => i.Status == QueueItemStatus.Done);
+            if (allSuccessful)
+            {
+                TxtOverallStatus.Text = I18n.T("StatusAllDone");
+                BtnCancelAll.Content = I18n.T("BtnClose");
+                BtnPauseAll.IsEnabled = false;
+                ExitCode = 0;
+
+                _autoCloseCts?.Cancel();
+                _autoCloseCts = new CancellationTokenSource();
+                var token = _autoCloseCts.Token;
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(600, token);
+                        if (!token.IsCancellationRequested)
+                        {
+                            Dispatcher.Invoke(Close);
+                        }
+                    }
+                    catch (OperationCanceledException) { }
+                });
+            }
+            else
+            {
+                _autoCloseCts?.Cancel();
+                _autoCloseCts = null;
+                TxtOverallStatus.Text = errors > 0
+                    ? I18n.T("StatusCompletedWithErrors", completed - errors, errors)
+                    : I18n.T("StatusAllDone");
+                BtnCancelAll.Content = I18n.T("BtnClose");
+                BtnPauseAll.IsEnabled = false;
+            }
         }
         else
         {
@@ -361,8 +414,18 @@ public partial class ConversionProgressWindow : FluentWindow
             }
             else if (item.Status == QueueItemStatus.Paused)
             {
-                item.Resume();
-                ProcessQueue();
+                if (item.RunningProcess != null && !item.RunningProcess.HasExited)
+                {
+                    item.Resume();
+                }
+                else
+                {
+                    StartItemConversion(item);
+                }
+            }
+            else if (item.Status == QueueItemStatus.Queued)
+            {
+                StartItemConversion(item);
             }
             UpdateOverallState();
         }
@@ -412,6 +475,10 @@ public partial class ConversionProgressWindow : FluentWindow
 
     protected override void OnClosing(CancelEventArgs e)
     {
+        _autoCloseCts?.Cancel();
+        _autoCloseCts?.Dispose();
+        _autoCloseCts = null;
+
         foreach (var item in Items)
         {
             if (item.Status is QueueItemStatus.Converting or QueueItemStatus.Paused or QueueItemStatus.Queued)
