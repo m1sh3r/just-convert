@@ -168,34 +168,49 @@ public class SubFormatExplorerCommand : IExplorerCommand
         if (paths.Count == 0) return 0;
 
         var isBatch = paths.Count > 1;
+        var validPaths = paths.Where(filePath =>
+        {
+            var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
+            return !isBatch || Registry.FindConverter(ext, _targetFormat) != null;
+        }).ToList();
+
+        if (validPaths.Count == 0) return 0;
+
+        if (ConversionQueueIpc.TrySend(validPaths, _targetFormat))
+        {
+            return 0;
+        }
+
         var exePath = Path.Combine(AppContext.BaseDirectory, "just-convert.exe");
         if (!File.Exists(exePath))
         {
             exePath = "just-convert.exe";
         }
 
-        foreach (var filePath in paths)
+        string arguments;
+        if (validPaths.Count == 1)
         {
-            var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-            if (isBatch && Registry.FindConverter(ext, _targetFormat) == null)
-            {
-                continue;
-            }
-
-            var batchArg = isBatch ? " --batch" : "";
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = exePath,
-                Arguments = $"convert \"{filePath}\" --to {_targetFormat}{batchArg}",
-                UseShellExecute = true
-            };
-
-            try
-            {
-                Process.Start(startInfo);
-            }
-            catch { }
+            arguments = $"convert \"{validPaths[0]}\" --to {_targetFormat}";
         }
+        else
+        {
+            var tempFile = Path.Combine(Path.GetTempPath(), $"just-convert-batch-{Guid.NewGuid():N}.tmp");
+            File.WriteAllLines(tempFile, validPaths);
+            arguments = $"convert --file-list \"{tempFile}\" --to {_targetFormat} --batch";
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = exePath,
+            Arguments = arguments,
+            UseShellExecute = true
+        };
+
+        try
+        {
+            Process.Start(startInfo);
+        }
+        catch { }
 
         return 0;
     }
