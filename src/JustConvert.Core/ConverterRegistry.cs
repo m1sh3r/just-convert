@@ -62,8 +62,9 @@ public class ConverterRegistry
 
         if (targetExt != "reencode" && sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
         {
-            progress?.Report(new ConversionProgress(100, I18n.T("StatusSkipped")));
-            return new ConversionResult(true, inputPath, null, null, TimeSpan.Zero, Skipped: true);
+            var msg = I18n.T("StatusSkippedAlreadyTarget");
+            progress?.Report(new ConversionProgress(100, msg));
+            return new ConversionResult(true, inputPath, msg, null, TimeSpan.Zero, Skipped: true);
         }
 
         var converter = FindConverter(sourceExt, targetExt);
@@ -71,8 +72,9 @@ public class ConverterRegistry
         {
             if (isBatch)
             {
-                progress?.Report(new ConversionProgress(100, I18n.T("StatusSkipped")));
-                return new ConversionResult(true, inputPath, null, null, TimeSpan.Zero, Skipped: true);
+                var msg = I18n.T("StatusSkippedUnsupported");
+                progress?.Report(new ConversionProgress(100, msg));
+                return new ConversionResult(true, inputPath, msg, null, TimeSpan.Zero, Skipped: true);
             }
 
             return new ConversionResult(false, null, I18n.T("NoConverterFound", sourceExt, targetExt));
