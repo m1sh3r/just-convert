@@ -23,9 +23,9 @@
 
   <Target Name="PreparePayloadZip" BeforeTargets="AssignTargetPaths;PrepareResourceNames" DependsOnTargets="MinVer">
     <PropertyGroup>
-      <PayloadStagingDir>$(IntermediateOutputPath)payload\</PayloadStagingDir>
-      <PayloadZipFile>$(IntermediateOutputPath)Payload.zip</PayloadZipFile>
-      <RepoDistAppDir>$(MSBuildThisFileDirectory)..\..\dist\app</RepoDistAppDir>
+      <PayloadStagingDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(IntermediateOutputPath)payload\'))</PayloadStagingDir>
+      <PayloadZipFile>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\$(IntermediateOutputPath)Payload.zip'))</PayloadZipFile>
+      <RepoDistAppDir>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\dist\app'))</RepoDistAppDir>
     </PropertyGroup>
 
     <RemoveDir Directories="$(PayloadStagingDir)" />
@@ -41,22 +41,19 @@
     </ItemGroup>
     <Copy SourceFiles="@(DistPayloadFiles)" DestinationFolder="$(PayloadStagingDir)%(RecursiveDir)" Condition="'@(DistPayloadFiles)' != ''" />
 
-    <ItemGroup Condition="'@(CustomPayloadFiles)' == '' And '@(DistPayloadFiles)' == ''">
-      <CliPayloadFiles Condition="Exists('..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\publish\just-convert.exe')" Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\publish\*.*" Exclude="*.pdb" />
-      <CliPayloadFiles Condition="'@(CliPayloadFiles)' == '' And Exists('..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\just-convert.exe')" Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\win-x64\*.*" Exclude="*.pdb" />
-      <CliPayloadFiles Condition="'@(CliPayloadFiles)' == '' And Exists('..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\just-convert.exe')" Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\*.*" Exclude="*.pdb" />
+    <MSBuild Condition="'@(CustomPayloadFiles)' == '' And '@(DistPayloadFiles)' == ''"
+             Projects="..\JustConvert.Cli\JustConvert.Cli.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;PublishReadyToRun=true;PublishDir=$(PayloadStagingDir);SelfContained=false" />
 
-      <ShellExPayloadFiles Condition="Exists('..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\publish\JustConvert.ShellExtension.dll')" Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\publish\*.*" Exclude="*.pdb" />
-      <ShellExPayloadFiles Condition="'@(ShellExPayloadFiles)' == '' And Exists('..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\JustConvert.ShellExtension.dll')" Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\win-x64\*.*" Exclude="*.pdb" />
-      <ShellExPayloadFiles Condition="'@(ShellExPayloadFiles)' == '' And Exists('..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\JustConvert.ShellExtension.dll')" Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\*.*" Exclude="*.pdb" />
+    <MSBuild Condition="'@(CustomPayloadFiles)' == '' And '@(DistPayloadFiles)' == ''"
+             Projects="..\JustConvert.ShellExtension\JustConvert.ShellExtension.csproj"
+             Targets="Publish"
+             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishDir=$(PayloadStagingDir);SelfContained=false" />
 
-      <ManifestFile Include="$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml" />
-    </ItemGroup>
-    <Copy SourceFiles="@(CliPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" Condition="'@(CliPayloadFiles)' != ''" />
-    <Copy SourceFiles="@(ShellExPayloadFiles)" DestinationFolder="$(PayloadStagingDir)" Condition="'@(ShellExPayloadFiles)' != ''" />
-    <Copy SourceFiles="@(ManifestFile)" DestinationFolder="$(PayloadStagingDir)" Condition="'@(ManifestFile)' != ''" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml" DestinationFolder="$(PayloadStagingDir)" Condition="Exists('$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml')" />
 
-    <Error Condition="!Exists('$(PayloadStagingDir)just-convert.exe')" Text="Payload staging directory is missing just-convert.exe. Build or publish JustConvert.Cli first." />
+    <Error Condition="!Exists('$(PayloadStagingDir)just-convert.exe')" Text="Payload staging directory is missing just-convert.exe." />
 
     <XmlPoke XmlInputPath="$(PayloadStagingDir)AppxManifest.xml"
              Query="/ns:Package/ns:Identity/@Version"
@@ -75,15 +72,15 @@
     </ItemGroup>
   </Target>
 
-  <Target Name="CopyPayloadFiles" AfterTargets="Build" Condition="'$(RuntimeIdentifier)' == ''">
-    <ItemGroup>
-      <CliOutputFiles Include="..\JustConvert.Cli\bin\$(Configuration)\net10.0-windows\just-convert.*" />
-      <ShellExOutputFiles Include="..\JustConvert.ShellExtension\bin\$(Configuration)\net10.0-windows\JustConvert.ShellExtension.*" />
-      <ManifestFiles Include="$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml" />
-    </ItemGroup>
-    <Copy SourceFiles="@(CliOutputFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(ShellExOutputFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="@(ManifestFiles)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  <Target Name="NameVersionedInstaller" AfterTargets="Publish" DependsOnTargets="MinVer">
+    <PropertyGroup>
+      <CleanVersion Condition="'$(MinVerVersion)' != ''">$(MinVerVersion)</CleanVersion>
+      <CleanVersion Condition="'$(CleanVersion)' == ''">$(Version)</CleanVersion>
+    </PropertyGroup>
+
+    <Copy SourceFiles="$(PublishDir)JustConvert-Setup.exe"
+          DestinationFiles="$(PublishDir)JustConvert-$(CleanVersion)-Setup.exe"
+          Condition="Exists('$(PublishDir)JustConvert-Setup.exe') And '$(CleanVersion)' != ''" />
   </Target>
 
 </Project>

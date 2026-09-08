@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows;
@@ -16,7 +17,7 @@ namespace JustConvert.Installer;
 
 public class Program
 {
-    public static readonly string AppVersion = FileVersionInfo.GetVersionInfo(Environment.ProcessPath ?? typeof(Program).Assembly.Location).ProductVersion?.Split('+')[0] ?? string.Empty;
+    public static readonly string AppVersion = typeof(Program).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? string.Empty;
     public const string AppPublisher = "m1sh3r";
     public const string AppName = "Just Convert";
 
@@ -102,12 +103,13 @@ public class Program
             : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "m1sh3r", "Just Convert");
     }
 
-    public static async Task InstallCoreAsync(string installDir, InstallScope scope, bool downloadFfmpeg, IProgress<(double? Percent, string Status)>? progress = null, CancellationToken ct = default)
+    public static async Task InstallCoreAsync(string installDir, InstallScope scope, bool ensureDependencies = true, IProgress<(double? Percent, string Status)>? progress = null, CancellationToken ct = default)
     {
         ct.ThrowIfCancellationRequested();
         progress?.Report((null, I18n.T("SetupCopying")));
 
         KillRunningProcesses(installDir);
+        CleanupOldFiles(installDir);
 
         if (!Directory.Exists(installDir))
         {
@@ -125,7 +127,7 @@ public class Program
         if (!string.IsNullOrEmpty(currentExe) && File.Exists(currentExe))
         {
             var destSetup = Path.Combine(installDir, "JustConvert-Setup.exe");
-            try { File.Copy(currentExe, destSetup, true); } catch { }
+            SafeCopyFile(currentExe, destSetup);
         }
 
         var installedExe = Path.Combine(installDir, "just-convert.exe");
@@ -157,9 +159,21 @@ public class Program
 
         ct.ThrowIfCancellationRequested();
 
-        if (downloadFfmpeg && MediaConverter.FindFfmpegPath() == null)
+        if (ensureDependencies)
         {
-            await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
+            var hasFfmpeg = File.Exists(Path.Combine(installDir, "ffmpeg.exe")) || MediaConverter.FindFfmpegPath() != null;
+            if (!hasFfmpeg)
+            {
+                await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
+            }
+
+            ct.ThrowIfCancellationRequested();
+
+            var hasMagick = File.Exists(Path.Combine(installDir, "magick.exe")) || ImageConverter.FindMagickPath() != null;
+            if (!hasMagick)
+            {
+                await ImageMagickInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
+            }
         }
 
         ct.ThrowIfCancellationRequested();
@@ -264,7 +278,7 @@ public class Program
     {
         try
         {
-            foreach (var name in new[] { "just-convert", "ffmpeg" })
+            foreach (var name in new[] { "just-convert", "ffmpeg", "magick" })
             {
                 foreach (var proc in Process.GetProcessesByName(name))
                 {
@@ -283,6 +297,65 @@ public class Program
         catch { }
     }
 
+    private static void CleanupOldFiles(string installDir)
+    {
+        try
+        {
+            if (!Directory.Exists(installDir)) return;
+            foreach (var old in Directory.GetFiles(installDir, "*.old", SearchOption.AllDirectories))
+            {
+                try { File.Delete(old); } catch { }
+            }
+        }
+        catch { }
+    }
+
+    private static void SafeCopyFile(string source, string destination)
+    {
+        try
+        {
+            File.Copy(source, destination, true);
+        }
+        catch (IOException)
+        {
+            try
+            {
+                var oldFile = destination + "." + Guid.NewGuid().ToString("N")[..8] + ".old";
+                if (File.Exists(destination))
+                {
+                    File.Move(destination, oldFile, true);
+                }
+                File.Copy(source, destination, true);
+                try { File.Delete(oldFile); } catch { }
+            }
+            catch { }
+        }
+        catch { }
+    }
+
+    private static void SafeExtractEntry(ZipArchiveEntry entry, string destination)
+    {
+        try
+        {
+            entry.ExtractToFile(destination, true);
+        }
+        catch (IOException)
+        {
+            try
+            {
+                var oldFile = destination + "." + Guid.NewGuid().ToString("N")[..8] + ".old";
+                if (File.Exists(destination))
+                {
+                    File.Move(destination, oldFile, true);
+                }
+                entry.ExtractToFile(destination, true);
+                try { File.Delete(oldFile); } catch { }
+            }
+            catch { }
+        }
+        catch { }
+    }
+
     private static bool TryExtractEmbeddedPayload(string destinationDir)
     {
         try
@@ -290,21 +363,24 @@ public class Program
             using var stream = typeof(Program).Assembly.GetManifestResourceStream("Payload.zip");
             if (stream == null) return false;
 
+            var fullDestDirPath = Path.GetFullPath(destinationDir + Path.DirectorySeparatorChar);
+
             using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
             foreach (var entry in archive.Entries)
             {
                 if (string.IsNullOrEmpty(entry.Name)) continue;
-                var destPath = Path.Combine(destinationDir, entry.FullName);
-                var destSubDir = Path.GetDirectoryName(destPath);
+                var destFileName = Path.GetFullPath(Path.Combine(destinationDir, entry.FullName));
+                if (!destFileName.StartsWith(fullDestDirPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var destSubDir = Path.GetDirectoryName(destFileName);
                 if (!string.IsNullOrEmpty(destSubDir) && !Directory.Exists(destSubDir))
                 {
                     Directory.CreateDirectory(destSubDir);
                 }
-                try
-                {
-                    entry.ExtractToFile(destPath, true);
-                }
-                catch { }
+                SafeExtractEntry(entry, destFileName);
             }
             return true;
         }
@@ -316,31 +392,40 @@ public class Program
 
     private static void CopyDirectoryFiles(string source, string destination)
     {
+        var fullDest = Path.GetFullPath(destination);
+        var destPrefix = fullDest.EndsWith(Path.DirectorySeparatorChar) ? fullDest : fullDest + Path.DirectorySeparatorChar;
+
         var filesToCopy = Directory.GetFiles(source, "*.*", SearchOption.TopDirectoryOnly);
         foreach (var file in filesToCopy)
         {
             var fileName = Path.GetFileName(file);
-            var destFile = Path.Combine(destination, fileName);
-            try
-            {
-                File.Copy(file, destFile, true);
-            }
-            catch { }
+            var destFile = Path.GetFullPath(Path.Combine(fullDest, fileName));
+            if (!destFile.StartsWith(destPrefix, StringComparison.OrdinalIgnoreCase)) continue;
+            SafeCopyFile(file, destFile);
         }
 
         var manifestsDir = Path.Combine(source, "manifests");
         if (Directory.Exists(manifestsDir))
         {
-            var destManifests = Path.Combine(destination, "manifests");
-            Directory.CreateDirectory(destManifests);
-            foreach (var f in Directory.GetFiles(manifestsDir))
+            var destManifests = Path.GetFullPath(Path.Combine(fullDest, "manifests"));
+            if (destManifests.StartsWith(destPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                try
+                Directory.CreateDirectory(destManifests);
+                var manifestDestPrefix = destManifests.EndsWith(Path.DirectorySeparatorChar) ? destManifests : destManifests + Path.DirectorySeparatorChar;
+                foreach (var f in Directory.GetFiles(manifestsDir))
                 {
-                    File.Copy(f, Path.Combine(destManifests, Path.GetFileName(f)), true);
-                    File.Copy(f, Path.Combine(destination, Path.GetFileName(f)), true);
+                    var fName = Path.GetFileName(f);
+                    var d1 = Path.GetFullPath(Path.Combine(destManifests, fName));
+                    var d2 = Path.GetFullPath(Path.Combine(fullDest, fName));
+                    if (d1.StartsWith(manifestDestPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        SafeCopyFile(f, d1);
+                    }
+                    if (d2.StartsWith(destPrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        SafeCopyFile(f, d2);
+                    }
                 }
-                catch { }
             }
         }
     }

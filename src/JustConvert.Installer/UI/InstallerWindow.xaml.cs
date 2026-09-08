@@ -11,7 +11,7 @@ public partial class InstallerWindow : FluentWindow
 {
     private readonly bool _startWithUninstall;
     private bool _isWorking;
-  private CancellationTokenSource? _cts;
+    private CancellationTokenSource? _cts;
 
     public InstallerWindow(InstallScope initialScope = InstallScope.CurrentUser, bool startWithUninstall = false)
     {
@@ -48,7 +48,6 @@ public partial class InstallerWindow : FluentWindow
     {
         var scope = RadioAllUsers.IsChecked == true ? InstallScope.AllUsers : InstallScope.CurrentUser;
         var installDir = Program.GetInstallDirectory(scope);
-        var downloadFfmpeg = MediaConverter.FindFfmpegPath() == null;
 
         if (scope == InstallScope.AllUsers && !Program.IsAdministrator())
         {
@@ -87,7 +86,7 @@ public partial class InstallerWindow : FluentWindow
         {
             await Task.Run(async () =>
             {
-                await Program.InstallCoreAsync(installDir, scope, downloadFfmpeg, progress, _cts.Token);
+                await Program.InstallCoreAsync(installDir, scope, true, progress, _cts.Token);
             }, _cts.Token);
 
             _isWorking = false;

@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -43,7 +43,7 @@
         <com:Extension Category="windows.comServer">
           <com:ComServer>
             <com:SurrogateServer DisplayName="JustConvert Explorer Command Handler">
-              <com:Class Id="78C3D0E2-51E2-4C18-9364-8846C74D2E5B" Path="JustConvert.ShellExtension.dll" ThreadingModel="STA" />
+              <com:Class Id="78C3D0E2-51E2-4C18-9364-8846C74D2E5B" Path="JustConvert.ShellExtension.comhost.dll" ThreadingModel="Both" />
             </com:SurrogateServer>
           </com:ComServer>
         </com:Extension>
