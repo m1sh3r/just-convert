@@ -15,7 +15,7 @@ public class MediaConverter : IFormatConverter
 
     private static readonly HashSet<string> AudioFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus"
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b"
     };
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
