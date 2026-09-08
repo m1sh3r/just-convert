@@ -140,7 +140,7 @@ public class Program
 
         if (!acquired)
         {
-            for (int attempt = 0; attempt < 25; attempt++)
+            for (int attempt = 0; attempt < 30; attempt++)
             {
                 Thread.Sleep(100);
                 if (ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath))
@@ -148,9 +148,26 @@ public class Program
                     return 0;
                 }
             }
+
+            try
+            {
+                acquired = mutex?.WaitOne(500) ?? false;
+            }
+            catch { }
+
+            if (!acquired)
+            {
+                if (ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath))
+                {
+                    return 0;
+                }
+                return 0;
+            }
         }
 
         ConversionProgressWindow? window = null;
+        var pendingMessages = new System.Collections.Concurrent.ConcurrentQueue<QueueIpcMessage>();
+
         using var ipcServer = ConversionQueueIpc.StartServer(msg =>
         {
             if (window != null)
@@ -161,11 +178,19 @@ public class Program
                     window.Activate();
                 });
             }
+            else
+            {
+                pendingMessages.Enqueue(msg);
+            }
         });
 
         var exitCode = RunWindow(() =>
         {
             window = new ConversionProgressWindow(inputFiles, targetFormat, outputPath, isBatch);
+            while (pendingMessages.TryDequeue(out var pending))
+            {
+                window.EnqueueFiles(pending.Files, pending.TargetFormat, pending.OutputPath);
+            }
             return window;
         });
 

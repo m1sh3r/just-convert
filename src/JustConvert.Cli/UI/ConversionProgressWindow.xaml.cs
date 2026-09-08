@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Media;
@@ -132,21 +133,31 @@ public partial class ConversionProgressWindow : FluentWindow
         var sourceExt = Path.GetExtension(item.InputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = item.TargetFormat.TrimStart('.').ToLowerInvariant();
 
-        if (_registry.FindConverter(sourceExt, targetExt) == null)
-        {
-            item.Status = QueueItemStatus.Done;
-            item.StatusText = I18n.T("StatusSkippedUnsupported");
-            item.ProgressPercentage = 100;
-            item.IsIndeterminate = false;
-            return;
-        }
-
         if (targetExt != "reencode" && sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
         {
             item.Status = QueueItemStatus.Done;
             item.StatusText = I18n.T("StatusSkippedAlreadyTarget");
             item.ProgressPercentage = 100;
             item.IsIndeterminate = false;
+            Dispatcher.InvokeAsync(() =>
+            {
+                ProcessQueue();
+                UpdateOverallState();
+            });
+            return;
+        }
+
+        if (_registry.FindConverter(sourceExt, targetExt) == null)
+        {
+            item.Status = QueueItemStatus.Done;
+            item.StatusText = I18n.T("StatusSkippedUnsupported");
+            item.ProgressPercentage = 100;
+            item.IsIndeterminate = false;
+            Dispatcher.InvokeAsync(() =>
+            {
+                ProcessQueue();
+                UpdateOverallState();
+            });
             return;
         }
 
@@ -336,7 +347,17 @@ public partial class ConversionProgressWindow : FluentWindow
                 {
                     try
                     {
-                        await Task.Delay(600, token);
+                        var delayMs = 600;
+                        try
+                        {
+                            if (Process.GetProcessesByName("just-convert").Length > 1)
+                            {
+                                delayMs = 1500;
+                            }
+                        }
+                        catch { }
+
+                        await Task.Delay(delayMs, token);
                         if (!token.IsCancellationRequested)
                         {
                             Dispatcher.Invoke(Close);
