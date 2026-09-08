@@ -5,7 +5,7 @@ namespace JustConvert.Core.Converters;
 
 public class ImageConverter : IFormatConverter
 {
-    public string Name => "Image Converter (FFmpeg)";
+    public string Name => "Image Converter (ImageMagick)";
 
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -18,6 +18,95 @@ public class ImageConverter : IFormatConverter
         "ico", "bmp", "gif", "jp2",
         "tiff", "tga", "pcx", "ppm", "avif"
     ];
+
+    public static string? FindMagickPath()
+    {
+        var localExe = Path.Combine(AppContext.BaseDirectory, "magick.exe");
+        if (File.Exists(localExe)) return localExe;
+
+        string[] appLocations =
+        [
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "m1sh3r", "Just Convert", "magick.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "m1sh3r", "Just Convert", "magick.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "m1sh3r", "JustConvert", "magick.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "m1sh3r", "JustConvert", "magick.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Just Convert", "magick.exe"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "JustConvert", "magick.exe")
+        ];
+
+        foreach (var loc in appLocations)
+        {
+            if (File.Exists(loc)) return loc;
+        }
+
+        var customPath = Environment.GetEnvironmentVariable("MAGICK_HOME") ?? Environment.GetEnvironmentVariable("MAGICK_PATH");
+        if (!string.IsNullOrEmpty(customPath))
+        {
+            if (File.Exists(customPath)) return customPath;
+            var binPath = Path.Combine(customPath, "magick.exe");
+            if (File.Exists(binPath)) return binPath;
+            binPath = Path.Combine(customPath, "bin", "magick.exe");
+            if (File.Exists(binPath)) return binPath;
+        }
+
+        var paths = (Environment.GetEnvironmentVariable("PATH") ?? "")
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var p in paths)
+        {
+            try
+            {
+                var target = Path.Combine(p.Trim('\"'), "magick.exe");
+                if (File.Exists(target)) return target;
+            }
+            catch { }
+        }
+
+        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+        string[] knownLocations =
+        [
+            Path.Combine(localAppData, @"Microsoft\WinGet\Links\magick.exe"),
+            Path.Combine(userProfile, @"scoop\shims\magick.exe"),
+            Path.Combine(userProfile, @"scoop\apps\imagemagick\current\magick.exe"),
+            @"C:\ProgramData\chocolatey\bin\magick.exe",
+            @"C:\Program Files\ImageMagick\magick.exe"
+        ];
+
+        foreach (var loc in knownLocations)
+        {
+            if (File.Exists(loc)) return loc;
+        }
+
+        var progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        if (Directory.Exists(progFiles))
+        {
+            try
+            {
+                var dirs = Directory.GetDirectories(progFiles, "ImageMagick*");
+                foreach (var d in dirs)
+                {
+                    var exe = Path.Combine(d, "magick.exe");
+                    if (File.Exists(exe)) return exe;
+                }
+            }
+            catch { }
+        }
+
+        var wingetPackagesDir = Path.Combine(localAppData, @"Microsoft\WinGet\Packages");
+        if (Directory.Exists(wingetPackagesDir))
+        {
+            try
+            {
+                var matches = Directory.GetFiles(wingetPackagesDir, "magick.exe", SearchOption.AllDirectories);
+                if (matches.Length > 0) return matches[0];
+            }
+            catch { }
+        }
+
+        return null;
+    }
 
     public bool CanConvert(string sourceExtension, string targetExtension)
     {
@@ -65,25 +154,22 @@ public class ImageConverter : IFormatConverter
         CancellationToken ct = default)
     {
         var sw = Stopwatch.StartNew();
-        var ffmpeg = MediaConverter.FindFfmpegPath();
+        var magick = FindMagickPath();
 
-        if (ffmpeg == null)
+        if (magick == null)
         {
             return new ConversionResult(
                 false,
                 null,
-                I18n.T("FfmpegNotFound"),
+                I18n.T("ImageMagickNotFound"),
                 null,
                 sw.Elapsed
             );
         }
 
         var sourceExt = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
-        var targetExt = targetExtension.TrimStart('.').ToLowerInvariant();
-        if (targetExt == "reencode")
-        {
-            targetExt = sourceExt;
-        }
+        var isReencode = targetExtension.TrimStart('.').Equals("reencode", StringComparison.OrdinalIgnoreCase);
+        var targetExt = isReencode ? sourceExt : targetExtension.TrimStart('.').ToLowerInvariant();
 
         var outputExt = targetExt switch
         {
@@ -111,10 +197,10 @@ public class ImageConverter : IFormatConverter
         {
             progress?.Report(new ConversionProgress(20, I18n.T("ImageLoading")));
 
-            var arguments = BuildArguments(inputPath, outputPath, targetExt);
+            var arguments = BuildArguments(inputPath, outputPath, targetExt, isReencode);
             var startInfo = new ProcessStartInfo
             {
-                FileName = ffmpeg,
+                FileName = magick,
                 Arguments = arguments,
                 UseShellExecute = false,
                 RedirectStandardError = true,
@@ -175,7 +261,7 @@ public class ImageConverter : IFormatConverter
             }
             catch { }
 
-            return new ConversionResult(false, null, I18n.T("FfmpegExitError", proc.ExitCode), logs, sw.Elapsed);
+            return new ConversionResult(false, null, I18n.T("ImageMagickExitError", proc.ExitCode), logs, sw.Elapsed);
         }
         catch (OperationCanceledException)
         {
@@ -191,15 +277,32 @@ public class ImageConverter : IFormatConverter
         }
     }
 
-    private static string BuildArguments(string input, string output, string targetExt)
+    private static string BuildArguments(string input, string output, string targetExt, bool isReencode = false)
     {
+        if (isReencode)
+        {
+            return targetExt switch
+            {
+                "png" => $"\"{input}\" -strip -quality 95 \"{output}\"",
+                "jpg" or "jpeg" => $"\"{input}\" -strip -quality 92 \"{output}\"",
+                "webp" => $"\"{input}\" -quality 85 \"{output}\"",
+                "avif" => $"\"{input}\" -quality 80 \"{output}\"",
+                "tiff" or "tif" => $"\"{input}\" -compress lzw \"{output}\"",
+                "jp2" or "jpeg2000" => $"\"{input}\" -quality 85 \"{output}\"",
+                _ => $"\"{input}\" \"{output}\""
+            };
+        }
+
         return targetExt switch
         {
-            "jpg" or "jpeg" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -vf \"split[s0][s1];[s0]drawbox=c=white:t=fill[bg];[bg][s1]overlay=format=auto\" -pix_fmt yuvj444p -q:v 2 -map_metadata 0 \"{output}\"",
-            "webp" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -c:v libwebp -quality 85 -map_metadata 0 \"{output}\"",
-            "ico" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -vf \"scale=256:256:force_original_aspect_ratio=decrease\" -map_metadata 0 \"{output}\"",
-            "jp2" or "jpeg2000" => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -c:v libopenjpeg -map_metadata 0 \"{output}\"",
-            _ => $"-y -i \"{input}\" -sws_flags +accurate_rnd+full_chroma_int+bitexact -map_metadata 0 \"{output}\""
+            "png" => $"\"{input}\" -quality 95 \"{output}\"",
+            "jpg" or "jpeg" => $"\"{input}\" -background white -flatten -quality 92 \"{output}\"",
+            "webp" => $"\"{input}\" -quality 85 \"{output}\"",
+            "avif" => $"\"{input}\" -quality 80 \"{output}\"",
+            "ico" => $"\"{input}\" -resize 256x256 \"{output}\"",
+            "jp2" or "jpeg2000" => $"\"{input}\" -quality 85 \"{output}\"",
+            "tiff" or "tif" => $"\"{input}\" -compress lzw \"{output}\"",
+            _ => $"\"{input}\" \"{output}\""
         };
     }
 }

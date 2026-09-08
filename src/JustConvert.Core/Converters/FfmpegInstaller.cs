@@ -62,21 +62,41 @@ public static class FfmpegInstaller
             }
 
             progress?.Report((null, I18n.T("SetupExtractingFfmpeg")));
-            ZipFile.ExtractToDirectory(tempZip, tempExtract);
 
-            var foundFile = Directory.GetFiles(tempExtract, "ffmpeg.exe", SearchOption.AllDirectories).FirstOrDefault();
-            if (foundFile != null)
+            var fullDestDirPath = Path.GetFullPath(targetDir + Path.DirectorySeparatorChar);
+
+            using (var zipArchive = ZipFile.OpenRead(tempZip))
             {
-                File.Copy(foundFile, ffmpegDest, true);
-
-                try
+                foreach (var entry in zipArchive.Entries)
                 {
-                    File.Delete(tempZip);
-                    Directory.Delete(tempExtract, true);
+                    if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var destFileName = Path.GetFullPath(Path.Combine(targetDir, "ffmpeg.exe"));
+                        if (destFileName.StartsWith(fullDestDirPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            try
+                            {
+                                entry.ExtractToFile(destFileName, true);
+                            }
+                            catch (IOException)
+                            {
+                                try
+                                {
+                                    var oldFile = destFileName + "." + Guid.NewGuid().ToString("N")[..8] + ".old";
+                                    if (File.Exists(destFileName))
+                                    {
+                                        File.Move(destFileName, oldFile, true);
+                                    }
+                                    entry.ExtractToFile(destFileName, true);
+                                    try { File.Delete(oldFile); } catch { }
+                                }
+                                catch { }
+                            }
+                            try { File.Delete(tempZip); } catch { }
+                            return true;
+                        }
+                    }
                 }
-                catch { }
-
-                return true;
             }
         }
         catch (Exception ex)
