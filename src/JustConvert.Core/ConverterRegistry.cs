@@ -49,7 +49,8 @@ public class ConverterRegistry
         string? outputPath = null,
         IProgress<ConversionProgress>? progress = null,
         CancellationToken ct = default,
-        bool isBatch = false)
+        bool isBatch = false,
+        IConversionController? controller = null)
     {
         if (!File.Exists(inputPath))
         {
@@ -77,6 +78,6 @@ public class ConverterRegistry
             return new ConversionResult(false, null, I18n.T("NoConverterFound", sourceExt, targetExt));
         }
 
-        return await converter.ConvertAsync(inputPath, targetExt, outputPath, progress, ct);
+        return await converter.ConvertAsync(inputPath, targetExt, outputPath, progress, ct, controller);
     }
 }

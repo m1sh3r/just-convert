@@ -15,6 +15,11 @@ public record ConversionProgress(
     string? Detail = null
 );
 
+public interface IConversionController
+{
+    void OnProcessStarted(System.Diagnostics.Process process);
+}
+
 public interface IFormatConverter
 {
     string Name { get; }
@@ -25,6 +30,7 @@ public interface IFormatConverter
         string targetExtension,
         string? outputPath = null,
         IProgress<ConversionProgress>? progress = null,
-        CancellationToken ct = default
+        CancellationToken ct = default,
+        IConversionController? controller = null
     );
 }

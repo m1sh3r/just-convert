@@ -151,7 +151,8 @@ public class ImageConverter : IFormatConverter
         string targetExtension,
         string? outputPath = null,
         IProgress<ConversionProgress>? progress = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        IConversionController? controller = null)
     {
         var sw = Stopwatch.StartNew();
         var magick = FindMagickPath();
@@ -225,12 +226,14 @@ public class ImageConverter : IFormatConverter
             progress?.Report(new ConversionProgress(60, I18n.T("EncodingTo", targetExt)));
 
             proc.Start();
+            controller?.OnProcessStarted(proc);
             proc.BeginErrorReadLine();
 
             using var registration = ct.Register(() =>
             {
                 try
                 {
+                    Windows.ProcessSuspender.Resume(proc);
                     if (!proc.HasExited)
                     {
                         proc.Kill();
