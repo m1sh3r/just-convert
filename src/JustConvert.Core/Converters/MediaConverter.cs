@@ -20,7 +20,7 @@ public class MediaConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "mov-prores422", "mov-prores4444", "frames"
+        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444", "frames"
     };
 
     public static string? FindFfmpegPath()
@@ -139,7 +139,7 @@ public class MediaConverter : IFormatConverter
 
         if (VideoFormats.Contains(src))
         {
-            return ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames", "reencode"];
+            return ["mp4-h264", "mp4-h265", "webm-vp9", "webm-av1", "mov-prores422", "mov-prores4444", "frames", "reencode"];
         }
 
         if (AudioFormats.Contains(src))
@@ -187,11 +187,11 @@ public class MediaConverter : IFormatConverter
         var isCompress = targetExt is "compress" or "compressed";
 
         string outputExt;
-        if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase)) outputExt = ".mp4";
+        if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase) && targetExt != "mp4-av1") outputExt = ".mp4";
         else if (targetExt.StartsWith("mov", StringComparison.OrdinalIgnoreCase)) outputExt = ".mov";
-        else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase)) outputExt = ".webm";
+        else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase) || targetExt is "vp9" or "av1") outputExt = ".webm";
         else if (targetExt.StartsWith("mkv", StringComparison.OrdinalIgnoreCase)) outputExt = ".mkv";
-        else if (targetExt is "h264" or "h265" or "hevc") outputExt = ".mp4";
+        else if (targetExt is "h264" or "h265" or "hevc" or "mp4-av1") outputExt = ".mp4";
         else outputExt = $".{targetExt}";
 
         if (string.IsNullOrWhiteSpace(outputPath))
@@ -215,6 +215,20 @@ public class MediaConverter : IFormatConverter
             else if (targetExt is "mp4-hevc" or "hevc" or "h265" or "mp4-h265")
             {
                 outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h265.mp4");
+            }
+            else if (targetExt is "webm-vp9" or "vp9" or "webm")
+            {
+                var isInputWebm = string.Equals(Path.GetExtension(inputPath), ".webm", StringComparison.OrdinalIgnoreCase);
+                outputPath = isInputWebm
+                    ? Path.Combine(dir, $"{fileNameWithoutExt}_vp9.webm")
+                    : Path.Combine(dir, $"{fileNameWithoutExt}.webm");
+            }
+            else if (targetExt is "webm-av1" or "av1")
+            {
+                var isInputWebm = string.Equals(Path.GetExtension(inputPath), ".webm", StringComparison.OrdinalIgnoreCase);
+                outputPath = isInputWebm
+                    ? Path.Combine(dir, $"{fileNameWithoutExt}_av1.webm")
+                    : Path.Combine(dir, $"{fileNameWithoutExt}.webm");
             }
             else if (targetExt is "mp4-h264" or "h264" or "mp4")
             {
@@ -440,9 +454,19 @@ public class MediaConverter : IFormatConverter
             return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -map_metadata 0 \"{output}\"";
         }
 
-        if (targetExt == "webm")
+        if (targetExt is "webm-vp9" or "vp9" or "webm")
         {
-            return $"-y -i \"{input}\" -c:v libvpx-vp9 -crf 30 -b:v 0 -c:a libopus -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libvpx-vp9 -crf 23 -b:v 0 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "webm-av1" or "av1")
+        {
+            return $"-y -i \"{input}\" -c:v libsvtav1 -crf 23 -preset 8 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt == "mp4-av1")
+        {
+            return $"-y -i \"{input}\" -c:v libsvtav1 -crf 23 -preset 8 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "mkv")

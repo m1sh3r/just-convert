@@ -40,7 +40,7 @@ public class ClassicContextMenuManager
     private static readonly Dictionary<string, string[]> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
         ["audio"] = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"],
-        ["video"] = ["mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames", "reencode"],
+        ["video"] = ["mp4-h264", "mp4-h265", "webm-vp9", "webm-av1", "mov-prores422", "mov-prores4444", "frames", "reencode"],
         ["image"] = ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
     };
 
@@ -144,8 +144,9 @@ public class ClassicContextMenuManager
         return fmt switch
         {
             "mp4-h264" or "mp4-h265" or "mp4" or "h264" or "h265" => 1,
-            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 2,
-            "frames" or "frames-png" or "frames-jpg" => 3,
+            "webm-vp9" or "vp9" or "webm-av1" or "av1" or "webm" => 2,
+            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 3,
+            "frames" or "frames-png" or "frames-jpg" => 4,
 
             "png" or "jpg" or "jpeg" or "webp" => 10,
             "ico" or "bmp" or "gif" => 11,

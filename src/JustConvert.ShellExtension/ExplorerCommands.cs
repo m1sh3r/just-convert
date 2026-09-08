@@ -310,8 +310,9 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
     public DynamicEnumExplorerCommand()
     {
         string[] videoGroup1 = ["mp4-h264", "mp4-h265"];
-        string[] videoGroup2 = ["mov-prores422", "mov-prores4444"];
-        string[] videoGroup3 = ["frames"];
+        string[] videoGroup2 = ["webm-vp9", "webm-av1"];
+        string[] videoGroup3 = ["mov-prores422", "mov-prores4444"];
+        string[] videoGroup4 = ["frames"];
 
         string[] imageGroup1 = ["png", "jpg", "webp"];
         string[] imageGroup2 = ["ico", "bmp", "gif"];
@@ -324,7 +325,7 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
 
         string[] allStandardFormats =
         [
-            "mp4-h264", "mp4-h265", "mov-prores422", "mov-prores4444", "frames",
+            "mp4-h264", "mp4-h265", "webm-vp9", "webm-av1", "mov-prores422", "mov-prores4444", "frames",
             "png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif",
             "mp3", "aac", "m4a", "wav", "flac", "ogg"
         ];
@@ -335,9 +336,12 @@ public class DynamicEnumExplorerCommand : IEnumExplorerCommand
             new SubFormatExplorerCommand("mp4-h264"),
             new SubFormatExplorerCommand("mp4-h265"),
             new SeparatorExplorerCommand(videoGroup1, videoGroup2),
+            new SubFormatExplorerCommand("webm-vp9", hasSeparatorBefore: true),
+            new SubFormatExplorerCommand("webm-av1"),
+            new SeparatorExplorerCommand(videoGroup2, videoGroup3),
             new SubFormatExplorerCommand("mov-prores422", hasSeparatorBefore: true),
             new SubFormatExplorerCommand("mov-prores4444"),
-            new SeparatorExplorerCommand(videoGroup2, videoGroup3),
+            new SeparatorExplorerCommand(videoGroup3, videoGroup4),
             new SubFormatExplorerCommand("frames", hasSeparatorBefore: true),
 
             new SubFormatExplorerCommand("png"),
