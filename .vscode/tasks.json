@@ -1,30 +1,60 @@
-﻿{
-    "version": "2.0.0",
-    "tasks": [
-        {
-            "label": "Build Solution",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "build",
-                "JustConvert.slnx"
-            ],
-            "problemMatcher": "$msCompile",
-            "group": {
-                "kind": "build",
-                "isDefault": true
-            }
-        },
-        {
-            "label": "Publish Single-File Installer",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "publish",
-                "src/JustConvert.Installer/JustConvert.Installer.csproj",
-                "/p:PublishProfile=FolderProfile"
-            ],
-            "problemMatcher": "$msCompile"
-        }
-    ]
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build Installer EXE (Release)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "publish",
+        "src/JustConvert.Installer/JustConvert.Installer.csproj",
+        "-c",
+        "Release",
+        "-r",
+        "win-x64",
+        "--self-contained",
+        "false",
+        "-o",
+        "dist"
+      ],
+      "group": "build",
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build Solution (Debug)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "JustConvert.slnx"
+      ],
+      "group": "build",
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Build Solution (Release)",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "JustConvert.slnx",
+        "-c",
+        "Release"
+      ],
+      "group": "build",
+      "problemMatcher": "$msCompile",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    }
+  ]
 }
