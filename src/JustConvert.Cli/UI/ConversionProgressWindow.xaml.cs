@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Windows;
@@ -11,24 +12,18 @@ namespace JustConvert.Cli.UI;
 
 public partial class ConversionProgressWindow : FluentWindow
 {
-    private readonly string _inputPath;
-    private readonly string _targetFormat;
-    private readonly string? _outputPath;
     private readonly ConverterRegistry _registry = new();
-    private readonly CancellationTokenSource _cts = new();
-
     private readonly bool _isBatch;
-    private bool _isRunning;
     private bool _isDirectError;
+    private int _maxParallel = 1;
+    private readonly object _queueLock = new();
 
+    public ObservableCollection<ConversionQueueItem> Items { get; } = [];
     public int ExitCode { get; private set; }
 
-    public ConversionProgressWindow(string inputPath, string targetFormat, string? outputPath = null, bool isBatch = false)
+    public ConversionProgressWindow(IReadOnlyList<string> initialFiles, string targetFormat, string? outputPath = null, bool isBatch = false)
     {
         InitializeComponent();
-        _inputPath = inputPath;
-        _targetFormat = targetFormat;
-        _outputPath = outputPath;
         _isBatch = isBatch;
 
         ApplicationThemeManager.ApplySystemTheme();
@@ -36,195 +31,395 @@ public partial class ConversionProgressWindow : FluentWindow
         ApplicationThemeManager.Apply(this);
         SystemThemeWatcher.Watch(this);
 
-        var fileName = Path.GetFileName(inputPath);
-        TxtFileName.Text = !string.IsNullOrEmpty(fileName) ? fileName : inputPath;
-        TxtTargetFormat.Text = $"→ {I18n.GetSubMenuTitle(targetFormat)}";
-        AppTitleBar.Title = string.Empty;
+        QueueItemsList.ItemsSource = Items;
+        AppTitleBar.Title = I18n.T("QueueTitle");
+
+        EnqueueFiles(initialFiles, targetFormat, outputPath);
 
         StartIconRotation();
         Loaded += OnLoaded;
     }
 
+    public ConversionProgressWindow(string inputPath, string targetFormat, string? outputPath = null, bool isBatch = false)
+        : this([inputPath], targetFormat, outputPath, isBatch)
+    {
+    }
+
     public static ConversionProgressWindow CreateForError(string inputPath, string targetFormat, string errorMessage, string? errorLog)
     {
-        var window = new ConversionProgressWindow(inputPath, targetFormat);
+        var window = new ConversionProgressWindow([inputPath], targetFormat);
         window.ShowErrorDirectly(errorMessage, errorLog);
         return window;
+    }
+
+    public void EnqueueFiles(IReadOnlyList<string> files, string targetFormat, string? outputPath = null)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => EnqueueFiles(files, targetFormat, outputPath));
+            return;
+        }
+
+        foreach (var file in files)
+        {
+            if (string.IsNullOrWhiteSpace(file)) continue;
+
+            var item = new ConversionQueueItem(file, targetFormat, outputPath);
+            item.OnItemStateChanged += () => Dispatcher.Invoke(UpdateOverallState);
+            Items.Add(item);
+        }
+
+        UpdateOverallState();
+        ProcessQueue();
     }
 
     private void ShowErrorDirectly(string errorMessage, string? errorLog)
     {
         StopIconRotation();
         _isDirectError = true;
-        _isRunning = false;
-        MinHeight = 360;
-        MaxHeight = 360;
-        Height = 360;
-        ProgressPanel.Visibility = Visibility.Collapsed;
-        ErrorPanel.Visibility = Visibility.Visible;
-
-        AppTitleBar.Title = string.Empty;
+        ErrorDetailOverlay.Visibility = Visibility.Visible;
         InfoBarError.Message = errorMessage;
         TxtErrorLog.Text = !string.IsNullOrWhiteSpace(errorLog) ? errorLog : errorMessage;
         ExitCode = 1;
     }
 
-    private async void OnLoaded(object sender, RoutedEventArgs e)
+    private void OnLoaded(object sender, RoutedEventArgs e)
     {
         if (_isDirectError) return;
+        ProcessQueue();
+        UpdateOverallState();
+    }
 
-        var sourceExt = Path.GetExtension(_inputPath).TrimStart('.').ToLowerInvariant();
-        var targetExt = _targetFormat.TrimStart('.').ToLowerInvariant();
+    private void ProcessQueue()
+    {
+        lock (_queueLock)
+        {
+            int runningCount = Items.Count(i => i.Status == QueueItemStatus.Converting);
+            int availableSlots = _maxParallel - runningCount;
+
+            while (availableSlots > 0)
+            {
+                var autoPaused = Items.FirstOrDefault(i => i.Status == QueueItemStatus.Paused && i.AutoPaused);
+                if (autoPaused != null)
+                {
+                    autoPaused.Resume();
+                    availableSlots--;
+                    continue;
+                }
+
+                var next = Items.FirstOrDefault(i => i.Status == QueueItemStatus.Queued);
+                if (next == null) break;
+
+                StartItemConversion(next);
+                availableSlots--;
+            }
+        }
+    }
+
+    private void StartItemConversion(ConversionQueueItem item)
+    {
+        item.Status = QueueItemStatus.Converting;
+        item.StatusText = I18n.T("StatusPreparing");
+        item.Cts = new CancellationTokenSource();
+
+        var sourceExt = Path.GetExtension(item.InputPath).TrimStart('.').ToLowerInvariant();
+        var targetExt = item.TargetFormat.TrimStart('.').ToLowerInvariant();
 
         if (_isBatch && _registry.FindConverter(sourceExt, targetExt) == null)
         {
-            ExitCode = 0;
-            Close();
+            item.Status = QueueItemStatus.Done;
+            item.StatusText = I18n.T("StatusSkipped");
+            item.ProgressPercentage = 100;
+            item.IsIndeterminate = false;
             return;
         }
 
         if (targetExt != "reencode" && sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
         {
-            ExitCode = 0;
-            Close();
+            item.Status = QueueItemStatus.Done;
+            item.StatusText = I18n.T("StatusSkipped");
+            item.ProgressPercentage = 100;
+            item.IsIndeterminate = false;
             return;
         }
-
-        _isRunning = true;
-        TxtStatus.Text = I18n.T("StatusPreparing");
 
         var progress = new Progress<ConversionProgress>(p =>
         {
             Dispatcher.Invoke(() =>
             {
-                TxtStatus.Text = p.StatusMessage;
+                if (item.Status != QueueItemStatus.Converting) return;
 
+                item.StatusText = p.StatusMessage;
                 if (p.Percentage >= 0 && p.Percentage <= 100)
                 {
-                    ProgressBar.IsIndeterminate = false;
-                    ProgressBar.Value = p.Percentage;
+                    item.IsIndeterminate = false;
+                    item.ProgressPercentage = p.Percentage;
                 }
                 else
                 {
-                    ProgressBar.IsIndeterminate = true;
+                    item.IsIndeterminate = true;
                 }
 
                 if (!string.IsNullOrEmpty(p.Detail))
                 {
-                    TxtProgressDetails.Text = p.Percentage > 0
-                        ? $"{p.Percentage:F0}% ({p.Detail})"
-                        : p.Detail;
+                    item.Detail = p.Percentage > 0 ? $"{p.Percentage:F0}% ({p.Detail})" : p.Detail;
                 }
                 else if (p.Percentage > 0)
                 {
-                    TxtProgressDetails.Text = $"{p.Percentage:F0}%";
+                    item.Detail = $"{p.Percentage:F0}%";
                 }
                 else
                 {
-                    TxtProgressDetails.Text = string.Empty;
+                    item.Detail = null;
                 }
             });
         });
 
-        try
+        _ = Task.Run(async () =>
         {
-            var result = await Task.Run(async () =>
+            try
             {
-                return await _registry.ConvertFileAsync(_inputPath, _targetFormat, _outputPath, progress, _cts.Token, _isBatch);
-            });
+                var result = await _registry.ConvertFileAsync(item.InputPath, item.TargetFormat, item.OutputPath, progress, item.Cts.Token, _isBatch, item);
 
-            _isRunning = false;
-
-            if (result.Success)
-            {
-                if (result.Skipped)
+                Dispatcher.Invoke(() =>
                 {
-                    ExitCode = 0;
-                    Close();
-                    return;
-                }
+                    if (result.Success)
+                    {
+                        item.ProgressPercentage = 100;
+                        item.IsIndeterminate = false;
+                        item.Status = QueueItemStatus.Done;
+                        item.StatusText = result.Skipped ? I18n.T("StatusSkipped") : I18n.T("StatusDone");
+                        item.Detail = "100%";
+                    }
+                    else if (item.Cts.IsCancellationRequested)
+                    {
+                        item.Status = QueueItemStatus.Cancelled;
+                        item.StatusText = I18n.T("StatusItemCancelled");
+                        item.Detail = null;
+                    }
+                    else
+                    {
+                        item.Status = QueueItemStatus.Error;
+                        item.StatusText = result.ErrorMessage ?? I18n.T("ErrorDefault");
+                        item.ErrorMessage = result.ErrorMessage ?? I18n.T("ErrorDefault");
+                        item.ErrorLog = result.FullLog;
+                        item.Detail = null;
+                    }
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    item.Status = QueueItemStatus.Cancelled;
+                    item.StatusText = I18n.T("StatusItemCancelled");
+                    item.Detail = null;
+                });
+            }
+            catch (Exception ex)
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    item.Status = QueueItemStatus.Error;
+                    item.StatusText = ex.Message;
+                    item.ErrorMessage = ex.Message;
+                    item.ErrorLog = ex.ToString();
+                    item.Detail = null;
+                });
+            }
+            finally
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    ProcessQueue();
+                    UpdateOverallState();
+                });
+            }
+        });
+    }
 
-                StopIconRotation();
-                ProgressBar.IsIndeterminate = false;
-                ProgressBar.Value = 100;
-                TxtStatus.Text = I18n.T("StatusDone");
-                TxtProgressDetails.Text = "100%";
-                BtnCancel.IsEnabled = false;
-                ExitCode = 0;
-                await Task.Delay(500);
-                Close();
-            }
-            else if (_cts.IsCancellationRequested)
+    private void NumParallel_ValueChanged(object sender, NumberBoxValueChangedEventArgs args)
+    {
+        var newVal = (int)Math.Max(1, Math.Round(args.NewValue ?? 1));
+        var oldVal = _maxParallel;
+        if (newVal == oldVal) return;
+
+        _maxParallel = newVal;
+
+        if (newVal > oldVal)
+        {
+            int extraSlots = newVal - oldVal;
+            var autoPaused = Items.Where(i => i.Status == QueueItemStatus.Paused && i.AutoPaused).Take(extraSlots).ToList();
+            foreach (var item in autoPaused)
             {
-                StopIconRotation();
-                ProgressBar.IsIndeterminate = false;
-                ProgressBar.Value = 0;
-                TxtStatus.Text = I18n.T("StatusCancelled");
-                TxtProgressDetails.Text = string.Empty;
-                BtnCancel.IsEnabled = false;
-                ExitCode = 2;
-                await Task.Delay(500);
-                Close();
+                item.Resume();
             }
-            else
+            ProcessQueue();
+        }
+        else
+        {
+            var converting = Items.Where(i => i.Status == QueueItemStatus.Converting).Reverse().ToList();
+            int excess = converting.Count - newVal;
+            for (int i = 0; i < excess && i < converting.Count; i++)
             {
-                ShowErrorDirectly(result.ErrorMessage ?? I18n.T("ErrorDefault"), result.FullLog);
+                converting[i].Pause(isAuto: true);
             }
         }
-        catch (OperationCanceledException)
+
+        UpdateOverallState();
+    }
+
+    private void UpdateOverallState()
+    {
+        int total = Items.Count;
+        int completed = Items.Count(i => i.Status is QueueItemStatus.Done or QueueItemStatus.Error or QueueItemStatus.Cancelled);
+        int converting = Items.Count(i => i.Status == QueueItemStatus.Converting);
+        int paused = Items.Count(i => i.Status == QueueItemStatus.Paused);
+        int errors = Items.Count(i => i.Status == QueueItemStatus.Error);
+
+        TxtOverallCount.Text = total > 0 ? $"{completed} / {total}" : string.Empty;
+        OverallProgressBar.Value = total > 0 ? (completed * 100.0 / total) : 0;
+
+        if (converting > 0)
+        {
+            TxtOverallStatus.Text = I18n.T("StatusConverting");
+            StartIconRotation();
+            BtnPauseAll.Content = I18n.T("BtnPauseAll");
+            BtnCancelAll.Content = I18n.T("BtnCancelAll");
+        }
+        else if (paused > 0 && completed < total)
+        {
+            TxtOverallStatus.Text = I18n.T("StatusPaused");
+            StopIconRotation();
+            BtnPauseAll.Content = I18n.T("BtnResumeAll");
+            BtnCancelAll.Content = I18n.T("BtnCancelAll");
+        }
+        else if (total > 0 && completed == total)
         {
             StopIconRotation();
-            _isRunning = false;
-            ProgressBar.IsIndeterminate = false;
-            ProgressBar.Value = 0;
-            TxtStatus.Text = I18n.T("StatusCancelled");
-            TxtProgressDetails.Text = string.Empty;
-            BtnCancel.IsEnabled = false;
-            ExitCode = 2;
-            await Task.Delay(500);
+            TxtOverallStatus.Text = errors > 0
+                ? I18n.T("StatusCompletedWithErrors", completed - errors, errors)
+                : I18n.T("StatusAllDone");
+            BtnCancelAll.Content = I18n.T("BtnClose");
+            BtnPauseAll.IsEnabled = false;
+        }
+        else
+        {
+            StopIconRotation();
+            TxtOverallStatus.Text = I18n.T("StatusPreparing");
+            BtnPauseAll.Content = I18n.T("BtnPauseAll");
+            BtnCancelAll.Content = I18n.T("BtnCancelAll");
+        }
+    }
+
+    private void BtnPauseAll_Click(object sender, RoutedEventArgs e)
+    {
+        int converting = Items.Count(i => i.Status == QueueItemStatus.Converting);
+        if (converting > 0)
+        {
+            foreach (var item in Items.Where(i => i.Status == QueueItemStatus.Converting))
+            {
+                item.Pause(isAuto: false);
+            }
+        }
+        else
+        {
+            var paused = Items.Where(i => i.Status == QueueItemStatus.Paused).ToList();
+            foreach (var item in paused)
+            {
+                item.Resume();
+            }
+            ProcessQueue();
+        }
+        UpdateOverallState();
+    }
+
+    private void BtnCancelAll_Click(object sender, RoutedEventArgs e)
+    {
+        int completed = Items.Count(i => i.Status is QueueItemStatus.Done or QueueItemStatus.Error or QueueItemStatus.Cancelled);
+        if (Items.Count > 0 && completed == Items.Count)
+        {
             Close();
+            return;
         }
-        catch (Exception ex)
+
+        foreach (var item in Items.Where(i => i.Status is QueueItemStatus.Converting or QueueItemStatus.Paused or QueueItemStatus.Queued))
         {
-            _isRunning = false;
-            ShowErrorDirectly(ex.Message, ex.ToString());
+            item.Cancel();
+        }
+        UpdateOverallState();
+    }
+
+    private void BtnItemPauseResume_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: ConversionQueueItem item })
+        {
+            if (item.Status == QueueItemStatus.Converting)
+            {
+                item.Pause(isAuto: false);
+                ProcessQueue();
+            }
+            else if (item.Status == QueueItemStatus.Paused)
+            {
+                item.Resume();
+                ProcessQueue();
+            }
+            UpdateOverallState();
         }
     }
 
-    private void BtnCancel_Click(object sender, RoutedEventArgs e)
+    private void BtnItemCancel_Click(object sender, RoutedEventArgs e)
     {
-        if (_isRunning && !_cts.IsCancellationRequested)
+        if (sender is FrameworkElement { Tag: ConversionQueueItem item })
         {
-            _cts.Cancel();
-            BtnCancel.IsEnabled = false;
-            TxtStatus.Text = I18n.T("StatusCancelling");
-            ProgressBar.IsIndeterminate = true;
+            item.Cancel();
+            ProcessQueue();
+            UpdateOverallState();
         }
     }
 
-    protected override void OnClosing(CancelEventArgs e)
+    private void BtnItemError_Click(object sender, RoutedEventArgs e)
     {
-        if (_isRunning && !_cts.IsCancellationRequested)
+        if (sender is FrameworkElement { Tag: ConversionQueueItem item })
         {
-            _cts.Cancel();
+            InfoBarError.Message = item.ErrorMessage ?? I18n.T("ErrorDefault");
+            TxtErrorLog.Text = !string.IsNullOrWhiteSpace(item.ErrorLog) ? item.ErrorLog : item.ErrorMessage;
+            ErrorDetailOverlay.Visibility = Visibility.Visible;
         }
-        base.OnClosing(e);
     }
 
     private void BtnCopy_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var textToCopy = $"File: {_inputPath}\nTarget: {_targetFormat}\nError: {InfoBarError.Message}\n\nLog:\n{TxtErrorLog.Text}";
-            Clipboard.SetText(textToCopy);
+            Clipboard.SetText(TxtErrorLog.Text);
             BtnCopy.Content = I18n.T("BtnCopied");
         }
         catch { }
     }
 
-    private void BtnClose_Click(object sender, RoutedEventArgs e)
+    private void BtnCloseError_Click(object sender, RoutedEventArgs e)
     {
-        Close();
+        if (_isDirectError)
+        {
+            Close();
+        }
+        else
+        {
+            ErrorDetailOverlay.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    protected override void OnClosing(CancelEventArgs e)
+    {
+        foreach (var item in Items)
+        {
+            if (item.Status is QueueItemStatus.Converting or QueueItemStatus.Paused or QueueItemStatus.Queued)
+            {
+                item.Cancel();
+            }
+        }
+        base.OnClosing(e);
     }
 
     private void StartIconRotation()

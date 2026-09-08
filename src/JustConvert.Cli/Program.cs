@@ -19,7 +19,7 @@ public class Program
             return 0;
         }
 
-        string? inputPath = null;
+        List<string> inputFiles = [];
         string? targetFormat = null;
         string? outputPath = null;
         bool isSilent = false;
@@ -41,6 +41,23 @@ public class Program
             {
                 outputPath = args[++i];
             }
+            else if ((arg is "--file-list" or "-l" or "/file-list") && i + 1 < args.Length)
+            {
+                var listFile = args[++i];
+                if (File.Exists(listFile))
+                {
+                    try
+                    {
+                        var lines = File.ReadAllLines(listFile);
+                        foreach (var line in lines)
+                        {
+                            if (!string.IsNullOrWhiteSpace(line)) inputFiles.Add(line.Trim());
+                        }
+                        File.Delete(listFile);
+                    }
+                    catch { }
+                }
+            }
             else if (arg is "--silent" or "-s" or "/silent" or "/s" or "--no-gui")
             {
                 isSilent = true;
@@ -51,18 +68,22 @@ public class Program
             }
             else if (!arg.StartsWith('-') && !arg.StartsWith('/'))
             {
-                if (inputPath == null)
-                {
-                    inputPath = arg;
-                }
-                else if (targetFormat == null)
+                if (targetFormat == null && inputFiles.Count == 1 && !File.Exists(arg) && !Directory.Exists(arg))
                 {
                     targetFormat = arg;
+                }
+                else
+                {
+                    inputFiles.Add(arg);
                 }
             }
         }
 
-        if (!isBatch)
+        if (inputFiles.Count > 1)
+        {
+            isBatch = true;
+        }
+        else if (!isBatch)
         {
             try
             {
@@ -71,38 +92,94 @@ public class Program
             catch { }
         }
 
-        if (string.IsNullOrWhiteSpace(inputPath) || string.IsNullOrWhiteSpace(targetFormat))
+        if (inputFiles.Count == 0 || string.IsNullOrWhiteSpace(targetFormat))
         {
             if (isSilent)
             {
                 Console.Error.WriteLine(I18n.T("CliMissingArgs"));
                 return 1;
             }
-            return RunWindow(() => ConversionProgressWindow.CreateForError(inputPath ?? "", targetFormat ?? "", I18n.T("CliMissingArgs"), null));
-        }
-
-        if (!File.Exists(inputPath))
-        {
-            if (isSilent)
-            {
-                Console.Error.WriteLine(I18n.T("FileNotFound", inputPath));
-                return 1;
-            }
-            return RunWindow(() => ConversionProgressWindow.CreateForError(inputPath, targetFormat, I18n.T("FileNotFound", inputPath), null));
+            return RunWindow(() => ConversionProgressWindow.CreateForError(inputFiles.FirstOrDefault() ?? "", targetFormat ?? "", I18n.T("CliMissingArgs"), null));
         }
 
         if (isSilent)
         {
-            var result = Registry.ConvertFileAsync(inputPath, targetFormat, outputPath, null, default, isBatch).GetAwaiter().GetResult();
-            if (!result.Success)
+            int failureCount = 0;
+            foreach (var inputPath in inputFiles)
             {
-                Console.Error.WriteLine(result.ErrorMessage ?? I18n.T("ErrorDefault"));
-                return 1;
+                if (!File.Exists(inputPath))
+                {
+                    Console.Error.WriteLine(I18n.T("FileNotFound", inputPath));
+                    failureCount++;
+                    continue;
+                }
+
+                var result = Registry.ConvertFileAsync(inputPath, targetFormat, outputPath, null, default, isBatch).GetAwaiter().GetResult();
+                if (!result.Success)
+                {
+                    Console.Error.WriteLine(result.ErrorMessage ?? I18n.T("ErrorDefault"));
+                    failureCount++;
+                }
             }
+            return failureCount > 0 ? 1 : 0;
+        }
+
+        if (ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath))
+        {
             return 0;
         }
 
-        return RunWindow(() => new ConversionProgressWindow(inputPath, targetFormat, outputPath, isBatch));
+        var mutexName = @"Global\JustConvert_QueueMutex_" + Environment.UserName;
+        Mutex? mutex = null;
+        bool acquired = false;
+        try
+        {
+            mutex = new Mutex(true, mutexName, out acquired);
+        }
+        catch { }
+
+        if (!acquired)
+        {
+            for (int attempt = 0; attempt < 25; attempt++)
+            {
+                Thread.Sleep(100);
+                if (ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath))
+                {
+                    return 0;
+                }
+            }
+        }
+
+        ConversionProgressWindow? window = null;
+        using var ipcServer = ConversionQueueIpc.StartServer(msg =>
+        {
+            if (window != null)
+            {
+                window.Dispatcher.Invoke(() =>
+                {
+                    window.EnqueueFiles(msg.Files, msg.TargetFormat, msg.OutputPath);
+                    window.Activate();
+                });
+            }
+        });
+
+        var exitCode = RunWindow(() =>
+        {
+            window = new ConversionProgressWindow(inputFiles, targetFormat, outputPath, isBatch);
+            return window;
+        });
+
+        try
+        {
+            if (acquired)
+            {
+                mutex?.ReleaseMutex();
+            }
+            mutex?.Dispose();
+        }
+        catch { }
+
+        return exitCode;
     }
 
     private static int RunWindow(Func<ConversionProgressWindow> windowFactory)
@@ -115,4 +192,3 @@ public class Program
         return window.ExitCode;
     }
 }
-

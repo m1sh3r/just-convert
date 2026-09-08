@@ -3,9 +3,9 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
-        Height="210" Width="480"
-        MinHeight="210" MaxHeight="210"
-        MinWidth="480" MaxWidth="480"
+        Height="440" Width="560"
+        MinHeight="440" MaxHeight="440"
+        MinWidth="560" MaxWidth="560"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
         ExtendsContentIntoTitleBar="True"
@@ -24,50 +24,119 @@
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" x:Name="AppTitleBar" ShowMaximize="False" ShowMinimize="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Height="36"/>
+        <ui:TitleBar Grid.Row="0" x:Name="AppTitleBar" Title="{core:Loc QueueTitle}" ShowMaximize="False" ShowMinimize="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Height="36"/>
 
-        <Grid Grid.Row="1" x:Name="ProgressPanel" Margin="24,8,24,16">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+        <Grid Grid.Row="1" Margin="24,4,24,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
 
-            <Grid Grid.Row="0" Margin="0,0,0,14">
+            <ui:SymbolIcon x:Name="IconOverall" Grid.Column="0" Symbol="ArrowSync24" FontSize="22" Margin="0,0,12,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" RenderTransformOrigin="0.5,0.5">
+                <ui:SymbolIcon.RenderTransform>
+                    <RotateTransform x:Name="IconRotateTransform" Angle="0"/>
+                </ui:SymbolIcon.RenderTransform>
+            </ui:SymbolIcon>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock x:Name="TxtOverallStatus" Text="{core:Loc StatusPreparing}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <ProgressBar x:Name="OverallProgressBar" Height="3" Margin="0,6,0,0" Foreground="{DynamicResource AccentFillColorDefaultBrush}" Minimum="0" Maximum="100"/>
+            </StackPanel>
+
+            <TextBlock x:Name="TxtOverallCount" Grid.Column="2" VerticalAlignment="Center" Margin="12,0,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        </Grid>
+
+        <ScrollViewer Grid.Row="2" Margin="24,0,24,10" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl x:Name="QueueItemsList">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Border Margin="0,0,0,6" Padding="10,6" CornerRadius="6" BorderThickness="1" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <ui:SymbolIcon Grid.Column="0" Symbol="{Binding StatusSymbol}" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center" Foreground="{Binding StatusBrush}"/>
+
+                                <Grid Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{Binding FileName}" FontWeight="Medium" FontSize="12" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                        <TextBlock Grid.Column="1" Text="{Binding TargetFormatDisplay}" FontSize="11" Margin="6,0,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </Grid>
+
+                                    <Grid Grid.Row="1" Margin="0,4,0,0">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <ProgressBar Grid.Row="0" Height="2" Minimum="0" Maximum="100" Value="{Binding ProgressPercentage}" IsIndeterminate="{Binding IsIndeterminate}" Foreground="{DynamicResource AccentFillColorDefaultBrush}" Visibility="{Binding ProgressBarVisibility}"/>
+
+                                        <Grid Grid.Row="1" Margin="0,2,0,0">
+                                            <TextBlock Text="{Binding DisplayStatus}" FontSize="11" Foreground="{Binding StatusTextBrush}" HorizontalAlignment="Left"/>
+                                            <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Right"/>
+                                        </Grid>
+                                    </Grid>
+                                </Grid>
+
+                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <ui:Button Appearance="Transparent" Padding="6,4" Margin="0,0,4,0" ToolTip="{Binding PauseResumeTooltip}" Visibility="{Binding PauseResumeVisibility}" Click="BtnItemPauseResume_Click" Tag="{Binding}">
+                                        <ui:SymbolIcon Symbol="{Binding PauseResumeSymbol}" FontSize="14"/>
+                                    </ui:Button>
+
+                                    <ui:Button Appearance="Transparent" Padding="6,4" ToolTip="{core:Loc TooltipCancel}" Visibility="{Binding CancelVisibility}" Click="BtnItemCancel_Click" Tag="{Binding}">
+                                        <ui:SymbolIcon Symbol="Dismiss16" FontSize="14"/>
+                                    </ui:Button>
+
+                                    <ui:Button Appearance="Transparent" Padding="6,4" ToolTip="{core:Loc TooltipError}" Visibility="{Binding ErrorButtonVisibility}" Click="BtnItemError_Click" Tag="{Binding}">
+                                        <ui:SymbolIcon Symbol="Info16" FontSize="14" Foreground="{DynamicResource SystemFillColorCriticalBrush}"/>
+                                    </ui:Button>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <Border Grid.Row="3" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="24,10">
+            <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <ui:SymbolIcon x:Name="IconProgress" Grid.Column="0" Symbol="ArrowSync24" FontSize="24" Margin="0,0,12,0" VerticalAlignment="Center" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" RenderTransformOrigin="0.5,0.5">
-                    <ui:SymbolIcon.RenderTransform>
-                        <RotateTransform x:Name="IconRotateTransform" Angle="0"/>
-                    </ui:SymbolIcon.RenderTransform>
-                </ui:SymbolIcon>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{core:Loc LabelParallelConversions}" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,8,0"/>
+                    <ui:NumberBox x:Name="NumParallel" Minimum="1" Maximum="16" SmallChange="1" MaxDecimalPlaces="0" SpinButtonPlacementMode="Inline" Width="80" Value="1" ValueChanged="NumParallel_ValueChanged"/>
+                </StackPanel>
 
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock x:Name="TxtFileName" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                    <TextBlock x:Name="TxtTargetFormat" FontSize="12" Margin="0,2,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ui:Button x:Name="BtnPauseAll" Content="{core:Loc BtnPauseAll}" Click="BtnPauseAll_Click" Margin="0,0,8,0" MinWidth="110"/>
+                    <ui:Button x:Name="BtnCancelAll" Content="{core:Loc BtnCancelAll}" Click="BtnCancelAll_Click" MinWidth="85"/>
                 </StackPanel>
             </Grid>
+        </Border>
 
-            <Grid Grid.Row="1" Margin="0,0,0,4">
-                <TextBlock x:Name="TxtStatus" Text="{core:Loc StatusPreparing}" FontSize="12" Foreground="{DynamicResource TextFillColorPrimaryBrush}" HorizontalAlignment="Left"/>
-                <TextBlock x:Name="TxtProgressDetails" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" HorizontalAlignment="Right"/>
-            </Grid>
-
-            <ProgressBar Grid.Row="2" x:Name="ProgressBar" IsIndeterminate="True" Height="4" Foreground="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,4,0,0"/>
-
-            <Grid Grid.Row="3" Margin="0,16,0,0" VerticalAlignment="Bottom">
-                <ui:Button x:Name="BtnCancel" Content="{core:Loc BtnCancel}" Click="BtnCancel_Click" HorizontalAlignment="Right" MinWidth="85"/>
-            </Grid>
-        </Grid>
-
-        <Grid Grid.Row="1" x:Name="ErrorPanel" Visibility="Collapsed" Margin="24,4,24,16">
+        <Grid Grid.Row="1" Grid.RowSpan="3" x:Name="ErrorDetailOverlay" Visibility="Collapsed" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" Margin="24,4,24,16">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
@@ -81,7 +150,7 @@
             <Border Grid.Row="2" Background="Transparent" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="0,12,0,0" Margin="0,12,0,0">
                 <Grid>
                     <ui:Button x:Name="BtnCopy" Content="{core:Loc BtnCopyError}" Click="BtnCopy_Click" HorizontalAlignment="Left" MinWidth="110"/>
-                    <ui:Button x:Name="BtnClose" Content="{core:Loc BtnClose}" Click="BtnClose_Click" IsDefault="True" IsCancel="True" HorizontalAlignment="Right" MinWidth="80"/>
+                    <ui:Button x:Name="BtnCloseError" Content="{core:Loc BtnClose}" Click="BtnCloseError_Click" IsDefault="True" IsCancel="True" HorizontalAlignment="Right" MinWidth="80"/>
                 </Grid>
             </Border>
         </Grid>
