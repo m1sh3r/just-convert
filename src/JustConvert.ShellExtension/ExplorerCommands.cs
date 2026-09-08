@@ -167,14 +167,7 @@ public class SubFormatExplorerCommand : IExplorerCommand
         var paths = TopLevelExplorerCommand.GetFilePaths(psiItemArray);
         if (paths.Count == 0) return 0;
 
-        var isBatch = paths.Count > 1;
-        var validPaths = paths.Where(filePath =>
-        {
-            var ext = Path.GetExtension(filePath).TrimStart('.').ToLowerInvariant();
-            return !isBatch || Registry.FindConverter(ext, _targetFormat) != null;
-        }).ToList();
-
-        if (validPaths.Count == 0) return 0;
+        var validPaths = paths;
 
         if (ConversionQueueIpc.TrySend(validPaths, _targetFormat))
         {
