@@ -19,8 +19,23 @@ public class ClassicContextMenuManager
     [
         "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic",
         "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v",
-        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus"
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b"
     ];
+
+    private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic"
+    };
+
+    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v"
+    };
+
+    private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b"
+    };
 
     private static readonly Dictionary<string, string[]> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -53,7 +68,24 @@ public class ClassicContextMenuManager
 
         foreach (var ext in KnownExtensions)
         {
-            var targets = _registry.GetAvailableTargetFormats(ext);
+            IReadOnlyList<string> targets;
+            if (ImageExtensions.Contains(ext))
+            {
+                targets = CategoryTargetFormats["image"];
+            }
+            else if (AudioExtensions.Contains(ext))
+            {
+                targets = CategoryTargetFormats["audio"];
+            }
+            else if (VideoExtensions.Contains(ext))
+            {
+                targets = CategoryTargetFormats["video"];
+            }
+            else
+            {
+                targets = _registry.GetAvailableTargetFormats(ext);
+            }
+
             if (targets.Count == 0) continue;
 
             var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
