@@ -66,7 +66,13 @@ public class ClassicContextMenuManager
 
         list.Add("mov-prores422");
         list.Add("mov-prores4444");
+        list.Add("remux-mp4");
+        list.Add("remux-mkv");
         list.Add("frames");
+        list.Add("mp3");
+        list.Add("wav");
+        list.Add("flac");
+        list.Add("aac");
         list.Add("reencode");
         return list;
     }
@@ -88,25 +94,31 @@ public class ClassicContextMenuManager
 
         if (classesRoot == null) return;
 
-        foreach (var (category, formatProvider) in CategoryTargetFormats)
-        {
-            RegisterKey(classesRoot, $@"SystemFileAssociations\{category}\shell\{VerbRoot}", formatProvider(), executablePath);
-        }
+        var settings = AppSettings.Load();
+        var activeProfile = settings.GetActiveProfile();
+
+        var videoTargets = FilterAvailableFormats(activeProfile.VideoFormats);
+        var audioTargets = FilterAvailableFormats(activeProfile.AudioFormats);
+        var imageTargets = FilterAvailableFormats(activeProfile.ImageFormats);
+
+        RegisterKey(classesRoot, $@"SystemFileAssociations\video\shell\{VerbRoot}", videoTargets, executablePath);
+        RegisterKey(classesRoot, $@"SystemFileAssociations\audio\shell\{VerbRoot}", audioTargets, executablePath);
+        RegisterKey(classesRoot, $@"SystemFileAssociations\image\shell\{VerbRoot}", imageTargets, executablePath);
 
         foreach (var ext in KnownExtensions)
         {
             IReadOnlyList<string> targets;
             if (ImageExtensions.Contains(ext))
             {
-                targets = CategoryTargetFormats["image"]();
+                targets = imageTargets;
             }
             else if (AudioExtensions.Contains(ext))
             {
-                targets = CategoryTargetFormats["audio"]();
+                targets = audioTargets;
             }
             else if (VideoExtensions.Contains(ext))
             {
-                targets = CategoryTargetFormats["video"]();
+                targets = videoTargets;
             }
             else
             {
@@ -119,7 +131,32 @@ public class ClassicContextMenuManager
             RegisterKey(classesRoot, $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}", targets, executablePath);
         }
 
+        CreateStartMenuShortcut(executablePath, scope);
         NotifyShell();
+    }
+
+    public static List<string> FilterAvailableFormats(IEnumerable<string> formats)
+    {
+        var result = new List<string>();
+        foreach (var fmt in formats)
+        {
+            var f = fmt.TrimStart('.').ToLowerInvariant();
+            if (f is "mp4-h264-nvenc" or "mp4-nvenc-h264" && !HardwareAccelerationDetector.HasNvencH264) continue;
+            if (f is "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" && !HardwareAccelerationDetector.HasNvencHevc) continue;
+            if (f is "webm-av1-nvenc" or "webm-nvenc-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" && !HardwareAccelerationDetector.HasNvencAv1) continue;
+
+            if (f is "mp4-h264-qsv" or "mp4-qsv-h264" && !HardwareAccelerationDetector.HasQsvH264) continue;
+            if (f is "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" && !HardwareAccelerationDetector.HasQsvHevc) continue;
+            if (f is "webm-vp9-qsv" or "webm-qsv-vp9" && !HardwareAccelerationDetector.HasQsvVp9) continue;
+            if (f is "webm-av1-qsv" or "webm-qsv-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" && !HardwareAccelerationDetector.HasQsvAv1) continue;
+
+            if (f is "mp4-h264-amf" or "mp4-amf-h264" && !HardwareAccelerationDetector.HasAmfH264) continue;
+            if (f is "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" && !HardwareAccelerationDetector.HasAmfHevc) continue;
+            if (f is "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-amf" or "mp4-amf-av1" && !HardwareAccelerationDetector.HasAmfAv1) continue;
+
+            result.Add(fmt);
+        }
+        return result;
     }
 
     private static void RegisterKey(RegistryKey classesRoot, string shellPath, IReadOnlyList<string> targetFormats, string exePath)
@@ -177,7 +214,8 @@ public class ClassicContextMenuManager
             "webm-vp9" or "vp9" or "webm-vp9-qsv" or "webm-qsv-vp9" => 3,
             "webm-av1" or "av1" or "webm" or "webm-av1-nvenc" or "webm-nvenc-av1" or "webm-av1-qsv" or "webm-qsv-av1" or "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" or "mp4-av1-amf" or "mp4-amf-av1" or "mp4-av1" => 4,
             "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 5,
-            "frames" or "frames-png" or "frames-jpg" => 6,
+            "remux-mp4" or "remux-mkv" or "mp4-remux" or "mkv-remux" => 6,
+            "frames" or "frames-png" or "frames-jpg" => 7,
 
             "png" or "jpg" or "jpeg" or "webp" => 10,
             "ico" or "bmp" or "gif" => 11,
@@ -185,7 +223,7 @@ public class ClassicContextMenuManager
 
             "mp3" or "aac" or "m4a" => 20,
             "wav" or "flac" => 21,
-            "ogg" => 22,
+            "ogg" or "opus" => 22,
 
             _ => 99
         };
@@ -211,7 +249,61 @@ public class ClassicContextMenuManager
             catch { }
         }
 
+        foreach (var ext in KnownExtensions)
+        {
+            var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
+            var shellPath = $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}";
+            try
+            {
+                classesRoot.DeleteSubKeyTree(shellPath, false);
+            }
+            catch { }
+        }
+
+        RemoveStartMenuShortcut(scope);
         NotifyShell();
+    }
+
+    public static void CreateStartMenuShortcut(string exePath, InstallScope scope)
+    {
+        try
+        {
+            var programsFolder = scope == InstallScope.AllUsers
+                ? Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms)
+                : Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+
+            var shortcutPath = Path.Combine(programsFolder, "Just Convert.lnk");
+            var workDir = Path.GetDirectoryName(exePath) ?? "";
+
+            var script = $"$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('{shortcutPath.Replace("'", "''")}'); $s.TargetPath = '{exePath.Replace("'", "''")}'; $s.WorkingDirectory = '{workDir.Replace("'", "''")}'; $s.IconLocation = '{exePath.Replace("'", "''")},0'; $s.Description = 'Just Convert'; $s.Save()";
+
+            using var proc = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            });
+            proc?.WaitForExit();
+        }
+        catch { }
+    }
+
+    public static void RemoveStartMenuShortcut(InstallScope scope)
+    {
+        try
+        {
+            var programsFolder = scope == InstallScope.AllUsers
+                ? Environment.GetFolderPath(Environment.SpecialFolder.CommonPrograms)
+                : Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+
+            var shortcutPath = Path.Combine(programsFolder, "Just Convert.lnk");
+            if (File.Exists(shortcutPath))
+            {
+                File.Delete(shortcutPath);
+            }
+        }
+        catch { }
     }
 
     [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
