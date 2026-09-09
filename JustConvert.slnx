@@ -4,4 +4,7 @@
     <Project Path="src/JustConvert.Core/JustConvert.Core.csproj" />
     <Project Path="src/JustConvert.Installer/JustConvert.Installer.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/JustConvert.Tests/JustConvert.Tests.csproj" />
+  </Folder>
 </Solution>

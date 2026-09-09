@@ -43,6 +43,11 @@ public class ConverterRegistry
         return _converters.FirstOrDefault(c => c.CanConvert(sourceExtension, targetExtension));
     }
 
+    public bool CanConvert(string sourceExtension, string targetExtension)
+    {
+        return FindConverter(sourceExtension, targetExtension) != null;
+    }
+
     public async Task<ConversionResult> ConvertFileAsync(
         string inputPath,
         string targetExtension,
