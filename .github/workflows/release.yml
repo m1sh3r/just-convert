@@ -43,21 +43,7 @@ jobs:
           -p:PublishReadyToRun=true
           -o dist/app
 
-      - name: Publish Shell Extension DLL
-        run: >
-          dotnet publish src/JustConvert.ShellExtension/JustConvert.ShellExtension.csproj
-          -c Release
-          -r win-x64
-          --self-contained false
-          -o dist/app
-
-      - name: Copy Assets and Manifests
-        shell: pwsh
-        run: |
-          Copy-Item -Path "manifests/AppxManifest.xml" -Destination "dist/app/" -Force
-          Copy-Item -Path "README.md" -Destination "dist/app/" -Force
-
-      - name: Publish Standalone Installer (JustConvert-Setup.exe)
+      - name: Publish Standalone Installer
         run: >
           dotnet publish src/JustConvert.Installer/JustConvert.Installer.csproj
           -c Release
@@ -71,13 +57,9 @@ jobs:
       - name: Bundle Payload with Installer
         shell: pwsh
         run: |
-          $version = (Get-Item "dist/installer/JustConvert-Setup.exe").VersionInfo.ProductVersion.Split('+')[0]
-          
-          # Copy app files into installer distribution folder
-          Copy-Item -Path "dist/app/*" -Destination "dist/installer/" -Force -Recurse
-          
-          $installerExe = "JustConvert-$version-Setup.exe"
-          Copy-Item -Path "dist/installer/JustConvert-Setup.exe" -Destination $installerExe -Force
+          $installerFile = Get-ChildItem -Path "dist/installer/JustConvert-*-Setup.exe" | Select-Object -First 1
+          $installerExe = $installerFile.Name
+          Move-Item -Path $installerFile.FullName -Destination "." -Force
           
           # Generate Checksum
           $hash = (Get-FileHash -Path $installerExe -Algorithm SHA256).Hash

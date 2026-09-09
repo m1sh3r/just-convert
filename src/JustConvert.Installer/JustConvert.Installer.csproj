@@ -68,9 +68,11 @@
       <CleanVersion Condition="'$(CleanVersion)' == ''">$(Version)</CleanVersion>
     </PropertyGroup>
 
-    <Copy SourceFiles="$(PublishDir)JustConvert-Setup.exe"
+    <Move SourceFiles="$(PublishDir)JustConvert-Setup.exe"
           DestinationFiles="$(PublishDir)JustConvert-$(CleanVersion)-Setup.exe"
           Condition="Exists('$(PublishDir)JustConvert-Setup.exe') And '$(CleanVersion)' != ''" />
+    <Delete Files="$(PublishDir)JustConvert-Setup.exe"
+            Condition="Exists('$(PublishDir)JustConvert-Setup.exe')" />
   </Target>
 
 </Project>
