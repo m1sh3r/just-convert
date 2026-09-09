@@ -5,7 +5,7 @@ namespace JustConvert.Core;
 
 public static class I18n
 {
-    private static readonly Dictionary<string, Dictionary<string, string>> Strings = new(StringComparer.OrdinalIgnoreCase)
+    internal static readonly Dictionary<string, Dictionary<string, string>> Strings = new(StringComparer.OrdinalIgnoreCase)
     {
         ["en"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -86,6 +86,8 @@ public static class I18n
             ["FormatWebmAv1Amf"] = "WEBM (AV1 AMF, CQ 23)",
             ["FormatProRes422"] = "MOV (Apple ProRes 422)",
             ["FormatProRes4444"] = "MOV (Apple ProRes 4444)",
+            ["FormatRemuxMp4"] = "MP4 Remux (Fast copy)",
+            ["FormatRemuxMkv"] = "MKV Remux (Fast copy)",
             ["FormatGif"] = "GIF (Animation)",
             ["FormatMp3"] = "MP3 (Audio)",
             ["FormatWav"] = "WAV (Audio)",
@@ -122,11 +124,41 @@ public static class I18n
             ["SetupUninstalling"] = "Uninstalling files...",
             ["SetupSuccessHeader"] = "Installation Completed",
             ["SetupSuccessText"] = "Just Convert is ready. Right-click any supported file in File Explorer to convert.",
+            ["SetupBtnOpenSettings"] = "Open Settings",
             ["SetupUninstallSuccessHeader"] = "Uninstallation Completed",
             ["SetupUninstallSuccessText"] = "Just Convert has been removed from your system.",
             ["SetupErrorHeader"] = "Setup failed",
             ["SetupCancelConfirmTitle"] = "Cancel Installation",
-            ["SetupCancelConfirmText"] = "Are you sure you want to cancel the installation?"
+            ["SetupCancelConfirmText"] = "Are you sure you want to cancel the installation?",
+
+            ["SettingsTitle"] = "Just Convert Settings",
+            ["ProfileDefaultName"] = "Default",
+            ["ProfileCopySuffix"] = "copy",
+            ["SettingsProfilesHeader"] = "Context Menu Profile",
+            ["BtnDuplicate"] = "Duplicate",
+            ["BtnRename"] = "Rename",
+            ["BtnDelete"] = "Delete",
+            ["BtnExport"] = "Export...",
+            ["BtnImport"] = "Import...",
+            ["BtnApply"] = "Apply",
+            ["ProfileReadOnlyNotice"] = "This profile is protected from changes. Click 'Duplicate' to create an editable copy.",
+            ["ProfileCustomNotice"] = "Check or uncheck the formats you want to see in the Windows Explorer context menu.",
+            ["CategoryVideo"] = "Video",
+            ["CategoryAudio"] = "Audio",
+            ["CategoryImages"] = "Images",
+            ["SettingsAppliedSuccess"] = "Settings saved and applied to Windows context menu.",
+            ["PromptNewProfileName"] = "Enter a name for the new profile:",
+            ["PromptRenameProfile"] = "Enter new profile name:",
+            ["ConfirmDeleteProfile"] = "Are you sure you want to delete profile '{0}'?",
+            ["SettingsExportSuccess"] = "Settings successfully exported.",
+            ["SettingsImportSuccess"] = "Settings successfully imported.",
+            ["SettingsImportError"] = "Failed to import settings: file is corrupt or has invalid format.",
+            ["TabProfiles"] = "Context Menu",
+            ["TabAbout"] = "About",
+            ["AppDescription"] = "Fast and native file converter for Windows 11",
+            ["BtnReRegisterMenu"] = "Re-register Context Menu",
+            ["BtnUnregisterMenu"] = "Remove Context Menu",
+            ["MenuUnregisteredSuccess"] = "Context menu removed from Windows Explorer."
         },
         ["ru"] = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -207,6 +239,8 @@ public static class I18n
             ["FormatWebmAv1Amf"] = "WEBM (AV1 AMF, CQ 23)",
             ["FormatProRes422"] = "MOV (Apple ProRes 422)",
             ["FormatProRes4444"] = "MOV (Apple ProRes 4444)",
+            ["FormatRemuxMp4"] = "MP4 Ремукс (Без пережатия)",
+            ["FormatRemuxMkv"] = "MKV Ремукс (Без пережатия)",
             ["FormatGif"] = "GIF (Анимация)",
             ["FormatMp3"] = "MP3 (Аудио)",
             ["FormatWav"] = "WAV (Аудио)",
@@ -243,11 +277,41 @@ public static class I18n
             ["SetupUninstalling"] = "Удаление файлов...",
             ["SetupSuccessHeader"] = "Установка завершена",
             ["SetupSuccessText"] = "Just Convert успешно установлен. Для конвертации поддерживаемых файлов откройте контекстное меню и выберите «Конвертировать в...».",
+            ["SetupBtnOpenSettings"] = "Открыть настройки",
             ["SetupUninstallSuccessHeader"] = "Удаление завершено",
             ["SetupUninstallSuccessText"] = "Just Convert был успешно удален с компьютера.",
             ["SetupErrorHeader"] = "Ошибка установки",
             ["SetupCancelConfirmTitle"] = "Отмена установки",
-            ["SetupCancelConfirmText"] = "Вы действительно хотите отменить установку?"
+            ["SetupCancelConfirmText"] = "Вы действительно хотите отменить установку?",
+
+            ["SettingsTitle"] = "Just Convert — Настройки",
+            ["ProfileDefaultName"] = "По умолчанию",
+            ["ProfileCopySuffix"] = "копия",
+            ["SettingsProfilesHeader"] = "Профиль контекстного меню",
+            ["BtnDuplicate"] = "Дублировать",
+            ["BtnRename"] = "Переименовать",
+            ["BtnDelete"] = "Удалить",
+            ["BtnExport"] = "Экспорт...",
+            ["BtnImport"] = "Импорт...",
+            ["BtnApply"] = "Применить",
+            ["ProfileReadOnlyNotice"] = "Этот профиль защищен от изменений. Нажмите «Дублировать», чтобы создать настраиваемую копию.",
+            ["ProfileCustomNotice"] = "Отметьте форматы, которые вы хотите видеть в контекстном меню Проводника Windows.",
+            ["CategoryVideo"] = "Видео",
+            ["CategoryAudio"] = "Аудио",
+            ["CategoryImages"] = "Изображения",
+            ["SettingsAppliedSuccess"] = "Настройки контекстного меню сохранены и применены.",
+            ["PromptNewProfileName"] = "Введите название нового профиля:",
+            ["PromptRenameProfile"] = "Введите новое название профиля:",
+            ["ConfirmDeleteProfile"] = "Вы действительно хотите удалить профиль «{0}»?",
+            ["SettingsExportSuccess"] = "Настройки успешно экспортированы.",
+            ["SettingsImportSuccess"] = "Настройки успешно импортированы.",
+            ["SettingsImportError"] = "Ошибка при импорте настроек: файл поврежден или имеет неверный формат.",
+            ["TabProfiles"] = "Контекстное меню",
+            ["TabAbout"] = "О программе",
+            ["AppDescription"] = "Быстрый и нативный конвертер файлов для Windows 11",
+            ["BtnReRegisterMenu"] = "Перерегистрировать контекстное меню",
+            ["BtnUnregisterMenu"] = "Удалить из контекстного меню",
+            ["MenuUnregisteredSuccess"] = "Контекстное меню Just Convert удалено из Проводника."
         }
     };
 
@@ -305,6 +369,8 @@ public static class I18n
             "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-amf" or "mp4-amf-av1" => T("FormatWebmAv1Amf"),
             "mov-prores422" or "prores422" or "prores" => T("FormatProRes422"),
             "mov-prores4444" or "prores4444" => T("FormatProRes4444"),
+            "remux-mp4" or "mp4-remux" => T("FormatRemuxMp4"),
+            "remux-mkv" or "mkv-remux" => T("FormatRemuxMkv"),
             "gif" => T("FormatGif"),
             "mp3" => T("FormatMp3"),
             "wav" => T("FormatWav"),
