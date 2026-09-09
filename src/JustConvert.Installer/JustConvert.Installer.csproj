@@ -13,7 +13,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\JustConvert.Cli\JustConvert.Cli.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" Publish="false" />
-    <ProjectReference Include="..\JustConvert.ShellExtension\JustConvert.ShellExtension.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" Private="false" Publish="false" />
     <ProjectReference Include="..\JustConvert.Core\JustConvert.Core.csproj" />
   </ItemGroup>
 
@@ -41,25 +40,16 @@
     </ItemGroup>
     <Copy SourceFiles="@(DistPayloadFiles)" DestinationFolder="$(PayloadStagingDir)%(RecursiveDir)" Condition="'@(DistPayloadFiles)' != ''" />
 
-    <MSBuild Condition="'@(CustomPayloadFiles)' == '' And '@(DistPayloadFiles)' == ''"
-             Projects="..\JustConvert.Cli\JustConvert.Cli.csproj"
-             Targets="Publish"
-             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishSingleFile=true;IncludeNativeLibrariesForSelfExtract=true;PublishReadyToRun=true;PublishDir=$(PayloadStagingDir);SelfContained=false" />
+    <PropertyGroup>
+      <EffectiveRuntimeIdentifier Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</EffectiveRuntimeIdentifier>
+      <EffectiveRuntimeIdentifier Condition="'$(EffectiveRuntimeIdentifier)' == '' And '$(NETCoreSdkRuntimeIdentifier)' != ''">$(NETCoreSdkRuntimeIdentifier)</EffectiveRuntimeIdentifier>
+      <EffectiveRuntimeIdentifier Condition="'$(EffectiveRuntimeIdentifier)' == ''">win-x64</EffectiveRuntimeIdentifier>
+    </PropertyGroup>
 
-    <MSBuild Condition="'@(CustomPayloadFiles)' == '' And '@(DistPayloadFiles)' == ''"
-             Projects="..\JustConvert.ShellExtension\JustConvert.ShellExtension.csproj"
-             Targets="Publish"
-             Properties="Configuration=$(Configuration);RuntimeIdentifier=win-x64;PublishDir=$(PayloadStagingDir);SelfContained=false" />
-
-    <Copy SourceFiles="$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml" DestinationFolder="$(PayloadStagingDir)" Condition="Exists('$(MSBuildThisFileDirectory)..\..\manifests\AppxManifest.xml')" />
+    <Exec Condition="'@(CustomPayloadFiles)' == '' And '@(DistPayloadFiles)' == ''"
+          Command="dotnet publish &quot;..\JustConvert.Cli\JustConvert.Cli.csproj&quot; -c $(Configuration) -r $(EffectiveRuntimeIdentifier) --self-contained false -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReadyToRun=true -o &quot;$(PayloadStagingDir)&quot;" />
 
     <Error Condition="!Exists('$(PayloadStagingDir)just-convert.exe')" Text="Payload staging directory is missing just-convert.exe." />
-
-    <XmlPoke XmlInputPath="$(PayloadStagingDir)AppxManifest.xml"
-             Query="/ns:Package/ns:Identity/@Version"
-             Value="$(FileVersion)"
-             Namespaces="&lt;Namespace Prefix='ns' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;"
-             Condition="Exists('$(PayloadStagingDir)AppxManifest.xml') And '$(FileVersion)' != ''" />
 
     <ZipDirectory SourceDirectory="$(PayloadStagingDir)" DestinationFile="$(PayloadZipFile)" Overwrite="true" />
 

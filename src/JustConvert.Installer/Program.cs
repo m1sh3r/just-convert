@@ -180,8 +180,8 @@ public class Program
 
         progress?.Report((null, I18n.T("SetupRegistering")));
         ClassicManager.Register(installedExe, scope);
-        RegisterModernMenu(installDir, scope);
         RegisterUninstallEntry(installDir, scope);
+        RemovePathEntry(installDir);
         NotifyShell();
     }
 
@@ -191,8 +191,8 @@ public class Program
 
         KillRunningProcesses(installDir);
         ClassicManager.Unregister(scope);
-        UnregisterModernMenu();
         RemoveUninstallEntry(scope);
+        RemovePathEntry(installDir);
         NotifyShell();
 
         if (Directory.Exists(installDir))
@@ -403,71 +403,6 @@ public class Program
             if (!destFile.StartsWith(destPrefix, StringComparison.OrdinalIgnoreCase)) continue;
             SafeCopyFile(file, destFile);
         }
-
-        var manifestsDir = Path.Combine(source, "manifests");
-        if (Directory.Exists(manifestsDir))
-        {
-            var destManifests = Path.GetFullPath(Path.Combine(fullDest, "manifests"));
-            if (destManifests.StartsWith(destPrefix, StringComparison.OrdinalIgnoreCase))
-            {
-                Directory.CreateDirectory(destManifests);
-                var manifestDestPrefix = destManifests.EndsWith(Path.DirectorySeparatorChar) ? destManifests : destManifests + Path.DirectorySeparatorChar;
-                foreach (var f in Directory.GetFiles(manifestsDir))
-                {
-                    var fName = Path.GetFileName(f);
-                    var d1 = Path.GetFullPath(Path.Combine(destManifests, fName));
-                    var d2 = Path.GetFullPath(Path.Combine(fullDest, fName));
-                    if (d1.StartsWith(manifestDestPrefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        SafeCopyFile(f, d1);
-                    }
-                    if (d2.StartsWith(destPrefix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        SafeCopyFile(f, d2);
-                    }
-                }
-            }
-        }
-    }
-
-    private static void RegisterModernMenu(string installDir, InstallScope scope)
-    {
-        try
-        {
-            var manifest = Path.Combine(installDir, "AppxManifest.xml");
-            if (File.Exists(manifest))
-            {
-                var script = $"Add-AppxPackage -Register \"{manifest}\" -AllowExternalContent -ErrorAction SilentlyContinue";
-                var psi = new ProcessStartInfo
-                {
-                    FileName = "powershell.exe",
-                    Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                };
-                using var proc = Process.Start(psi);
-                proc?.WaitForExit(5000);
-            }
-        }
-        catch { }
-    }
-
-    private static void UnregisterModernMenu()
-    {
-        try
-        {
-            var script = "Remove-AppxPackage -Package (Get-AppxPackage -Name JustConvert).PackageFullName -ErrorAction SilentlyContinue";
-            var psi = new ProcessStartInfo
-            {
-                FileName = "powershell.exe",
-                Arguments = $"-NoProfile -ExecutionPolicy Bypass -Command \"{script}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            using var proc = Process.Start(psi);
-            proc?.WaitForExit(5000);
-        }
-        catch { }
     }
 
     private static void RegisterUninstallEntry(string installDir, InstallScope scope)
@@ -504,6 +439,26 @@ public class Program
         {
             var root = scope == InstallScope.AllUsers ? Registry.LocalMachine : Registry.CurrentUser;
             root.DeleteSubKeyTree(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\Just Convert", false);
+        }
+        catch { }
+    }
+
+    private static void RemovePathEntry(string installDir)
+    {
+        try
+        {
+            foreach (var target in new[] { EnvironmentVariableTarget.User, EnvironmentVariableTarget.Machine })
+            {
+                var path = Environment.GetEnvironmentVariable("Path", target);
+                if (string.IsNullOrEmpty(path)) continue;
+
+                var entries = path.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                var filtered = entries.Where(e => !string.Equals(e.TrimEnd('\\', '/'), installDir.TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase)).ToArray();
+                if (filtered.Length != entries.Length)
+                {
+                    Environment.SetEnvironmentVariable("Path", string.Join(";", filtered), target);
+                }
+            }
         }
         catch { }
     }
