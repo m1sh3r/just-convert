@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using JustConvert.Cli.UI;
 using JustConvert.Core;
+using JustConvert.Core.Windows;
 using File = System.IO.File;
 
 namespace JustConvert.Cli;
@@ -16,6 +17,19 @@ public class Program
     {
         if (args.Length == 0)
         {
+            return 0;
+        }
+
+        if (args.Length >= 1 && args[0].Equals("register", StringComparison.OrdinalIgnoreCase))
+        {
+            var exePath = Environment.ProcessPath ?? Path.Combine(AppContext.BaseDirectory, "just-convert.exe");
+            new ClassicContextMenuManager(Registry).Register(exePath);
+            return 0;
+        }
+
+        if (args.Length >= 1 && args[0].Equals("unregister", StringComparison.OrdinalIgnoreCase))
+        {
+            new ClassicContextMenuManager(Registry).Unregister();
             return 0;
         }
 
