@@ -20,10 +20,11 @@ public class MediaConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444", "frames",
+        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444", "remux-mp4", "remux-mkv", "frames",
         "mp4-h264-nvenc", "mp4-nvenc-h264", "mp4-h265-nvenc", "mp4-hevc-nvenc", "mp4-nvenc-h265", "mp4-nvenc-hevc", "webm-av1-nvenc", "webm-nvenc-av1", "mp4-av1-nvenc", "mp4-nvenc-av1",
         "mp4-h264-qsv", "mp4-qsv-h264", "mp4-h265-qsv", "mp4-hevc-qsv", "mp4-qsv-h265", "mp4-qsv-hevc", "webm-vp9-qsv", "webm-qsv-vp9", "webm-av1-qsv", "webm-qsv-av1", "mp4-av1-qsv", "mp4-qsv-av1",
-        "mp4-h264-amf", "mp4-amf-h264", "mp4-h265-amf", "mp4-hevc-amf", "mp4-amf-h265", "mp4-amf-hevc", "webm-av1-amf", "webm-amf-av1", "mp4-av1-amf", "mp4-amf-av1"
+        "mp4-h264-amf", "mp4-amf-h264", "mp4-h265-amf", "mp4-hevc-amf", "mp4-amf-h265", "mp4-amf-hevc", "webm-av1-amf", "webm-amf-av1", "mp4-av1-amf", "mp4-amf-av1",
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "opus"
     };
 
     public static string? FindFfmpegPath()
@@ -176,7 +177,13 @@ public class MediaConverter : IFormatConverter
 
             list.Add("mov-prores422");
             list.Add("mov-prores4444");
+            list.Add("remux-mp4");
+            list.Add("remux-mkv");
             list.Add("frames");
+            list.Add("mp3");
+            list.Add("wav");
+            list.Add("flac");
+            list.Add("aac");
             list.Add("reencode");
             return list;
         }
@@ -324,6 +331,14 @@ public class MediaConverter : IFormatConverter
             {
                 outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_prores4444.mov");
             }
+            else if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_remux.mp4");
+            }
+            else if (targetExt is "remux-mkv" or "mkv-remux" or "mkv-copy")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_remux.mkv");
+            }
             else
             {
                 outputPath = Path.Combine(dir, $"{fileNameWithoutExt}{outputExt}");
@@ -341,16 +356,28 @@ public class MediaConverter : IFormatConverter
                 }
             }
         }
+        else
+        {
+            if (!isExtractFrames && string.IsNullOrEmpty(Path.GetExtension(outputPath)))
+            {
+                outputPath += outputExt;
+            }
+        }
+
+        if (isExtractFrames && !string.IsNullOrEmpty(outputPath) && !Directory.Exists(outputPath))
+        {
+            Directory.CreateDirectory(outputPath);
+        }
 
         try
         {
-            AudioStreamInfo? audioInfo = null;
-            if (AudioFormats.Contains(targetExt))
+            MediaStreamInfo? mediaInfo = null;
+            if (VideoFormats.Contains(sourceExt) || AudioFormats.Contains(sourceExt) || VideoFormats.Contains(targetExt) || AudioFormats.Contains(targetExt))
             {
-                audioInfo = await ProbeAudioInfoAsync(ffmpeg, inputPath, ct);
+                mediaInfo = await ProbeMediaInfoAsync(ffmpeg, inputPath, ct);
             }
 
-            var arguments = BuildArguments(inputPath, outputPath, targetExt, audioInfo, isReencode);
+            var arguments = BuildArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video);
             var startInfo = new ProcessStartInfo
             {
                 FileName = ffmpeg,
@@ -495,147 +522,161 @@ public class MediaConverter : IFormatConverter
         }
     }
 
-    private static string BuildArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false)
+    private static string BuildArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false, VideoStreamInfo? videoInfo = null)
     {
+        var tonemapFilter = (videoInfo?.IsHdrOrWideGamut == true)
+            ? "-vf \"scale=out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709\" -color_primaries:v bt709 -color_trc:v bt709 -colorspace:v bt709 "
+            : "";
+
         if (targetExt is "frames" or "frames-png")
         {
             var pattern = Path.Combine(output, "frame_%04d.png");
             return $"-y -i \"{input}\" -vf \"fps=1\" \"{pattern}\"";
         }
 
+        if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy")
+        {
+            return $"-y -i \"{input}\" -map 0:v? -map 0:a? -c copy -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "remux-mkv" or "mkv-remux" or "mkv-copy")
+        {
+            return $"-y -i \"{input}\" -map 0:v? -map 0:a? -map 0:s? -c copy -map_metadata 0 \"{output}\"";
+        }
+
         if (targetExt is "compress" or "compressed")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4" or "mp4-h264" or "h264")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-hevc" or "mp4-h265" or "h265" or "hevc")
         {
-            return $"-y -i \"{input}\" -c:v libx265 -crf 23 -preset medium -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? -c:v libx265 -crf 23 -preset medium -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mov-prores422" or "prores422" or "prores")
         {
-            return $"-y -i \"{input}\" -c:v prores_ks -profile:v 2 -c:a pcm_s16le -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? -c:v prores_ks -profile:v 2 -c:a pcm_s16le -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mov-prores4444" or "prores4444")
         {
-            return $"-y -i \"{input}\" -c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le -c:a pcm_s16le -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? -c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le -c:a pcm_s16le -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mov" or "mov-h264")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "webm-vp9" or "vp9" or "webm")
         {
-            return $"-y -i \"{input}\" -c:v libvpx-vp9 -crf 23 -b:v 0 -deadline good -cpu-used 2 -row-mt 1 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libvpx-vp9 -crf 23 -b:v 0 -deadline good -cpu-used 2 -row-mt 1 -c:a libopus -b:a 128k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "webm-av1" or "av1")
         {
-            return $"-y -i \"{input}\" -c:v libsvtav1 -crf 23 -preset 8 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libsvtav1 -crf 23 -preset 6 -svtav1-params tune=0 -c:a libopus -b:a 128k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "mp4-av1")
         {
-            return $"-y -i \"{input}\" -c:v libsvtav1 -crf 23 -preset 8 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libsvtav1 -crf 23 -preset 6 -svtav1-params tune=0 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-h264-nvenc" or "mp4-nvenc-h264")
         {
-            return $"-y -i \"{input}\" -c:v h264_nvenc -cq:v 23 -preset p5 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v h264_nvenc -cq:v 23 -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc")
         {
-            return $"-y -i \"{input}\" -c:v hevc_nvenc -cq:v 23 -preset p5 -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? -c:v hevc_nvenc -cq:v 23 -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "webm-av1-nvenc" or "webm-nvenc-av1")
         {
-            return $"-y -i \"{input}\" -c:v av1_nvenc -cq:v 23 -preset p5 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v av1_nvenc -cq:v 23 -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -c:a libopus -b:a 128k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-av1-nvenc" or "mp4-nvenc-av1")
         {
-            return $"-y -i \"{input}\" -c:v av1_nvenc -cq:v 23 -preset p5 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v av1_nvenc -cq:v 23 -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-h264-qsv" or "mp4-qsv-h264")
         {
-            return $"-y -i \"{input}\" -c:v h264_qsv -global_quality:v 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v h264_qsv -global_quality:v 23 -preset medium -adaptive_i 1 -adaptive_b 1 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc")
         {
-            return $"-y -i \"{input}\" -c:v hevc_qsv -global_quality:v 23 -preset medium -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? -c:v hevc_qsv -global_quality:v 23 -preset medium -adaptive_i 1 -adaptive_b 1 -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "webm-vp9-qsv" or "webm-qsv-vp9")
         {
-            return $"-y -i \"{input}\" -c:v vp9_qsv -global_quality:v 23 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v vp9_qsv -global_quality:v 23 -adaptive_i 1 -adaptive_b 1 -c:a libopus -b:a 128k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "webm-av1-qsv" or "webm-qsv-av1")
         {
-            return $"-y -i \"{input}\" -c:v av1_qsv -global_quality:v 23 -preset medium -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v av1_qsv -global_quality:v 23 -preset medium -adaptive_i 1 -adaptive_b 1 -c:a libopus -b:a 128k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-av1-qsv" or "mp4-qsv-av1")
         {
-            return $"-y -i \"{input}\" -c:v av1_qsv -global_quality:v 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v av1_qsv -global_quality:v 23 -preset medium -adaptive_i 1 -adaptive_b 1 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-h264-amf" or "mp4-amf-h264")
         {
-            return $"-y -i \"{input}\" -c:v h264_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v h264_amf -rc cqp -qp_i 23 -qp_p 23 -qp_b 23 -quality balanced -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc")
         {
-            return $"-y -i \"{input}\" -c:v hevc_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? -c:v hevc_amf -rc cqp -qp_i 23 -qp_p 23 -qp_b 23 -quality balanced -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "webm-av1-amf" or "webm-amf-av1")
         {
-            return $"-y -i \"{input}\" -c:v av1_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v av1_amf -rc cqp -qp_i 23 -qp_p 23 -qp_b 23 -quality balanced -c:a libopus -b:a 128k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "mp4-av1-amf" or "mp4-amf-av1")
         {
-            return $"-y -i \"{input}\" -c:v av1_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v av1_amf -rc cqp -qp_i 23 -qp_p 23 -qp_b 23 -quality balanced -c:a aac -b:a 192k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "mkv")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "avi")
         {
-            return $"-y -i \"{input}\" -c:v mpeg4 -qscale:v 3 -c:a mp3 -b:a 192k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v mpeg4 -qscale:v 3 -c:a mp3 -b:a 192k -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "wmv")
         {
-            return $"-y -i \"{input}\" -c:v wmv2 -b:v 2M -c:a wmav2 -b:a 192k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v wmv2 -b:v 2M -c:a wmav2 -b:a 192k -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "flv")
         {
-            return $"-y -i \"{input}\" -c:v flv1 -qscale:v 3 -c:a mp3 -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v flv1 -qscale:v 3 -c:a mp3 -b:a 128k -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "m4v")
         {
-            return $"-y -i \"{input}\" -c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libx264 -crf 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "gif")
@@ -646,7 +687,7 @@ public class MediaConverter : IFormatConverter
         if (targetExt == "mp3")
         {
             var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
-            var hasAttachedPic = audioInfo?.HasAttachedPic ?? true;
+            var hasAttachedPic = audioInfo?.HasAttachedPic ?? false;
             if (hasAttachedPic)
             {
                 return $"-y -i \"{input}\" -map 0:a:0 -map 0:v? -c:a libmp3lame -b:a {bitrate}k -c:v copy -disposition:v:0 attached_pic -id3v2_version 3 -metadata:s:v title=\"Album cover\" -metadata:s:v comment=\"Cover (front)\" -map_metadata 0 \"{output}\"";
@@ -662,7 +703,7 @@ public class MediaConverter : IFormatConverter
 
         if (targetExt == "flac")
         {
-            var hasAttachedPic = audioInfo?.HasAttachedPic ?? true;
+            var hasAttachedPic = audioInfo?.HasAttachedPic ?? false;
             if (hasAttachedPic)
             {
                 return $"-y -i \"{input}\" -map 0:a:0 -map 0:v? -c:a flac -c:v copy -disposition:v:0 attached_pic -map_metadata 0 \"{output}\"";
@@ -675,7 +716,7 @@ public class MediaConverter : IFormatConverter
         {
             var bitrate = ResolveAudioBitrate(audioInfo, 320, 320);
             var aacCodec = (!isReencode && string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase)) ? "-c:a copy" : $"-c:a aac -b:a {bitrate}k";
-            var hasAttachedPic = audioInfo?.HasAttachedPic ?? true;
+            var hasAttachedPic = audioInfo?.HasAttachedPic ?? false;
             if (hasAttachedPic)
             {
                 return $"-y -i \"{input}\" -map 0:a:0 -map 0:v? {aacCodec} -c:v copy -disposition:v:0 attached_pic -map_metadata 0 \"{output}\"";
@@ -712,7 +753,7 @@ public class MediaConverter : IFormatConverter
         return $"-y -i \"{input}\" \"{output}\"";
     }
 
-    private static async Task<AudioStreamInfo?> ProbeAudioInfoAsync(string ffmpegPath, string inputPath, CancellationToken ct)
+    private static async Task<MediaStreamInfo?> ProbeMediaInfoAsync(string ffmpegPath, string inputPath, CancellationToken ct)
     {
         try
         {
@@ -760,7 +801,8 @@ public class MediaConverter : IFormatConverter
 
             await proc.WaitForExitAsync(CancellationToken.None);
 
-            return ParseAudioInfo(stderr.ToString());
+            var output = stderr.ToString();
+            return new MediaStreamInfo(ParseAudioInfo(output), ParseVideoInfo(output));
         }
         catch
         {
@@ -768,7 +810,7 @@ public class MediaConverter : IFormatConverter
         }
     }
 
-    private static AudioStreamInfo ParseAudioInfo(string output)
+    private static AudioStreamInfo? ParseAudioInfo(string output)
     {
         string? codec = null;
         int? bitrate = null;
@@ -792,13 +834,47 @@ public class MediaConverter : IFormatConverter
             }
         }
 
-        var hasAttachedPic = Regex.IsMatch(output, @"Stream #\d+:\d+.*?: Video:", RegexOptions.IgnoreCase);
+        var hasAttachedPic = Regex.IsMatch(output, @"attached_pic|attached pic|disposition.*?attached_pic|title=Album cover", RegexOptions.IgnoreCase);
 
         var isLossless = (codec != null && (codec.StartsWith("pcm", StringComparison.OrdinalIgnoreCase) ||
                                             codec is "flac" or "alac" or "wavpack" or "ape" or "truehd"))
                          || (bitrate.HasValue && bitrate.Value > 320);
 
         return new AudioStreamInfo(bitrate, hasAttachedPic, codec, isLossless);
+    }
+
+    private static VideoStreamInfo? ParseVideoInfo(string output)
+    {
+        var streamMatch = Regex.Match(output, @"Stream #\d+:\d+.*?: Video:\s*([^\r\n]+)", RegexOptions.IgnoreCase);
+        if (!streamMatch.Success) return null;
+
+        var line = streamMatch.Groups[1].Value.ToLowerInvariant();
+        var isHdrOrWideGamut = line.Contains("bt2020") ||
+                               line.Contains("arib-std-b67") ||
+                               line.Contains("smpte2084") ||
+                               line.Contains("10le") ||
+                               line.Contains("12le") ||
+                               line.Contains("10be") ||
+                               line.Contains("12be") ||
+                               line.Contains("p10") ||
+                               line.Contains("10-bit") ||
+                               line.Contains("main 10") ||
+                               line.Contains("profile 2") ||
+                               line.Contains("profile 3") ||
+                               line.Contains("dci-p3") ||
+                               line.Contains("display-p3") ||
+                               line.Contains("apple-log") ||
+                               line.Contains("canon-log") ||
+                               line.Contains("s-log") ||
+                               line.Contains("v-log");
+
+        var codecMatch = Regex.Match(line, @"^([a-zA-Z0-9_\-]+)");
+        var codec = codecMatch.Success ? codecMatch.Groups[1].Value : null;
+
+        var pixFmtMatch = Regex.Match(line, @",\s*([a-zA-Z0-9_]+)(?:\([^\)]*\))?,");
+        var pixFmt = pixFmtMatch.Success ? pixFmtMatch.Groups[1].Value : null;
+
+        return new VideoStreamInfo(isHdrOrWideGamut, codec, pixFmt);
     }
 
     private static int ResolveAudioBitrate(AudioStreamInfo? info, int defaultKbps, int maxKbps)
@@ -849,4 +925,6 @@ public class MediaConverter : IFormatConverter
     }
 
     private sealed record AudioStreamInfo(int? BitrateKbps, bool HasAttachedPic, string? Codec, bool IsLossless);
+    private sealed record VideoStreamInfo(bool IsHdrOrWideGamut, string? Codec, string? PixelFormat);
+    private sealed record MediaStreamInfo(AudioStreamInfo? Audio, VideoStreamInfo? Video);
 }
