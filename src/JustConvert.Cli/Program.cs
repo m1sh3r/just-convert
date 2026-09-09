@@ -15,9 +15,13 @@ public class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        if (args.Length == 0)
+        if (args.Length == 0 || (args.Length == 1 && args[0] is "--settings" or "-s" or "settings"))
         {
-            return 0;
+            var app = new Application();
+            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
+            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
+            var settingsWindow = new SettingsWindow();
+            return app.Run(settingsWindow);
         }
 
         if (args.Length >= 1 && args[0].Equals("register", StringComparison.OrdinalIgnoreCase))
