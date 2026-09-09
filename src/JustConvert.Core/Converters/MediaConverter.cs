@@ -20,7 +20,10 @@ public class MediaConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444", "frames"
+        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444", "frames",
+        "mp4-h264-nvenc", "mp4-nvenc-h264", "mp4-h265-nvenc", "mp4-hevc-nvenc", "mp4-nvenc-h265", "mp4-nvenc-hevc", "webm-av1-nvenc", "webm-nvenc-av1", "mp4-av1-nvenc", "mp4-nvenc-av1",
+        "mp4-h264-qsv", "mp4-qsv-h264", "mp4-h265-qsv", "mp4-hevc-qsv", "mp4-qsv-h265", "mp4-qsv-hevc", "webm-vp9-qsv", "webm-qsv-vp9", "webm-av1-qsv", "webm-qsv-av1", "mp4-av1-qsv", "mp4-qsv-av1",
+        "mp4-h264-amf", "mp4-amf-h264", "mp4-h265-amf", "mp4-hevc-amf", "mp4-amf-h265", "mp4-amf-hevc", "webm-av1-amf", "webm-amf-av1", "mp4-av1-amf", "mp4-amf-av1"
     };
 
     public static string? FindFfmpegPath()
@@ -122,7 +125,21 @@ public class MediaConverter : IFormatConverter
 
         if (VideoFormats.Contains(src))
         {
-            return VideoTargetFormats.Contains(tgt);
+            if (!VideoTargetFormats.Contains(tgt)) return false;
+            if (tgt is "mp4-h264-nvenc" or "mp4-nvenc-h264" && !HardwareAccelerationDetector.HasNvencH264) return false;
+            if (tgt is "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" && !HardwareAccelerationDetector.HasNvencHevc) return false;
+            if (tgt is "webm-av1-nvenc" or "webm-nvenc-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" && !HardwareAccelerationDetector.HasNvencAv1) return false;
+
+            if (tgt is "mp4-h264-qsv" or "mp4-qsv-h264" && !HardwareAccelerationDetector.HasQsvH264) return false;
+            if (tgt is "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" && !HardwareAccelerationDetector.HasQsvHevc) return false;
+            if (tgt is "webm-vp9-qsv" or "webm-qsv-vp9" && !HardwareAccelerationDetector.HasQsvVp9) return false;
+            if (tgt is "webm-av1-qsv" or "webm-qsv-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" && !HardwareAccelerationDetector.HasQsvAv1) return false;
+
+            if (tgt is "mp4-h264-amf" or "mp4-amf-h264" && !HardwareAccelerationDetector.HasAmfH264) return false;
+            if (tgt is "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" && !HardwareAccelerationDetector.HasAmfHevc) return false;
+            if (tgt is "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-amf" or "mp4-amf-av1" && !HardwareAccelerationDetector.HasAmfAv1) return false;
+
+            return true;
         }
 
         if (AudioFormats.Contains(src))
@@ -139,7 +156,29 @@ public class MediaConverter : IFormatConverter
 
         if (VideoFormats.Contains(src))
         {
-            return ["mp4-h264", "mp4-h265", "webm-vp9", "webm-av1", "mov-prores422", "mov-prores4444", "frames", "reencode"];
+            var list = new List<string> { "mp4-h264" };
+            if (HardwareAccelerationDetector.HasNvencH264) list.Add("mp4-h264-nvenc");
+            if (HardwareAccelerationDetector.HasQsvH264) list.Add("mp4-h264-qsv");
+            if (HardwareAccelerationDetector.HasAmfH264) list.Add("mp4-h264-amf");
+
+            list.Add("mp4-h265");
+            if (HardwareAccelerationDetector.HasNvencHevc) list.Add("mp4-h265-nvenc");
+            if (HardwareAccelerationDetector.HasQsvHevc) list.Add("mp4-h265-qsv");
+            if (HardwareAccelerationDetector.HasAmfHevc) list.Add("mp4-h265-amf");
+
+            list.Add("webm-vp9");
+            if (HardwareAccelerationDetector.HasQsvVp9) list.Add("webm-vp9-qsv");
+
+            list.Add("webm-av1");
+            if (HardwareAccelerationDetector.HasNvencAv1) list.Add("webm-av1-nvenc");
+            if (HardwareAccelerationDetector.HasQsvAv1) list.Add("webm-av1-qsv");
+            if (HardwareAccelerationDetector.HasAmfAv1) list.Add("webm-av1-amf");
+
+            list.Add("mov-prores422");
+            list.Add("mov-prores4444");
+            list.Add("frames");
+            list.Add("reencode");
+            return list;
         }
 
         if (AudioFormats.Contains(src))
@@ -211,6 +250,46 @@ public class MediaConverter : IFormatConverter
             else if (isCompress)
             {
                 outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_compressed.mp4");
+            }
+            else if (targetExt is "mp4-h264-nvenc" or "mp4-nvenc-h264")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h264_nvenc.mp4");
+            }
+            else if (targetExt is "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h265_nvenc.mp4");
+            }
+            else if (targetExt is "webm-av1-nvenc" or "webm-nvenc-av1")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_av1_nvenc.webm");
+            }
+            else if (targetExt is "mp4-h264-qsv" or "mp4-qsv-h264")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h264_qsv.mp4");
+            }
+            else if (targetExt is "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h265_qsv.mp4");
+            }
+            else if (targetExt is "webm-vp9-qsv" or "webm-qsv-vp9")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_vp9_qsv.webm");
+            }
+            else if (targetExt is "webm-av1-qsv" or "webm-qsv-av1")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_av1_qsv.webm");
+            }
+            else if (targetExt is "mp4-h264-amf" or "mp4-amf-h264")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h264_amf.mp4");
+            }
+            else if (targetExt is "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_h265_amf.mp4");
+            }
+            else if (targetExt is "webm-av1-amf" or "webm-amf-av1")
+            {
+                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_av1_amf.webm");
             }
             else if (targetExt is "mp4-hevc" or "hevc" or "h265" or "mp4-h265")
             {
@@ -456,7 +535,7 @@ public class MediaConverter : IFormatConverter
 
         if (targetExt is "webm-vp9" or "vp9" or "webm")
         {
-            return $"-y -i \"{input}\" -c:v libvpx-vp9 -crf 23 -b:v 0 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+            return $"-y -i \"{input}\" -c:v libvpx-vp9 -crf 23 -b:v 0 -deadline good -cpu-used 2 -row-mt 1 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "webm-av1" or "av1")
@@ -467,6 +546,71 @@ public class MediaConverter : IFormatConverter
         if (targetExt == "mp4-av1")
         {
             return $"-y -i \"{input}\" -c:v libsvtav1 -crf 23 -preset 8 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-h264-nvenc" or "mp4-nvenc-h264")
+        {
+            return $"-y -i \"{input}\" -c:v h264_nvenc -cq:v 23 -preset p5 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc")
+        {
+            return $"-y -i \"{input}\" -c:v hevc_nvenc -cq:v 23 -preset p5 -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "webm-av1-nvenc" or "webm-nvenc-av1")
+        {
+            return $"-y -i \"{input}\" -c:v av1_nvenc -cq:v 23 -preset p5 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-av1-nvenc" or "mp4-nvenc-av1")
+        {
+            return $"-y -i \"{input}\" -c:v av1_nvenc -cq:v 23 -preset p5 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-h264-qsv" or "mp4-qsv-h264")
+        {
+            return $"-y -i \"{input}\" -c:v h264_qsv -global_quality:v 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc")
+        {
+            return $"-y -i \"{input}\" -c:v hevc_qsv -global_quality:v 23 -preset medium -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "webm-vp9-qsv" or "webm-qsv-vp9")
+        {
+            return $"-y -i \"{input}\" -c:v vp9_qsv -global_quality:v 23 -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "webm-av1-qsv" or "webm-qsv-av1")
+        {
+            return $"-y -i \"{input}\" -c:v av1_qsv -global_quality:v 23 -preset medium -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-av1-qsv" or "mp4-qsv-av1")
+        {
+            return $"-y -i \"{input}\" -c:v av1_qsv -global_quality:v 23 -preset medium -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-h264-amf" or "mp4-amf-h264")
+        {
+            return $"-y -i \"{input}\" -c:v h264_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc")
+        {
+            return $"-y -i \"{input}\" -c:v hevc_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -tag:v hvc1 -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "webm-av1-amf" or "webm-amf-av1")
+        {
+            return $"-y -i \"{input}\" -c:v av1_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -c:a libopus -b:a 128k -map_metadata 0 \"{output}\"";
+        }
+
+        if (targetExt is "mp4-av1-amf" or "mp4-amf-av1")
+        {
+            return $"-y -i \"{input}\" -c:v av1_amf -rc cqp -qp_i 23 -qp_p 23 -quality balanced -c:a aac -b:a 192k -movflags +faststart -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt == "mkv")

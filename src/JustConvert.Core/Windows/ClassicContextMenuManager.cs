@@ -37,12 +37,39 @@ public class ClassicContextMenuManager
         "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b"
     };
 
-    private static readonly Dictionary<string, string[]> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
+    private static readonly Dictionary<string, Func<IReadOnlyList<string>>> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["audio"] = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"],
-        ["video"] = ["mp4-h264", "mp4-h265", "webm-vp9", "webm-av1", "mov-prores422", "mov-prores4444", "frames", "reencode"],
-        ["image"] = ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
+        ["audio"] = () => ["mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"],
+        ["video"] = GetVideoTargetFormats,
+        ["image"] = () => ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
     };
+
+    private static IReadOnlyList<string> GetVideoTargetFormats()
+    {
+        var list = new List<string> { "mp4-h264" };
+        if (HardwareAccelerationDetector.HasNvencH264) list.Add("mp4-h264-nvenc");
+        if (HardwareAccelerationDetector.HasQsvH264) list.Add("mp4-h264-qsv");
+        if (HardwareAccelerationDetector.HasAmfH264) list.Add("mp4-h264-amf");
+
+        list.Add("mp4-h265");
+        if (HardwareAccelerationDetector.HasNvencHevc) list.Add("mp4-h265-nvenc");
+        if (HardwareAccelerationDetector.HasQsvHevc) list.Add("mp4-h265-qsv");
+        if (HardwareAccelerationDetector.HasAmfHevc) list.Add("mp4-h265-amf");
+
+        list.Add("webm-vp9");
+        if (HardwareAccelerationDetector.HasQsvVp9) list.Add("webm-vp9-qsv");
+
+        list.Add("webm-av1");
+        if (HardwareAccelerationDetector.HasNvencAv1) list.Add("webm-av1-nvenc");
+        if (HardwareAccelerationDetector.HasQsvAv1) list.Add("webm-av1-qsv");
+        if (HardwareAccelerationDetector.HasAmfAv1) list.Add("webm-av1-amf");
+
+        list.Add("mov-prores422");
+        list.Add("mov-prores4444");
+        list.Add("frames");
+        list.Add("reencode");
+        return list;
+    }
 
     private readonly ConverterRegistry _registry;
 
@@ -61,9 +88,9 @@ public class ClassicContextMenuManager
 
         if (classesRoot == null) return;
 
-        foreach (var (category, formats) in CategoryTargetFormats)
+        foreach (var (category, formatProvider) in CategoryTargetFormats)
         {
-            RegisterKey(classesRoot, $@"SystemFileAssociations\{category}\shell\{VerbRoot}", formats, executablePath);
+            RegisterKey(classesRoot, $@"SystemFileAssociations\{category}\shell\{VerbRoot}", formatProvider(), executablePath);
         }
 
         foreach (var ext in KnownExtensions)
@@ -71,15 +98,15 @@ public class ClassicContextMenuManager
             IReadOnlyList<string> targets;
             if (ImageExtensions.Contains(ext))
             {
-                targets = CategoryTargetFormats["image"];
+                targets = CategoryTargetFormats["image"]();
             }
             else if (AudioExtensions.Contains(ext))
             {
-                targets = CategoryTargetFormats["audio"];
+                targets = CategoryTargetFormats["audio"]();
             }
             else if (VideoExtensions.Contains(ext))
             {
-                targets = CategoryTargetFormats["video"];
+                targets = CategoryTargetFormats["video"]();
             }
             else
             {
@@ -91,6 +118,8 @@ public class ClassicContextMenuManager
             var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
             RegisterKey(classesRoot, $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}", targets, executablePath);
         }
+
+        NotifyShell();
     }
 
     private static void RegisterKey(RegistryKey classesRoot, string shellPath, IReadOnlyList<string> targetFormats, string exePath)
@@ -143,10 +172,12 @@ public class ClassicContextMenuManager
         var fmt = format.TrimStart('.').ToLowerInvariant();
         return fmt switch
         {
-            "mp4-h264" or "mp4-h265" or "mp4" or "h264" or "h265" => 1,
-            "webm-vp9" or "vp9" or "webm-av1" or "av1" or "webm" => 2,
-            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 3,
-            "frames" or "frames-png" or "frames-jpg" => 4,
+            "mp4-h264" or "h264" or "mp4" or "mp4-h264-nvenc" or "mp4-nvenc-h264" or "mp4-h264-qsv" or "mp4-qsv-h264" or "mp4-h264-amf" or "mp4-amf-h264" => 1,
+            "mp4-h265" or "h265" or "hevc" or "mp4-hevc" or "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" or "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" or "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" => 2,
+            "webm-vp9" or "vp9" or "webm-vp9-qsv" or "webm-qsv-vp9" => 3,
+            "webm-av1" or "av1" or "webm" or "webm-av1-nvenc" or "webm-nvenc-av1" or "webm-av1-qsv" or "webm-qsv-av1" or "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" or "mp4-av1-amf" or "mp4-amf-av1" or "mp4-av1" => 4,
+            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 5,
+            "frames" or "frames-png" or "frames-jpg" => 6,
 
             "png" or "jpg" or "jpeg" or "webp" => 10,
             "ico" or "bmp" or "gif" => 11,
@@ -180,16 +211,18 @@ public class ClassicContextMenuManager
             catch { }
         }
 
-        foreach (var ext in KnownExtensions)
+        NotifyShell();
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern void SHChangeNotify(int wEventId, uint uFlags, IntPtr dwItem1, IntPtr dwItem2);
+
+    private static void NotifyShell()
+    {
+        try
         {
-            var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
-            var shellPath = $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}";
-            
-            try
-            {
-                classesRoot.DeleteSubKeyTree(shellPath, false);
-            }
-            catch { }
+            SHChangeNotify(0x08000000, 0x0000, IntPtr.Zero, IntPtr.Zero);
         }
+        catch { }
     }
 }
