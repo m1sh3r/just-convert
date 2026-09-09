@@ -94,6 +94,8 @@ public partial class InstallerWindow : FluentWindow
             SuccessPanel.Visibility = Visibility.Visible;
             InfoBarSuccess.Title = I18n.T("SetupSuccessHeader");
             TxtSuccessText.Text = I18n.T("SetupSuccessText");
+            BtnOpenSettings.Visibility = Visibility.Visible;
+            BtnOpenSettings.IsDefault = true;
             BtnClose.Content = I18n.T("BtnClose");
         }
         catch (OperationCanceledException)
@@ -115,6 +117,27 @@ public partial class InstallerWindow : FluentWindow
             TxtErrorLog.Text = ex.Message + "\n" + ex.StackTrace;
             BtnClose.Content = I18n.T("BtnClose");
         }
+    }
+
+    private void BtnOpenSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var scope = RadioAllUsers.IsChecked == true ? InstallScope.AllUsers : InstallScope.CurrentUser;
+        var installDir = Program.GetInstallDirectory(scope);
+        var exePath = System.IO.Path.Combine(installDir, "just-convert.exe");
+        if (System.IO.File.Exists(exePath))
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = exePath,
+                    Arguments = "--settings",
+                    UseShellExecute = true
+                });
+            }
+            catch { }
+        }
+        Close();
     }
 
     private void BtnUninstall_Click(object sender, RoutedEventArgs e)
