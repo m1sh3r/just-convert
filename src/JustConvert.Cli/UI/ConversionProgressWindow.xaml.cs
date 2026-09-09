@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using JustConvert.Core;
@@ -525,5 +526,14 @@ public partial class ConversionProgressWindow : FluentWindow
     private void StopIconRotation()
     {
         IconRotateTransform.BeginAnimation(RotateTransform.AngleProperty, null);
+    }
+
+    private void OnScrollViewerPreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer sv || sv.ScrollableHeight <= 0) return;
+
+        var offset = sv.VerticalOffset - (e.Delta * 0.25);
+        sv.ScrollToVerticalOffset(Math.Clamp(offset, 0, sv.ScrollableHeight));
+        e.Handled = true;
     }
 }
