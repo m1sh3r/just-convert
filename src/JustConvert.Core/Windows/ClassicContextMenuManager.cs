@@ -17,14 +17,14 @@ public class ClassicContextMenuManager
 
     private static readonly string[] KnownExtensions =
     [
-        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic",
+        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic", "svg", "psd", "dng", "cr2", "cr3", "nef", "arw",
         "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v",
-        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b"
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b", "alac", "ape", "wv"
     ];
 
     private static readonly HashSet<string> ImageExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic"
+        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic", "svg", "psd", "dng", "cr2", "cr3", "nef", "arw"
     };
 
     private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
@@ -34,47 +34,24 @@ public class ClassicContextMenuManager
 
     private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b"
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "aif", "m4b", "alac", "ape", "wv"
     };
 
     private static readonly Dictionary<string, Func<IReadOnlyList<string>>> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["audio"] = () => ["mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"],
+        ["audio"] = () => ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "aiff", "reencode"],
         ["video"] = GetVideoTargetFormats,
-        ["image"] = () => ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
+        ["image"] = () => ["jpg", "png", "webp", "avif", "gif", "ico", "bmp", "tiff", "jp2", "tga", "pcx", "ppm", "reencode"]
     };
 
     private static IReadOnlyList<string> GetVideoTargetFormats()
     {
-        var list = new List<string> { "mp4-h264" };
-        if (HardwareAccelerationDetector.HasNvencH264) list.Add("mp4-h264-nvenc");
-        if (HardwareAccelerationDetector.HasQsvH264) list.Add("mp4-h264-qsv");
-        if (HardwareAccelerationDetector.HasAmfH264) list.Add("mp4-h264-amf");
-
-        list.Add("mp4-h265");
-        if (HardwareAccelerationDetector.HasNvencHevc) list.Add("mp4-h265-nvenc");
-        if (HardwareAccelerationDetector.HasQsvHevc) list.Add("mp4-h265-qsv");
-        if (HardwareAccelerationDetector.HasAmfHevc) list.Add("mp4-h265-amf");
-
-        list.Add("webm-vp9");
-        if (HardwareAccelerationDetector.HasQsvVp9) list.Add("webm-vp9-qsv");
-
-        list.Add("webm-av1");
-        if (HardwareAccelerationDetector.HasNvencAv1) list.Add("webm-av1-nvenc");
-        if (HardwareAccelerationDetector.HasQsvAv1) list.Add("webm-av1-qsv");
-        if (HardwareAccelerationDetector.HasAmfAv1) list.Add("webm-av1-amf");
-
-        list.Add("mov-prores422");
-        list.Add("mov-prores4444");
-        list.Add("remux-mp4");
-        list.Add("remux-mkv");
-        list.Add("frames");
-        list.Add("mp3");
-        list.Add("wav");
-        list.Add("flac");
-        list.Add("aac");
-        list.Add("reencode");
-        return list;
+        return
+        [
+            "mp4", "mkv", "mov", "webm", "gif", "frames",
+            "mp3", "m4a", "aac", "wav", "flac", "opus",
+            "remux", "reencode"
+        ];
     }
 
     private readonly ConverterRegistry _registry;
@@ -101,35 +78,55 @@ public class ClassicContextMenuManager
         var audioTargets = FilterAvailableFormats(activeProfile.AudioFormats);
         var imageTargets = FilterAvailableFormats(activeProfile.ImageFormats);
 
-        RegisterKey(classesRoot, $@"SystemFileAssociations\video\shell\{VerbRoot}", videoTargets, executablePath);
-        RegisterKey(classesRoot, $@"SystemFileAssociations\audio\shell\{VerbRoot}", audioTargets, executablePath);
-        RegisterKey(classesRoot, $@"SystemFileAssociations\image\shell\{VerbRoot}", imageTargets, executablePath);
+        var videoPresets = settings.CustomPresets.Where(p => p.Category == "video").Select(p => $"preset:{p.Id}").ToList();
+        var audioPresets = settings.CustomPresets.Where(p => p.Category == "audio").Select(p => $"preset:{p.Id}").ToList();
+        var imagePresets = settings.CustomPresets.Where(p => p.Category == "image").Select(p => $"preset:{p.Id}").ToList();
+
+        videoTargets.AddRange(videoPresets);
+        audioTargets.AddRange(audioPresets);
+        imageTargets.AddRange(imagePresets);
+
+        foreach (var category in CategoryTargetFormats.Keys)
+        {
+            var shellPath = $@"SystemFileAssociations\{category}\shell\{VerbRoot}";
+            try
+            {
+                classesRoot.DeleteSubKeyTree(shellPath, false);
+            }
+            catch { }
+        }
 
         foreach (var ext in KnownExtensions)
         {
-            IReadOnlyList<string> targets;
+            IReadOnlyList<string> baseTargets;
             if (ImageExtensions.Contains(ext))
             {
-                targets = imageTargets;
+                baseTargets = imageTargets;
             }
             else if (AudioExtensions.Contains(ext))
             {
-                targets = audioTargets;
+                baseTargets = audioTargets;
             }
             else if (VideoExtensions.Contains(ext))
             {
-                targets = videoTargets;
+                baseTargets = videoTargets;
             }
             else
             {
-                targets = _registry.GetAvailableTargetFormats(ext);
+                baseTargets = _registry.GetAvailableTargetFormats(ext);
             }
+
+            var targets = baseTargets
+                .Where(t => !IsSameFormat(ext, t))
+                .ToList();
 
             if (targets.Count == 0) continue;
 
             var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
             RegisterKey(classesRoot, $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}", targets, executablePath);
         }
+
+        RegisterFolderMenu(classesRoot, executablePath);
 
         CreateStartMenuShortcut(executablePath, scope);
         NotifyShell();
@@ -182,7 +179,8 @@ public class ClassicContextMenuManager
         for (int i = 0; i < targetFormats.Count; i++)
         {
             var target = targetFormats[i];
-            var verbKey = $@"{subCommandsRoot}\{i:D2}_To_{target.ToUpperInvariant()}";
+            var safeTarget = target.Replace(':', '_').ToUpperInvariant();
+            var verbKey = $@"{subCommandsRoot}\{i:D2}_To_{safeTarget}";
             using var subKey = classesRoot.CreateSubKey(verbKey, true);
             if (subKey == null) continue;
 
@@ -204,26 +202,71 @@ public class ClassicContextMenuManager
         }
     }
 
+    private static void RegisterFolderMenu(RegistryKey rootKey, string executablePath)
+    {
+        using var folderKey = rootKey.CreateSubKey(@"Directory\shell\JustConvertFolder", true);
+        if (folderKey == null) return;
+
+        folderKey.SetValue("", I18n.T("MenuConvertFolder"));
+        folderKey.SetValue("MUIVerb", I18n.T("MenuConvertFolder"));
+        folderKey.SetValue("Icon", $"\"{executablePath}\",0");
+
+        using var commandKey = folderKey.CreateSubKey("command", true);
+        commandKey?.SetValue("", $"\"{executablePath}\" \"%1\"");
+    }
+
+    public static bool IsSameFormat(string sourceExt, string targetFormat)
+    {
+        var src = sourceExt.TrimStart('.').ToLowerInvariant();
+        var tgt = targetFormat.TrimStart('.').ToLowerInvariant();
+
+        if (tgt.StartsWith("preset:")) return false;
+
+        if (tgt is "reencode" or "frames" or "compress" or "remux")
+        {
+            return false;
+        }
+
+        if (VideoExtensions.Contains(src) && VideoExtensions.Contains(tgt))
+        {
+            return false;
+        }
+
+        if (src == tgt) return true;
+
+        if (src is "jpg" or "jpeg" && tgt is "jpg" or "jpeg") return true;
+        if (src is "tiff" or "tif" && tgt is "tiff" or "tif") return true;
+        if (src is "jp2" or "jpeg2000" && tgt is "jp2" or "jpeg2000") return true;
+        if (src is "aiff" or "aif" && tgt is "aiff" or "aif") return true;
+
+        if (src == "mp4" && tgt is "remux-mp4" or "mp4-remux" or "mp4-copy") return true;
+        if (src == "mkv" && tgt is "remux-mkv" or "mkv-remux" or "mkv-copy") return true;
+
+        return false;
+    }
+
     private static int GetFormatGroup(string format)
     {
         var fmt = format.TrimStart('.').ToLowerInvariant();
         return fmt switch
         {
-            "mp4-h264" or "h264" or "mp4" or "mp4-h264-nvenc" or "mp4-nvenc-h264" or "mp4-h264-qsv" or "mp4-qsv-h264" or "mp4-h264-amf" or "mp4-amf-h264" => 1,
-            "mp4-h265" or "h265" or "hevc" or "mp4-hevc" or "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" or "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" or "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" => 2,
-            "webm-vp9" or "vp9" or "webm-vp9-qsv" or "webm-qsv-vp9" => 3,
-            "webm-av1" or "av1" or "webm" or "webm-av1-nvenc" or "webm-nvenc-av1" or "webm-av1-qsv" or "webm-qsv-av1" or "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" or "mp4-av1-amf" or "mp4-amf-av1" or "mp4-av1" => 4,
-            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 5,
-            "remux-mp4" or "remux-mkv" or "mp4-remux" or "mkv-remux" => 6,
-            "frames" or "frames-png" or "frames-jpg" => 7,
+            "mp4" or "mkv" or "mov" or "webm" or "gif" => 1,
+            "mp4-h264" or "h264" or "mp4-h264-nvenc" or "mp4-nvenc-h264" or "mp4-h264-qsv" or "mp4-qsv-h264" or "mp4-h264-amf" or "mp4-amf-h264" => 2,
+            "mp4-h265" or "h265" or "hevc" or "mp4-hevc" or "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" or "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" or "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" => 3,
+            "webm-vp9" or "vp9" or "webm-vp9-qsv" or "webm-qsv-vp9" => 4,
+            "webm-av1" or "av1" or "webm-av1-nvenc" or "webm-nvenc-av1" or "webm-av1-qsv" or "webm-qsv-av1" or "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" or "mp4-av1-amf" or "mp4-amf-av1" or "mp4-av1" => 5,
+            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 6,
 
-            "png" or "jpg" or "jpeg" or "webp" => 10,
-            "ico" or "bmp" or "gif" => 11,
-            "tiff" or "tif" or "tga" or "avif" or "heic" => 12,
+            "frames" or "frames-png" or "frames-jpg" => 10,
 
-            "mp3" or "aac" or "m4a" => 20,
-            "wav" or "flac" => 21,
-            "ogg" or "opus" => 22,
+            "jpg" or "jpeg" or "png" or "webp" or "avif" => 15,
+            "ico" or "bmp" => 16,
+            "tiff" or "tif" or "jp2" or "jpeg2000" or "tga" or "pcx" or "ppm" or "heic" => 17,
+
+            "mp3" or "m4a" or "aac" or "wav" or "flac" or "opus" or "ogg" or "aiff" or "aif" => 20,
+
+            "remux" or "remux-mp4" or "remux-mkv" or "mp4-remux" or "mkv-remux" => 40,
+            "reencode" => 41,
 
             _ => 99
         };
@@ -259,6 +302,12 @@ public class ClassicContextMenuManager
             }
             catch { }
         }
+
+        try
+        {
+            classesRoot.DeleteSubKeyTree(@"Directory\shell\JustConvertFolder", false);
+        }
+        catch { }
 
         RemoveStartMenuShortcut(scope);
         NotifyShell();

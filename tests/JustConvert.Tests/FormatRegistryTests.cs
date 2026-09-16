@@ -14,27 +14,25 @@ public class FormatRegistryTests
 
     private static readonly string[] AudioExtensions =
     [
-        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "m4b"
+        "mp3", "wav", "flac", "aac", "ogg", "m4a", "wma", "opus", "aiff", "m4b", "alac", "ape", "wv"
     ];
 
     private static readonly string[] ImageExtensions =
     [
-        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic"
+        "png", "jpg", "jpeg", "webp", "bmp", "gif", "tiff", "tif", "tga", "ico", "pcx", "ppm", "jp2", "heic", "svg", "psd", "dng", "cr2", "cr3", "nef", "arw"
     ];
 
     private static readonly string[] ExpectedVideoTargets =
     [
-        "mp4-h264", "mp4-h265", "webm-vp9", "webm-av1",
-        "mov-prores422", "mov-prores4444",
-        "remux-mp4", "remux-mkv",
+        "mp4", "mkv", "mov", "webm", "gif",
         "frames",
-        "mp3", "wav", "flac", "aac",
-        "reencode"
+        "mp3", "m4a", "aac", "wav", "flac", "opus",
+        "remux", "reencode"
     ];
 
     private static readonly string[] ExpectedAudioTargets =
     [
-        "mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"
+        "mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff", "reencode"
     ];
 
     private static readonly string[] ExpectedImageTargets =
@@ -152,12 +150,13 @@ public class FormatRegistryTests
 
     public static TheoryData<string, string> GetAllImageTargetCombinations()
     {
+        var rawFormats = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "dng", "cr2", "cr3", "nef", "arw" };
         var data = new TheoryData<string, string>();
         foreach (var src in ImageExtensions)
         {
             foreach (var tgt in ExpectedImageTargets)
             {
-                if (src == "heic" && tgt == "reencode") continue;
+                if ((src is "heic" or "svg" or "psd" || rawFormats.Contains(src)) && tgt == "reencode") continue;
                 if (tgt == "reencode" || !IsSameImageFormat(src, tgt))
                 {
                     data.Add(src, tgt);
@@ -176,5 +175,71 @@ public class FormatRegistryTests
         if (s is "tiff" or "tif" && t is "tiff" or "tif") return true;
         if (s is "jp2" or "jpeg2000" && t is "jp2" or "jpeg2000") return true;
         return false;
+    }
+
+    [Theory]
+    [InlineData("jpg", "jpg", true)]
+    [InlineData("jpg", "jpeg", true)]
+    [InlineData("jpeg", "jpg", true)]
+    [InlineData("png", "png", true)]
+    [InlineData("png", "jpg", false)]
+    [InlineData("mp3", "mp3", true)]
+    [InlineData("mp3", "flac", false)]
+    [InlineData("wav", "wav", true)]
+    [InlineData("aif", "aiff", true)]
+    [InlineData("tiff", "tif", true)]
+    [InlineData("mp4", "remux-mp4", true)]
+    [InlineData("mkv", "remux-mkv", true)]
+    [InlineData("mp4", "mp4-h264", false)]
+    [InlineData("jpg", "reencode", false)]
+    [InlineData("mp4", "frames", false)]
+    public void IsSameFormat_CorrectlyIdentifiesDuplicates(string sourceExt, string targetFormat, bool expectedDuplicate)
+    {
+        var result = JustConvert.Core.Windows.ClassicContextMenuManager.IsSameFormat(sourceExt, targetFormat);
+        Assert.Equal(expectedDuplicate, result);
+    }
+
+    [Theory]
+    [InlineData("jpg", true)]
+    [InlineData("jpeg", true)]
+    [InlineData("webp", true)]
+    [InlineData("avif", true)]
+    [InlineData("jp2", true)]
+    [InlineData("png", false)]
+    [InlineData("ico", false)]
+    [InlineData("bmp", false)]
+    [InlineData("tiff", false)]
+    public void SupportsQuality_ReturnsTrueOnlyForSupportedLossyFormats(string format, bool expected)
+    {
+        Assert.Equal(expected, AppSettings.SupportsQuality(format));
+    }
+
+    [Theory]
+    [InlineData("jpg", 92)]
+    [InlineData("jpeg", 92)]
+    [InlineData("webp", 85)]
+    [InlineData("avif", 80)]
+    [InlineData("jp2", 85)]
+    public void GetDefaultQuality_ReturnsExpectedDefaults(string format, int expected)
+    {
+        Assert.Equal(expected, AppSettings.GetDefaultQuality(format));
+    }
+
+    [Fact]
+    public void AppSettings_SetAndGetQuality_PersistsChoice()
+    {
+        var settings = new AppSettings();
+        Assert.False(settings.TryGetSavedQuality("jpg", out var qInit));
+        Assert.Equal(92, qInit);
+
+        settings.SetQuality("jpg", 77, remember: true);
+        Assert.True(settings.TryGetSavedQuality("jpg", out var qSaved));
+        Assert.Equal(77, qSaved);
+        Assert.Equal(77, settings.GetEffectiveQuality("jpg"));
+
+        settings.ResetQuality("jpg");
+        Assert.False(settings.TryGetSavedQuality("jpg", out var qAfterReset));
+        Assert.Equal(92, qAfterReset);
+        Assert.Equal(92, settings.GetEffectiveQuality("jpg"));
     }
 }

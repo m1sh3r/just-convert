@@ -5,9 +5,61 @@ namespace JustConvert.Core.Converters;
 
 public static class OutputFileNameHelper
 {
-    public static string? BuildVideoSuffix(string targetFormat)
+    public static string? BuildVideoSuffix(string targetFormat, VideoQualitySetting? setting = null, bool appendSuffix = true)
     {
+        if (!appendSuffix) return null;
+
         var fmt = targetFormat.ToLowerInvariant();
+        if (fmt == "reencode") return "Reencode";
+        if (fmt is "remux-mp4" or "remux-mkv" or "remux") return "Remux";
+        if (fmt is "frames" or "frames-png" or "frames-jpg") return "Frames";
+        if (fmt is "compress" or "compress-video") return "H.264 - CRF 28";
+        if (fmt == "gif") return null;
+
+        if (setting != null)
+        {
+            var codecName = setting.VideoCodec.ToLowerInvariant() switch
+            {
+                "h264" => setting.Encoder.ToLowerInvariant() switch
+                {
+                    "nvenc" => "H.264 NVENC",
+                    "qsv" => "H.264 QSV",
+                    "amf" => "H.264 AMF",
+                    _ => "H.264"
+                },
+                "h265" or "hevc" => setting.Encoder.ToLowerInvariant() switch
+                {
+                    "nvenc" => "H.265 NVENC",
+                    "qsv" => "H.265 QSV",
+                    "amf" => "H.265 AMF",
+                    _ => "H.265"
+                },
+                "av1" => setting.Encoder.ToLowerInvariant() switch
+                {
+                    "nvenc" => "AV1 NVENC",
+                    "qsv" => "AV1 QSV",
+                    "amf" => "AV1 AMF",
+                    _ => "AV1"
+                },
+                "vp9" => setting.Encoder.ToLowerInvariant() switch
+                {
+                    "qsv" => "VP9 QSV",
+                    _ => "VP9"
+                },
+                "prores422" => "ProRes 422",
+                "prores4444" => "ProRes 4444",
+                "copy" => "Copy",
+                _ => setting.VideoCodec.ToUpperInvariant()
+            };
+
+            if (setting.VideoCodec is "prores422" or "prores4444" or "copy")
+            {
+                return codecName;
+            }
+
+            return $"{codecName} - CQ {setting.VideoQualityCq}";
+        }
+
         return fmt switch
         {
             "mp4-h264" or "h264" or "mp4" => "H.264 - CQ 23",
@@ -40,16 +92,24 @@ public static class OutputFileNameHelper
         };
     }
 
-    public static string? BuildAudioSuffix(string targetFormat, AudioStreamInfo? audioInfo = null)
+    public static string? BuildAudioSuffix(string targetFormat, AudioStreamInfo? audioInfo = null, int? bitrateKbps = null, bool appendSuffix = true)
     {
+        if (!appendSuffix) return null;
+
         var fmt = targetFormat.ToLowerInvariant();
         var is24Bit = audioInfo?.BitsPerSample >= 24;
+
+        if (bitrateKbps.HasValue && fmt is "mp3" or "aac" or "ogg" or "vorbis" or "opus")
+        {
+            if (fmt is "ogg" or "vorbis") return $"Vorbis - {bitrateKbps.Value}k";
+            return $"{bitrateKbps.Value}k";
+        }
 
         return fmt switch
         {
             "mp3" => "320k",
             "aac" => "320k",
-            "m4a" => audioInfo?.IsLossless == true ? "ALAC - Lossless" : "AAC - 320k",
+            "m4a" => audioInfo?.IsLossless == true ? "ALAC - Lossless" : (bitrateKbps.HasValue ? $"AAC - {bitrateKbps.Value}k" : "AAC - 320k"),
             "flac" => is24Bit ? "24-bit" : "Lossless",
             "wav" => is24Bit ? "PCM 24-bit" : "PCM 16-bit",
             "opus" => (audioInfo?.Channels == 1) ? "192k" : "256k",
@@ -60,17 +120,22 @@ public static class OutputFileNameHelper
         };
     }
 
-    public static string? BuildImageSuffix(string targetFormat)
+    public static string? BuildImageSuffix(string targetFormat, int? quality = null, bool appendQualitySuffix = true)
     {
         var fmt = targetFormat.ToLowerInvariant();
+        if (fmt == "reencode") return "Reencode";
+
+        if (AppSettings.SupportsQuality(fmt))
+        {
+            if (!appendQualitySuffix) return null;
+            var q = quality ?? AppSettings.GetDefaultQuality(fmt);
+            return $"Q{q}";
+        }
+
         return fmt switch
         {
-            "jpg" or "jpeg" => "Q92",
-            "webp" => "Q90",
-            "avif" => "Q85",
             "ico" => "Multi-layer",
             "tiff" or "tif" => "LZW",
-            "reencode" => "Reencode",
             _ => null
         };
     }

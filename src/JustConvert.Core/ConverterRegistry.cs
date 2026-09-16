@@ -49,6 +49,11 @@ public class ConverterRegistry
         return FindConverter(sourceExtension, targetExtension) != null;
     }
 
+    private static readonly HashSet<string> VideoExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v"
+    };
+
     public async Task<ConversionResult> ConvertFileAsync(
         string inputPath,
         string targetExtension,
@@ -66,7 +71,9 @@ public class ConverterRegistry
         var sourceExt = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = targetExtension.TrimStart('.').ToLowerInvariant();
 
-        if (targetExt != "reencode" && sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
+        var isVideoSameFormat = VideoExtensions.Contains(sourceExt) && VideoExtensions.Contains(targetExt);
+
+        if (!isVideoSameFormat && targetExt != "reencode" && targetExt != "remux" && IsSameFormat(sourceExt, targetExt) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
         {
             var msg = I18n.T("StatusSkippedAlreadyTarget");
             progress?.Report(new ConversionProgress(100, msg));
@@ -87,5 +94,15 @@ public class ConverterRegistry
         }
 
         return await converter.ConvertAsync(inputPath, targetExt, outputPath, progress, ct, controller);
+    }
+
+    private static bool IsSameFormat(string src, string tgt)
+    {
+        if (src == tgt) return true;
+        if (src is "jpg" or "jpeg" && tgt is "jpg" or "jpeg") return true;
+        if (src is "tiff" or "tif" && tgt is "tiff" or "tif") return true;
+        if (src is "jp2" or "jpeg2000" && tgt is "jp2" or "jpeg2000") return true;
+        if (src is "aiff" or "aif" && tgt is "aiff" or "aif") return true;
+        return false;
     }
 }

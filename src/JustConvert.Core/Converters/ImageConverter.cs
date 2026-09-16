@@ -98,11 +98,15 @@ public class ImageConverter : IFormatConverter
             _ => targetExt
         };
 
+        var settings = AppSettings.Load();
+        var effectiveQuality = settings.GetEffectiveQuality(targetExt);
+        var appendQualitySuffix = settings.AppendQualitySuffix;
+
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var dir = Path.GetDirectoryName(inputPath) ?? "";
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
-            var suffix = OutputFileNameHelper.BuildImageSuffix(targetExt);
+            var suffix = OutputFileNameHelper.BuildImageSuffix(targetExt, effectiveQuality, appendQualitySuffix);
             outputPath = OutputFileNameHelper.GetUniquePath(dir, fileNameWithoutExt, suffix, $".{outputExt}");
         }
         else
@@ -123,7 +127,7 @@ public class ImageConverter : IFormatConverter
         {
             progress?.Report(new ConversionProgress(20, I18n.T("ImageLoading")));
 
-            var arguments = BuildArguments(inputPath, outputPath, targetExt, sourceExt, isReencode);
+            var arguments = BuildArguments(inputPath, outputPath, targetExt, sourceExt, isReencode, effectiveQuality);
             var startInfo = new ProcessStartInfo
             {
                 FileName = magick,
@@ -205,7 +209,7 @@ public class ImageConverter : IFormatConverter
         }
     }
 
-    private static string BuildArguments(string input, string output, string targetExt, string sourceExt, bool isReencode = false)
+    private static string BuildArguments(string input, string output, string targetExt, string sourceExt, bool isReencode = false, int quality = 90)
     {
         var inputSpecifier = sourceExt switch
         {
@@ -219,11 +223,11 @@ public class ImageConverter : IFormatConverter
             return targetExt switch
             {
                 "png" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 95 \"{output}\"",
-                "jpg" or "jpeg" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 92 \"{output}\"",
-                "webp" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 85 \"{output}\"",
-                "avif" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 80 \"{output}\"",
+                "jpg" or "jpeg" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality {quality} \"{output}\"",
+                "webp" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality {quality} \"{output}\"",
+                "avif" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality {quality} \"{output}\"",
                 "tiff" or "tif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -compress lzw \"{output}\"",
-                "jp2" or "jpeg2000" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 85 \"{output}\"",
+                "jp2" or "jpeg2000" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
                 _ => $"{inputSpecifier} -auto-orient -colorspace sRGB \"{output}\""
             };
         }
@@ -231,11 +235,11 @@ public class ImageConverter : IFormatConverter
         return targetExt switch
         {
             "png" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 95 \"{output}\"",
-            "jpg" or "jpeg" => $"{inputSpecifier} -auto-orient -background white -flatten -colorspace sRGB -quality 92 \"{output}\"",
-            "webp" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 85 \"{output}\"",
-            "avif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 80 \"{output}\"",
+            "jpg" or "jpeg" => $"{inputSpecifier} -auto-orient -background white -flatten -colorspace sRGB -quality {quality} \"{output}\"",
+            "webp" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
+            "avif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
             "ico" => $"{inputSpecifier} -auto-orient -background transparent -define icon:auto-resize=256,128,64,48,32,16 \"{output}\"",
-            "jp2" or "jpeg2000" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 85 \"{output}\"",
+            "jp2" or "jpeg2000" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
             "tiff" or "tif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -compress lzw \"{output}\"",
             _ => $"{inputSpecifier} -auto-orient -colorspace sRGB \"{output}\""
         };

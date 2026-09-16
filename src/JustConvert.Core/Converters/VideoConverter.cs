@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 using JustConvert.Core.Converters.Tools;
 
@@ -17,7 +18,8 @@ public class VideoConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444", "remux-mp4", "remux-mkv", "frames", "gif",
+        "mp4", "mkv", "mov", "webm", "gif", "remux", "remux-mp4", "remux-mkv", "frames",
+        "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444",
         "mp4-h264-nvenc", "mp4-nvenc-h264", "mp4-h265-nvenc", "mp4-hevc-nvenc", "mp4-nvenc-h265", "mp4-nvenc-hevc", "webm-av1-nvenc", "webm-nvenc-av1", "mp4-av1-nvenc", "mp4-nvenc-av1",
         "mp4-h264-qsv", "mp4-qsv-h264", "mp4-h265-qsv", "mp4-hevc-qsv", "mp4-qsv-h265", "mp4-qsv-hevc", "webm-vp9-qsv", "webm-qsv-vp9", "webm-av1-qsv", "webm-qsv-av1", "mp4-av1-qsv", "mp4-qsv-av1",
         "mp4-h264-amf", "mp4-amf-h264", "mp4-h265-amf", "mp4-hevc-amf", "mp4-amf-h265", "mp4-amf-hevc", "webm-av1-amf", "webm-amf-av1", "mp4-av1-amf", "mp4-amf-av1",
@@ -34,14 +36,13 @@ public class VideoConverter : IFormatConverter
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
         var tgt = targetExtension.TrimStart('.').ToLowerInvariant();
 
-        if (tgt == "reencode")
+        if (tgt is "reencode" or "remux")
         {
             return VideoFormats.Contains(src);
         }
 
-        if (src == tgt && tgt is not "frames") return false;
-
         if (!VideoFormats.Contains(src)) return false;
+        if (tgt.StartsWith("preset:")) return true;
         if (!VideoTargetFormats.Contains(tgt)) return false;
 
         if (tgt is "mp4-h264-nvenc" or "mp4-nvenc-h264" && !HardwareAccelerationDetector.HasNvencH264) return false;
@@ -65,38 +66,12 @@ public class VideoConverter : IFormatConverter
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
         if (!VideoFormats.Contains(src)) return [];
 
-        var list = new List<string> { "mp4-h264" };
-        if (HardwareAccelerationDetector.HasNvencH264) list.Add("mp4-h264-nvenc");
-        if (HardwareAccelerationDetector.HasQsvH264) list.Add("mp4-h264-qsv");
-        if (HardwareAccelerationDetector.HasAmfH264) list.Add("mp4-h264-amf");
-
-        list.Add("mp4-h265");
-        if (HardwareAccelerationDetector.HasNvencHevc) list.Add("mp4-h265-nvenc");
-        if (HardwareAccelerationDetector.HasQsvHevc) list.Add("mp4-h265-qsv");
-        if (HardwareAccelerationDetector.HasAmfHevc) list.Add("mp4-h265-amf");
-
-        list.Add("webm-vp9");
-        if (HardwareAccelerationDetector.HasQsvVp9) list.Add("webm-vp9-qsv");
-
-        list.Add("webm-av1");
-        if (HardwareAccelerationDetector.HasNvencAv1) list.Add("webm-av1-nvenc");
-        if (HardwareAccelerationDetector.HasQsvAv1) list.Add("webm-av1-qsv");
-        if (HardwareAccelerationDetector.HasAmfAv1) list.Add("webm-av1-amf");
-
-        list.Add("mov-prores422");
-        list.Add("mov-prores4444");
-        list.Add("remux-mp4");
-        list.Add("remux-mkv");
-        list.Add("frames");
-        list.Add("mp3");
-        list.Add("wav");
-        list.Add("flac");
-        list.Add("aac");
-        list.Add("m4a");
-        list.Add("opus");
-        list.Add("reencode");
-
-        return list;
+        return
+        [
+            "mp4", "mkv", "mov", "webm", "gif", "frames",
+            "mp3", "m4a", "aac", "wav", "flac", "opus",
+            "remux", "reencode"
+        ];
     }
 
     public async Task<ConversionResult> ConvertAsync(
@@ -124,20 +99,62 @@ public class VideoConverter : IFormatConverter
         var sourceExt = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
         var rawTargetExt = targetExtension.TrimStart('.').ToLowerInvariant();
         var isReencode = rawTargetExt == "reencode";
+        var isRemux = rawTargetExt == "remux";
         var targetExt = isReencode ? sourceExt : rawTargetExt;
 
         var isExtractFrames = targetExt is "frames" or "frames-png" or "frames-jpg";
         var isCompress = targetExt is "compress" or "compressed";
 
+        var settings = AppSettings.Load();
+        CustomPreset? preset = null;
+        VideoQualitySetting videoSetting;
+        RemuxSetting? remuxSetting = null;
+
         string outputExt;
-        if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy") outputExt = ".mp4";
-        else if (targetExt is "remux-mkv" or "mkv-remux" or "mkv-copy") outputExt = ".mkv";
-        else if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase) && targetExt != "mp4-av1") outputExt = ".mp4";
-        else if (targetExt.StartsWith("mov", StringComparison.OrdinalIgnoreCase)) outputExt = ".mov";
-        else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase) || targetExt is "vp9" or "av1") outputExt = ".webm";
-        else if (targetExt.StartsWith("mkv", StringComparison.OrdinalIgnoreCase)) outputExt = ".mkv";
-        else if (targetExt is "h264" or "h265" or "hevc" or "mp4-av1" or "compress" or "compressed") outputExt = ".mp4";
-        else outputExt = $".{targetExt}";
+        if (isRemux)
+        {
+            remuxSetting = settings.GetEffectiveRemuxSetting();
+            var container = remuxSetting.TargetContainer.TrimStart('.').ToLowerInvariant();
+            outputExt = $".{container}";
+            videoSetting = settings.GetEffectiveVideoQuality(container);
+        }
+        else if (targetExt.StartsWith("preset:"))
+        {
+            var presetId = targetExt.Substring(7);
+            preset = settings.FindPreset(presetId);
+            if (preset != null)
+            {
+                outputExt = $".{preset.ContainerFormat.TrimStart('.').ToLowerInvariant()}";
+                videoSetting = new VideoQualitySetting
+                {
+                    VideoCodec = preset.VideoCodec,
+                    Encoder = preset.Encoder,
+                    VideoQualityCq = preset.VideoQualityCq,
+                    AudioCodec = preset.AudioCodec,
+                    AudioBitrateKbps = preset.AudioBitrateKbps
+                };
+            }
+            else
+            {
+                outputExt = ".mp4";
+                videoSetting = settings.GetEffectiveVideoQuality("mp4");
+            }
+        }
+        else
+        {
+            if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy") outputExt = ".mp4";
+            else if (targetExt is "remux-mkv" or "mkv-remux" or "mkv-copy") outputExt = ".mkv";
+            else if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase) && targetExt != "mp4-av1") outputExt = ".mp4";
+            else if (targetExt.StartsWith("mov", StringComparison.OrdinalIgnoreCase)) outputExt = ".mov";
+            else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase) || targetExt is "vp9" or "av1") outputExt = ".webm";
+            else if (targetExt.StartsWith("mkv", StringComparison.OrdinalIgnoreCase)) outputExt = ".mkv";
+            else if (targetExt is "h264" or "h265" or "hevc" or "mp4-av1" or "compress" or "compressed") outputExt = ".mp4";
+            else outputExt = $".{targetExt}";
+
+            videoSetting = settings.GetEffectiveVideoQuality(targetExt);
+        }
+
+        var appendSuffix = preset != null ? preset.AppendSuffix : settings.AppendQualitySuffix;
 
         MediaStreamInfo? mediaInfo = null;
         try
@@ -152,8 +169,8 @@ public class VideoConverter : IFormatConverter
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
 
             var suffix = AudioExtractionTargets.Contains(targetExt)
-                ? OutputFileNameHelper.BuildAudioSuffix(targetExt, mediaInfo?.Audio)
-                : OutputFileNameHelper.BuildVideoSuffix(targetExt);
+                ? OutputFileNameHelper.BuildAudioSuffix(targetExt, mediaInfo?.Audio, appendSuffix: appendSuffix)
+                : (preset != null && appendSuffix ? preset.Name : OutputFileNameHelper.BuildVideoSuffix(targetExt, videoSetting, appendSuffix: appendSuffix));
 
             if (isExtractFrames)
             {
@@ -180,7 +197,7 @@ public class VideoConverter : IFormatConverter
 
         try
         {
-            var arguments = BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video);
+            var arguments = BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting, remuxSetting);
 
             var startInfo = new ProcessStartInfo
             {
@@ -326,8 +343,28 @@ public class VideoConverter : IFormatConverter
         }
     }
 
-    private static string BuildVideoArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo, bool isReencode, VideoStreamInfo? videoInfo)
+    public static string BuildRemuxArguments(string input, string output, RemuxSetting? setting = null)
     {
+        var s = setting ?? new RemuxSetting();
+        var outExt = Path.GetExtension(output).TrimStart('.').ToLowerInvariant();
+        var sb = new StringBuilder();
+        sb.Append("-y -i \"").Append(input).Append("\"");
+        if (s.CopyVideo) sb.Append(" -map 0:v?");
+        if (s.CopyAudio) sb.Append(" -map 0:a?");
+        if (s.CopySubtitles && outExt is "mkv" or "mp4") sb.Append(" -map 0:s?");
+        sb.Append(" -c copy");
+        if (s.FastStart && outExt is "mp4" or "mov") sb.Append(" -movflags +faststart");
+        sb.Append(" -map_metadata 0 \"").Append(output).Append("\"");
+        return sb.ToString();
+    }
+
+    private static string BuildVideoArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo, bool isReencode, VideoStreamInfo? videoInfo, VideoQualitySetting? videoSetting = null, RemuxSetting? remuxSetting = null)
+    {
+        if (targetExt == "remux")
+        {
+            return BuildRemuxArguments(input, output, remuxSetting);
+        }
+
         if (AudioExtractionTargets.Contains(targetExt))
         {
             return AudioConverter.BuildAudioArguments(input, output, targetExt, audioInfo, isReencode);
@@ -356,6 +393,11 @@ public class VideoConverter : IFormatConverter
         if (targetExt is "compress" or "compressed")
         {
             return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
+        }
+
+        if (videoSetting != null && (targetExt is "mp4" or "webm" or "mkv" or "mov" || targetExt.StartsWith("preset:")))
+        {
+            return BuildSettingBasedVideoArguments(input, output, targetExt, videoSetting, tonemapFilter);
         }
 
         if (targetExt is "mp4" or "mp4-h264" or "h264")
@@ -494,5 +536,116 @@ public class VideoConverter : IFormatConverter
         }
 
         return $"-y -i \"{input}\" \"{output}\"";
+    }
+
+    private static string BuildSettingBasedVideoArguments(
+        string input,
+        string output,
+        string targetExt,
+        VideoQualitySetting setting,
+        string tonemapFilter)
+    {
+        var codecArg = BuildVideoCodecArgument(setting);
+        var audioArg = BuildAudioCodecArgument(setting);
+        var container = targetExt.StartsWith("preset:") ? Path.GetExtension(output).TrimStart('.').ToLowerInvariant() : targetExt;
+        var movflags = (container is "mp4" or "mov")
+            ? "-movflags +faststart "
+            : "";
+
+        return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}{codecArg} {audioArg} {movflags}-sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
+    }
+
+    private static string BuildVideoCodecArgument(VideoQualitySetting setting)
+    {
+        var codec = setting.VideoCodec.ToLowerInvariant();
+        var encoder = setting.Encoder.ToLowerInvariant();
+        var cq = setting.VideoQualityCq;
+
+        if (codec == "copy") return "-c:v copy";
+        if (codec == "prores422") return "-c:v prores_ks -profile:v 2";
+        if (codec == "prores4444") return "-c:v prores_ks -profile:v 4 -pix_fmt yuva444p10le";
+
+        if (encoder == "auto")
+        {
+            if (codec == "h264")
+            {
+                if (HardwareAccelerationDetector.HasNvencH264) encoder = "nvenc";
+                else if (HardwareAccelerationDetector.HasQsvH264) encoder = "qsv";
+                else if (HardwareAccelerationDetector.HasAmfH264) encoder = "amf";
+                else encoder = "cpu";
+            }
+            else if (codec is "h265" or "hevc")
+            {
+                if (HardwareAccelerationDetector.HasNvencHevc) encoder = "nvenc";
+                else if (HardwareAccelerationDetector.HasQsvHevc) encoder = "qsv";
+                else if (HardwareAccelerationDetector.HasAmfHevc) encoder = "amf";
+                else encoder = "cpu";
+            }
+            else if (codec == "av1")
+            {
+                if (HardwareAccelerationDetector.HasNvencAv1) encoder = "nvenc";
+                else if (HardwareAccelerationDetector.HasQsvAv1) encoder = "qsv";
+                else if (HardwareAccelerationDetector.HasAmfAv1) encoder = "amf";
+                else encoder = "cpu";
+            }
+            else if (codec == "vp9")
+            {
+                if (HardwareAccelerationDetector.HasQsvVp9) encoder = "qsv";
+                else encoder = "cpu";
+            }
+            else
+            {
+                encoder = "cpu";
+            }
+        }
+
+        return encoder switch
+        {
+            "nvenc" => codec switch
+            {
+                "h264" => $"-c:v h264_nvenc -cq:v {cq} -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle",
+                "h265" or "hevc" => $"-c:v hevc_nvenc -cq:v {cq} -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle -tag:v hvc1",
+                "av1" => $"-c:v av1_nvenc -cq:v {cq} -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1",
+                _ => $"-c:v libx264 -crf {cq} -preset medium"
+            },
+            "qsv" => codec switch
+            {
+                "h264" => $"-c:v h264_qsv -global_quality:v {cq} -preset medium -adaptive_i 1 -adaptive_b 1",
+                "h265" or "hevc" => $"-c:v hevc_qsv -global_quality:v {cq} -preset medium -adaptive_i 1 -adaptive_b 1 -tag:v hvc1",
+                "av1" => $"-c:v av1_qsv -global_quality:v {cq} -preset medium -adaptive_i 1 -adaptive_b 1",
+                "vp9" => $"-c:v vp9_qsv -global_quality:v {cq} -adaptive_i 1 -adaptive_b 1",
+                _ => $"-c:v libx264 -crf {cq} -preset medium"
+            },
+            "amf" => codec switch
+            {
+                "h264" => $"-c:v h264_amf -rc cqp -qp_i {cq} -qp_p {cq} -qp_b {cq} -quality balanced",
+                "h265" or "hevc" => $"-c:v hevc_amf -rc cqp -qp_i {cq} -qp_p {cq} -qp_b {cq} -quality balanced -tag:v hvc1",
+                "av1" => $"-c:v av1_amf -rc cqp -qp_i {cq} -qp_p {cq} -qp_b {cq} -quality balanced",
+                _ => $"-c:v libx264 -crf {cq} -preset medium"
+            },
+            _ => codec switch
+            {
+                "h264" => $"-c:v libx264 -crf {cq} -preset medium",
+                "h265" or "hevc" => $"-c:v libx265 -crf {cq} -preset medium -tag:v hvc1",
+                "av1" => $"-c:v libsvtav1 -crf {cq} -preset 6 -svtav1-params tune=0",
+                "vp9" => $"-c:v libvpx-vp9 -crf {cq} -b:v 0 -deadline good -cpu-used 2 -row-mt 1",
+                _ => $"-c:v libx264 -crf {cq} -preset medium"
+            }
+        };
+    }
+
+    private static string BuildAudioCodecArgument(VideoQualitySetting setting)
+    {
+        var codec = setting.AudioCodec.ToLowerInvariant();
+        var bitrate = setting.AudioBitrateKbps;
+
+        return codec switch
+        {
+            "copy" => "-c:a copy",
+            "opus" => $"-c:a libopus -b:a {bitrate}k",
+            "mp3" => $"-c:a libmp3lame -b:a {bitrate}k",
+            "flac" => "-c:a flac",
+            _ => $"-c:a aac -b:a {bitrate}k"
+        };
     }
 }

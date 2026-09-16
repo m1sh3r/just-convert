@@ -98,16 +98,43 @@ public class OutputFileNameHelperTests : IDisposable
 
     [Theory]
     [InlineData("png", null)]
+    [InlineData("bmp", null)]
     [InlineData("jpg", "Q92")]
     [InlineData("jpeg", "Q92")]
-    [InlineData("webp", "Q90")]
+    [InlineData("webp", "Q85")]
+    [InlineData("avif", "Q80")]
+    [InlineData("jp2", "Q85")]
     [InlineData("ico", "Multi-layer")]
-    [InlineData("bmp", null)]
     [InlineData("tiff", "LZW")]
-    [InlineData("avif", "Q85")]
-    public void BuildImageSuffix_ReturnsExpectedSuffix(string targetFormat, string? expectedSuffix)
+    [InlineData("reencode", "Reencode")]
+    public void BuildImageSuffix_WithDefaultQuality_ReturnsExpectedSuffix(string targetFormat, string? expectedSuffix)
     {
         var suffix = OutputFileNameHelper.BuildImageSuffix(targetFormat);
+        Assert.Equal(expectedSuffix, suffix);
+    }
+
+    [Theory]
+    [InlineData("jpg", 75, "Q75")]
+    [InlineData("webp", 90, "Q90")]
+    [InlineData("avif", 60, "Q60")]
+    [InlineData("jp2", 50, "Q50")]
+    public void BuildImageSuffix_WithCustomQuality_ReturnsCustomSuffix(string targetFormat, int quality, string expectedSuffix)
+    {
+        var suffix = OutputFileNameHelper.BuildImageSuffix(targetFormat, quality);
+        Assert.Equal(expectedSuffix, suffix);
+    }
+
+    [Theory]
+    [InlineData("jpg", null)]
+    [InlineData("webp", null)]
+    [InlineData("avif", null)]
+    [InlineData("jp2", null)]
+    [InlineData("ico", "Multi-layer")]
+    [InlineData("tiff", "LZW")]
+    [InlineData("reencode", "Reencode")]
+    public void BuildImageSuffix_WhenQualitySuffixDisabled_ReturnsNullForLossyFormats(string targetFormat, string? expectedSuffix)
+    {
+        var suffix = OutputFileNameHelper.BuildImageSuffix(targetFormat, quality: null, appendQualitySuffix: false);
         Assert.Equal(expectedSuffix, suffix);
     }
 

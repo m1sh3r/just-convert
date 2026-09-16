@@ -13,34 +13,54 @@ public sealed record AudioStreamInfo(
     bool IsLossless,
     int? BitsPerSample,
     int? SampleRate,
-    int? Channels);
+    int? Channels,
+    double? DurationSeconds = null,
+    long? FileSizeBytes = null);
 
 public sealed record VideoStreamInfo(
     bool IsHdrOrWideGamut,
     string? Codec,
     string? PixelFormat,
     int? Width,
-    int? Height);
+    int? Height,
+    double? DurationSeconds = null,
+    double? FrameRateFps = null,
+    long? FileSizeBytes = null);
 
 public sealed record MediaStreamInfo(
     AudioStreamInfo? Audio,
-    VideoStreamInfo? Video);
+    VideoStreamInfo? Video,
+    double? DurationSeconds = null,
+    long? FileSizeBytes = null,
+    string? FilePath = null);
 
 public static class MediaProbe
 {
     public static async Task<MediaStreamInfo?> ProbeAsync(string ffmpegPath, string inputPath, CancellationToken ct = default)
     {
+        MediaStreamInfo? result = null;
         var probePath = ToolLocator.FindFfprobePath();
         if (probePath != null)
         {
-            var probeResult = await ProbeWithFfprobeAsync(probePath, inputPath, ct);
-            if (probeResult != null)
-            {
-                return probeResult;
-            }
+            result = await ProbeWithFfprobeAsync(probePath, inputPath, ct);
         }
 
-        return await ProbeWithFfmpegAsync(ffmpegPath, inputPath, ct);
+        if (result == null)
+        {
+            result = await ProbeWithFfmpegAsync(ffmpegPath, inputPath, ct);
+        }
+
+        if (result != null)
+        {
+            long? fileSize = result.FileSizeBytes;
+            if (fileSize == null && File.Exists(inputPath))
+            {
+                try { fileSize = new FileInfo(inputPath).Length; } catch { }
+            }
+            return result with { FilePath = inputPath, FileSizeBytes = fileSize };
+        }
+
+        return null;
     }
 
     private static async Task<MediaStreamInfo?> ProbeWithFfprobeAsync(string ffprobePath, string inputPath, CancellationToken ct)
@@ -86,12 +106,35 @@ public static class MediaProbe
             AudioStreamInfo? audio = null;
             VideoStreamInfo? video = null;
 
-            int? formatBitrate = null;
-            if (root.TryGetProperty("format", out var formatElem) &&
-                formatElem.TryGetProperty("bit_rate", out var fbrElem) &&
-                int.TryParse(fbrElem.GetString(), CultureInfo.InvariantCulture, out var fbrVal) && fbrVal > 0)
+            double? formatDuration = null;
+            long? fileSize = null;
+
+            try
             {
-                formatBitrate = fbrVal / 1000;
+                if (File.Exists(inputPath)) fileSize = new FileInfo(inputPath).Length;
+            }
+            catch { }
+
+            int? formatBitrate = null;
+            if (root.TryGetProperty("format", out var formatElem))
+            {
+                if (formatElem.TryGetProperty("bit_rate", out var fbrElem) &&
+                    int.TryParse(fbrElem.GetString(), CultureInfo.InvariantCulture, out var fbrVal) && fbrVal > 0)
+                {
+                    formatBitrate = fbrVal / 1000;
+                }
+
+                if (formatElem.TryGetProperty("duration", out var durProp) &&
+                    double.TryParse(durProp.GetString(), CultureInfo.InvariantCulture, out var durVal) && durVal > 0)
+                {
+                    formatDuration = durVal;
+                }
+
+                if (fileSize == null && formatElem.TryGetProperty("size", out var szProp) &&
+                    long.TryParse(szProp.GetString(), CultureInfo.InvariantCulture, out var szVal) && szVal > 0)
+                {
+                    fileSize = szVal;
+                }
             }
 
             if (root.TryGetProperty("streams", out var streamsElem) && streamsElem.ValueKind == JsonValueKind.Array)
@@ -142,7 +185,7 @@ public static class MediaProbe
                                          || (bitsPerSample.HasValue && bitsPerSample.Value >= 24)
                                          || (bitrate.HasValue && bitrate.Value > 320);
 
-                        audio = new AudioStreamInfo(bitrate, false, codec, isLossless, bitsPerSample, sampleRate, channels);
+                        audio = new AudioStreamInfo(bitrate, false, codec, isLossless, bitsPerSample, sampleRate, channels, formatDuration, fileSize);
                     }
                     else if (codecType == "video")
                     {
@@ -172,18 +215,28 @@ public static class MediaProbe
                             int? width = s.TryGetProperty("width", out var wProp) && wProp.TryGetInt32(out var wVal) ? wVal : null;
                             int? height = s.TryGetProperty("height", out var hProp) && hProp.TryGetInt32(out var hVal) ? hVal : null;
 
+                            double? fps = null;
+                            if (s.TryGetProperty("avg_frame_rate", out var afrProp))
+                            {
+                                fps = ParseFps(afrProp.GetString());
+                            }
+                            if (fps == null && s.TryGetProperty("r_frame_rate", out var rfrProp))
+                            {
+                                fps = ParseFps(rfrProp.GetString());
+                            }
+
                             var isHdr = (colorSpace?.Contains("bt2020") == true) ||
                                         (colorTransfer is "smpte2084" or "arib-std-b67") ||
                                         (colorPrimaries?.Contains("bt2020") == true) ||
                                         (pixFmt != null && (pixFmt.Contains("10le") || pixFmt.Contains("12le") || pixFmt.Contains("p10")));
 
-                            video = new VideoStreamInfo(isHdr, codec, pixFmt, width, height);
+                            video = new VideoStreamInfo(isHdr, codec, pixFmt, width, height, formatDuration, fps, fileSize);
                         }
                     }
                 }
             }
 
-            return new MediaStreamInfo(audio, video);
+            return new MediaStreamInfo(audio, video, formatDuration, fileSize);
         }
         catch
         {
@@ -237,7 +290,15 @@ public static class MediaProbe
             await proc.WaitForExitAsync(CancellationToken.None);
             var output = stderr.ToString();
 
-            return new MediaStreamInfo(ParseAudioInfo(output), ParseVideoInfo(output));
+            double? duration = ParseDuration(output);
+            long? fileSize = null;
+            try
+            {
+                if (File.Exists(inputPath)) fileSize = new FileInfo(inputPath).Length;
+            }
+            catch { }
+
+            return new MediaStreamInfo(ParseAudioInfo(output, duration, fileSize), ParseVideoInfo(output, duration, fileSize), duration, fileSize);
         }
         catch
         {
@@ -245,7 +306,7 @@ public static class MediaProbe
         }
     }
 
-    private static AudioStreamInfo? ParseAudioInfo(string output)
+    private static AudioStreamInfo? ParseAudioInfo(string output, double? duration = null, long? fileSize = null)
     {
         string? codec = null;
         int? bitrate = null;
@@ -308,10 +369,10 @@ public static class MediaProbe
                          || (bitsPerSample.HasValue && bitsPerSample.Value >= 24)
                          || (bitrate.HasValue && bitrate.Value > 320);
 
-        return new AudioStreamInfo(bitrate, hasAttachedPic, codec, isLossless, bitsPerSample, sampleRate, channels);
+        return new AudioStreamInfo(bitrate, hasAttachedPic, codec, isLossless, bitsPerSample, sampleRate, channels, duration, fileSize);
     }
 
-    private static VideoStreamInfo? ParseVideoInfo(string output)
+    private static VideoStreamInfo? ParseVideoInfo(string output, double? duration = null, long? fileSize = null)
     {
         var streamMatch = Regex.Match(output, @"Stream #\d+:\d+.*?: Video:\s*([^\r\n]+)", RegexOptions.IgnoreCase);
         if (!streamMatch.Success) return null;
@@ -342,7 +403,61 @@ public static class MediaProbe
         var pixFmtMatch = Regex.Match(line, @",\s*([a-zA-Z0-9_]+)(?:\([^\)]*\))?,");
         var pixFmt = pixFmtMatch.Success ? pixFmtMatch.Groups[1].Value : null;
 
-        return new VideoStreamInfo(isHdrOrWideGamut, codec, pixFmt, null, null);
+        int? width = null;
+        int? height = null;
+        var resMatch = Regex.Match(line, @",\s*(\d{2,5})x(\d{2,5})");
+        if (resMatch.Success &&
+            int.TryParse(resMatch.Groups[1].Value, CultureInfo.InvariantCulture, out var w) &&
+            int.TryParse(resMatch.Groups[2].Value, CultureInfo.InvariantCulture, out var h))
+        {
+            width = w;
+            height = h;
+        }
+
+        double? fps = null;
+        var fpsMatch = Regex.Match(line, @",\s*(\d+(?:\.\d+)?)\s*fps");
+        if (fpsMatch.Success && double.TryParse(fpsMatch.Groups[1].Value, CultureInfo.InvariantCulture, out var parsedFps))
+        {
+            fps = parsedFps;
+        }
+
+        return new VideoStreamInfo(isHdrOrWideGamut, codec, pixFmt, width, height, duration, fps, fileSize);
+    }
+
+    private static double? ParseFps(string? rateStr)
+    {
+        if (string.IsNullOrWhiteSpace(rateStr) || rateStr == "0/0") return null;
+
+        var parts = rateStr.Split('/');
+        if (parts.Length == 2 &&
+            double.TryParse(parts[0], CultureInfo.InvariantCulture, out var num) &&
+            double.TryParse(parts[1], CultureInfo.InvariantCulture, out var den) &&
+            den > 0)
+        {
+            var res = num / den;
+            return res > 0 ? res : null;
+        }
+
+        if (double.TryParse(rateStr, CultureInfo.InvariantCulture, out var val) && val > 0)
+        {
+            return val;
+        }
+
+        return null;
+    }
+
+    private static double? ParseDuration(string output)
+    {
+        var match = Regex.Match(output, @"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", RegexOptions.IgnoreCase);
+        if (match.Success &&
+            int.TryParse(match.Groups[1].Value, CultureInfo.InvariantCulture, out var h) &&
+            int.TryParse(match.Groups[2].Value, CultureInfo.InvariantCulture, out var m) &&
+            double.TryParse(match.Groups[3].Value, CultureInfo.InvariantCulture, out var s))
+        {
+            return h * 3600 + m * 60 + s;
+        }
+
+        return null;
     }
 
     public static int ResolveAudioBitrate(AudioStreamInfo? info, int defaultKbps, int maxKbps)

@@ -89,11 +89,15 @@ public class AudioConverter : IFormatConverter
         }
         catch { }
 
+        var settings = AppSettings.Load();
+        var effectiveBitrate = settings.GetEffectiveAudioQuality(targetExt);
+        var appendSuffix = settings.AppendQualitySuffix;
+
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var dir = Path.GetDirectoryName(inputPath) ?? "";
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
-            var suffix = OutputFileNameHelper.BuildAudioSuffix(targetExt, mediaInfo?.Audio);
+            var suffix = OutputFileNameHelper.BuildAudioSuffix(targetExt, mediaInfo?.Audio, effectiveBitrate, appendSuffix: appendSuffix);
             outputPath = OutputFileNameHelper.GetUniquePath(dir, fileNameWithoutExt, suffix, outputExt);
         }
         else
@@ -112,7 +116,7 @@ public class AudioConverter : IFormatConverter
 
         try
         {
-            var arguments = BuildAudioArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode);
+            var arguments = BuildAudioArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, effectiveBitrate);
 
             var startInfo = new ProcessStartInfo
             {
@@ -222,7 +226,7 @@ public class AudioConverter : IFormatConverter
         }
     }
 
-    public static string BuildAudioArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false)
+    public static string BuildAudioArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false, int? customBitrate = null)
     {
         var hasAttachedPic = audioInfo?.HasAttachedPic ?? false;
         var isLosslessSource = audioInfo?.IsLossless ?? false;
@@ -238,7 +242,7 @@ public class AudioConverter : IFormatConverter
                 return $"-y -i \"{input}\" -map 0:a:0 -c:a alac -map_metadata 0 \"{output}\"";
             }
 
-            var bitrate = MediaProbe.ResolveAudioBitrate(audioInfo, 320, 320);
+            var bitrate = customBitrate ?? MediaProbe.ResolveAudioBitrate(audioInfo, 320, 320);
             var aacCodec = (!isReencode && string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase))
                 ? "-c:a copy"
                 : $"-c:a aac -b:a {bitrate}k";
@@ -252,7 +256,7 @@ public class AudioConverter : IFormatConverter
 
         if (targetExt is "mp3")
         {
-            var bitrate = MediaProbe.ResolveAudioBitrate(audioInfo, 320, 320);
+            var bitrate = customBitrate ?? MediaProbe.ResolveAudioBitrate(audioInfo, 320, 320);
             if (hasAttachedPic)
             {
                 return $"-y -i \"{input}\" -map 0:a:0 -map 0:v? -c:a libmp3lame -b:a {bitrate}k -c:v copy -disposition:v:0 attached_pic -id3v2_version 3 -metadata:s:v title=\"Album cover\" -metadata:s:v comment=\"Cover (front)\" -map_metadata 0 \"{output}\"";
@@ -277,7 +281,7 @@ public class AudioConverter : IFormatConverter
 
         if (targetExt is "aac")
         {
-            var bitrate = MediaProbe.ResolveAudioBitrate(audioInfo, 320, 320);
+            var bitrate = customBitrate ?? MediaProbe.ResolveAudioBitrate(audioInfo, 320, 320);
             var aacCodec = (!isReencode && string.Equals(audioInfo?.Codec, "aac", StringComparison.OrdinalIgnoreCase))
                 ? "-c:a copy"
                 : $"-c:a aac -b:a {bitrate}k";
@@ -287,7 +291,7 @@ public class AudioConverter : IFormatConverter
         if (targetExt is "opus")
         {
             var maxBitrate = (audioInfo?.Channels == 1) ? 192 : 256;
-            var bitrate = Math.Min(MediaProbe.ResolveAudioBitrate(audioInfo, 192, maxBitrate), maxBitrate);
+            var bitrate = customBitrate ?? Math.Min(MediaProbe.ResolveAudioBitrate(audioInfo, 192, maxBitrate), maxBitrate);
             return $"-y -i \"{input}\" -map 0:a:0 -c:a libopus -b:a {bitrate}k -vbr on -map_metadata 0 \"{output}\"";
         }
 
@@ -303,13 +307,15 @@ public class AudioConverter : IFormatConverter
 
         if (targetExt is "ogg")
         {
-            var vorbisQuality = MediaProbe.ResolveVorbisQuality(audioInfo);
+            var vorbisQuality = customBitrate.HasValue
+                ? (customBitrate.Value switch { >= 320 => 10, >= 256 => 8, >= 192 => 6, >= 128 => 4, _ => 2 })
+                : MediaProbe.ResolveVorbisQuality(audioInfo);
             return $"-y -i \"{input}\" -map 0:a:0 -c:a libvorbis -q:a {vorbisQuality} -map_metadata 0 \"{output}\"";
         }
 
         if (targetExt is "wma")
         {
-            var bitrate = MediaProbe.ResolveAudioBitrate(audioInfo, 192, 320);
+            var bitrate = customBitrate ?? MediaProbe.ResolveAudioBitrate(audioInfo, 192, 320);
             return $"-y -i \"{input}\" -map 0:a:0 -c:a wmav2 -b:a {bitrate}k -map_metadata 0 \"{output}\"";
         }
 
