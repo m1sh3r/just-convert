@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
@@ -12,11 +13,15 @@ public partial class InputDialog : FluentWindow
     {
         InitializeComponent();
 
-        ApplicationThemeManager.ApplySystemTheme();
-        ApplicationAccentColorManager.ApplySystemAccent();
-        ApplicationThemeManager.Apply(this);
-        SystemThemeWatcher.Watch(this);
+        if (!DesignerProperties.GetIsInDesignMode(this))
+        {
+            ApplicationThemeManager.ApplySystemTheme();
+            ApplicationAccentColorManager.ApplySystemAccent();
+            ApplicationThemeManager.Apply(this);
+            SystemThemeWatcher.Watch(this);
+        }
 
+        Title = title;
         AppTitleBar.Title = title;
         TxtPrompt.Text = prompt;
         TxtInput.Text = defaultValue;
@@ -36,13 +41,13 @@ public partial class InputDialog : FluentWindow
 
     private void OnOkClick(object sender, RoutedEventArgs e)
     {
-        DialogResult = true;
+        try { DialogResult = true; } catch (InvalidOperationException) { }
         Close();
     }
 
     private void OnCancelClick(object sender, RoutedEventArgs e)
     {
-        DialogResult = false;
+        try { DialogResult = false; } catch (InvalidOperationException) { }
         Close();
     }
 }

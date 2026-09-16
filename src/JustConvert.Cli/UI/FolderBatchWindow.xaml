@@ -1,0 +1,240 @@
+﻿<ui:FluentWindow x:Class="JustConvert.Cli.UI.FolderBatchWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
+                 mc:Ignorable="d"
+                 Title="{core:Loc FolderBatchTitle}"
+                 d:Title="Пакетная конвертация папки"
+                 Height="570"
+                 Width="580"
+                 MinHeight="570"
+                 MaxHeight="570"
+                 MinWidth="580"
+                 MaxWidth="580"
+                 WindowStartupLocation="CenterScreen"
+                 ResizeMode="NoResize"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <ui:FluentWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Light"/>
+                <ui:ControlsDictionary/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     x:Name="AppTitleBar"
+                     Title="{core:Loc FolderBatchTitle}"
+                     d:Title="Пакетная конвертация папки"
+                     ShowMaximize="False"
+                     ShowMinimize="False"
+                     Height="36"/>
+
+        <ScrollViewer Grid.Row="1"
+                      VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled"
+                      PanningMode="VerticalOnly"
+                      CanContentScroll="False"
+                      Padding="24,8,24,12">
+            <StackPanel>
+                <Grid Margin="0,0,0,16">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Grid.Column="0"
+                                   Symbol="Folder24"
+                                   FontSize="28"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,12,0"
+                                   Foreground="{DynamicResource AccentFillColorDefaultBrush}"/>
+                    <StackPanel Grid.Column="1"
+                            VerticalAlignment="Center">
+                        <TextBlock x:Name="TxtFolderName"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   TextTrimming="CharacterEllipsis"
+                                   d:Text="My Media Folder"/>
+                        <TextBlock x:Name="TxtFolderPath"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   TextTrimming="CharacterEllipsis"
+                                   d:Text="C:\Users\User\Videos\My Media Folder"/>
+                    </StackPanel>
+                </Grid>
+
+                <TextBlock x:Name="TxtScanSummary"
+                           FontSize="13"
+                           FontWeight="Medium"
+                           Margin="0,0,0,12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           d:Text="Обнаружено файлов: 18"/>
+
+                <TextBlock x:Name="TxtNoFiles"
+                           FontSize="13"
+                           Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                           Visibility="Collapsed"
+                           d:Visibility="Collapsed"
+                           Text="{core:Loc NoSupportedFiles}"
+                           d:Text="В папке не найдено поддерживаемых медиафайлов."
+                           Margin="0,0,0,12"/>
+
+                <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        Padding="16,12"
+                        Margin="0,0,0,16">
+                    <StackPanel x:Name="PanelCategories">
+                        <Grid x:Name="RowImages"
+                                Margin="0,4,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="190"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox x:Name="ChkImages"
+                                      Grid.Column="0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="True"
+                                      d:Content="Изображения: 12 (расширения: jpg, png)"/>
+                            <ComboBox x:Name="CmbImageFormats"
+                                      Grid.Column="1"
+                                      Height="32"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="Format"/>
+                        </Grid>
+
+                        <Grid x:Name="RowVideo"
+                                Margin="0,4,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="190"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox x:Name="ChkVideo"
+                                      Grid.Column="0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="True"
+                                      d:Content="Видео: 4 (расширения: mp4, mov)"/>
+                            <ComboBox x:Name="CmbVideoFormats"
+                                      Grid.Column="1"
+                                      Height="32"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="Format"/>
+                        </Grid>
+
+                        <Grid x:Name="RowAudio"
+                                Margin="0,4,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="190"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox x:Name="ChkAudio"
+                                      Grid.Column="0"
+                                      VerticalAlignment="Center"
+                                      IsChecked="True"
+                                      d:Content="Аудио: 2 (расширения: flac, wav)"/>
+                            <ComboBox x:Name="CmbAudioFormats"
+                                      Grid.Column="1"
+                                      Height="32"
+                                      DisplayMemberPath="DisplayName"
+                                      SelectedValuePath="Format"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="{core:Loc LabelDestination}"
+                           d:Text="Сохранение результатов:"
+                           FontWeight="SemiBold"
+                           FontSize="13"
+                           Margin="0,0,0,8"/>
+
+                <RadioButton x:Name="RbInPlace"
+                             Content="{core:Loc OptionDestInPlace}"
+                             d:Content="Рядом с оригиналами"
+                             IsChecked="True"
+                             GroupName="Destination"
+                             Margin="0,0,0,6"/>
+
+                <RadioButton x:Name="RbSubfolder"
+                             Content="{core:Loc OptionDestSubfolder}"
+                             d:Content="В подпапку «Converted» (с сохранением структуры)"
+                             GroupName="Destination"
+                             Checked="OnDestinationChanged"
+                             Unchecked="OnDestinationChanged"
+                             Margin="0,0,0,6"/>
+
+                <RadioButton x:Name="RbCustomFolder"
+                             Content="{core:Loc OptionDestCustomFolder}"
+                             d:Content="В указанную папку (с сохранением структуры)"
+                             GroupName="Destination"
+                             Checked="OnDestinationChanged"
+                             Unchecked="OnDestinationChanged"
+                             Margin="0,0,0,6"/>
+
+                <Grid x:Name="PanelCustomFolder"
+                      Visibility="Collapsed"
+                      d:Visibility="Visible"
+                      Margin="24,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBox x:Name="TxtCustomFolder"
+                             Height="32"
+                             VerticalAlignment="Center"
+                             d:Text="D:\ConvertedMedia"/>
+                    <ui:Button x:Name="BtnBrowseCustomFolder"
+                               Grid.Column="1"
+                               Content="{core:Loc BtnBrowseFolder}"
+                               d:Content="Обзор..."
+                               Height="32"
+                               Margin="8,0,0,0"
+                               Click="BtnBrowseCustomFolder_Click"/>
+                </Grid>
+
+                <CheckBox x:Name="ChkIncludeSubfolders"
+                          Content="{core:Loc OptionIncludeSubfolders}"
+                          d:Content="Включать подпапки"
+                          Margin="0,0,0,4"/>
+            </StackPanel>
+        </ScrollViewer>
+
+        <Border Grid.Row="2"
+                Padding="24,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Background="{DynamicResource ApplicationBackgroundBrush}">
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Right">
+                <ui:Button x:Name="BtnCancel"
+                           Content="{core:Loc BtnCancel}"
+                           d:Content="Отмена"
+                           Width="110"
+                           Height="34"
+                           Margin="0,0,10,0"
+                           Click="BtnCancel_Click"/>
+                <ui:Button x:Name="BtnStart"
+                           Appearance="Primary"
+                           Content="{core:Loc BtnStartBatch}"
+                           d:Content="Конвертировать"
+                           Width="140"
+                           Height="34"
+                           Click="BtnStart_Click"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+</ui:FluentWindow>
