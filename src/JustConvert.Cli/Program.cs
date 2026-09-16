@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows;
 using JustConvert.Cli.UI;
 using JustConvert.Core;
+using JustConvert.Core.Converters.Tools;
+using JustConvert.Core.Scanning;
 using JustConvert.Core.Windows;
 using File = System.IO.File;
 
@@ -15,6 +17,8 @@ public class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        TouchpadScrollHelper.Initialize();
+
         if (args.Length == 0 || (args.Length == 1 && args[0] is "--settings" or "-s" or "settings"))
         {
             var app = new Application();
@@ -101,13 +105,66 @@ public class Program
         {
             isBatch = true;
         }
-        else if (!isBatch)
+
+        if (inputFiles.Count == 1 && Directory.Exists(inputFiles[0]))
         {
-            try
+            var folderPath = inputFiles[0];
+            if (string.IsNullOrWhiteSpace(targetFormat))
             {
-                isBatch = Process.GetProcessesByName("just-convert").Length > 1;
+                if (isSilent)
+                {
+                    Console.Error.WriteLine(I18n.T("CliMissingArgs"));
+                    return 1;
+                }
+                return RunWindow(() => new FolderBatchWindow(folderPath));
             }
-            catch { }
+
+            if (!isSilent && !PromptOptionsIfNeeded(targetFormat, null))
+            {
+                Application.Current?.Shutdown();
+                return 0;
+            }
+
+            var scan = FolderScanner.Scan(folderPath, recursive: false);
+            var categoryPlans = new Dictionary<MediaCategory, BatchCategoryPlan>();
+            var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
+
+            if (Registry.FindConverter("mp4", fmt) != null || fmt is "remux" or "remux-mp4" or "remux-mkv" or "frames" or "gif")
+            {
+                categoryPlans[MediaCategory.Video] = new BatchCategoryPlan(MediaCategory.Video, true, fmt);
+            }
+            if (Registry.FindConverter("mp3", fmt) != null)
+            {
+                categoryPlans[MediaCategory.Audio] = new BatchCategoryPlan(MediaCategory.Audio, true, fmt);
+            }
+            if (Registry.FindConverter("png", fmt) != null)
+            {
+                categoryPlans[MediaCategory.Image] = new BatchCategoryPlan(MediaCategory.Image, true, fmt);
+            }
+
+            var plannedItems = FolderBatchPlanner.Plan(scan, categoryPlans, DestinationMode.InPlace);
+            if (plannedItems.Count == 0)
+            {
+                if (isSilent) Console.Error.WriteLine(I18n.T("NoSupportedFiles"));
+                return 1;
+            }
+
+            if (isSilent)
+            {
+                int failureCount = 0;
+                foreach (var item in plannedItems)
+                {
+                    var res = Registry.ConvertFileAsync(item.SourceFilePath, item.TargetFormat, item.DestinationFilePath, null, default, isBatch: true).GetAwaiter().GetResult();
+                    if (!res.Success)
+                    {
+                        Console.Error.WriteLine(res.ErrorMessage ?? I18n.T("ErrorDefault"));
+                        failureCount++;
+                    }
+                }
+                return failureCount > 0 ? 1 : 0;
+            }
+
+            return RunWindow(() => new ConversionProgressWindow(plannedItems));
         }
 
         if (inputFiles.Count == 0 || string.IsNullOrWhiteSpace(targetFormat))
@@ -142,53 +199,57 @@ public class Program
             return failureCount > 0 ? 1 : 0;
         }
 
-        if (ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath))
-        {
-            return 0;
-        }
-
-        var mutexName = @"Global\JustConvert_QueueMutex_" + Environment.UserName;
+        var mutexName = @"Local\JustConvert_QueueMutex_" + Environment.UserName;
         Mutex? mutex = null;
-        bool acquired = false;
+        bool isPrimary = false;
         try
         {
-            mutex = new Mutex(true, mutexName, out acquired);
+            mutex = new Mutex(true, mutexName, out isPrimary);
+        }
+        catch (AbandonedMutexException)
+        {
+            isPrimary = true;
         }
         catch { }
 
-        if (!acquired)
+        if (!isPrimary)
         {
-            for (int attempt = 0; attempt < 30; attempt++)
-            {
-                Thread.Sleep(100);
-                if (ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath))
-                {
-                    return 0;
-                }
-            }
-
             try
             {
-                acquired = mutex?.WaitOne(500) ?? false;
+                ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath, timeoutMs: 5000);
             }
             catch { }
-
-            if (!acquired)
-            {
-                if (ConversionQueueIpc.TrySend(inputFiles, targetFormat, outputPath))
-                {
-                    return 0;
-                }
-                return 0;
-            }
+            return 0;
         }
 
         ConversionProgressWindow? window = null;
+        ConversionOptionsDialog? activeDialog = null;
         var pendingMessages = new System.Collections.Concurrent.ConcurrentQueue<QueueIpcMessage>();
+        var batchFiles = new List<string>(inputFiles);
+        var batchLock = new object();
 
         using var ipcServer = ConversionQueueIpc.StartServer(msg =>
         {
-            if (window != null)
+            if (activeDialog != null)
+            {
+                try
+                {
+                    activeDialog.Dispatcher.Invoke(() => activeDialog.AddBatchFiles(msg.Files));
+                }
+                catch { }
+
+                lock (batchLock)
+                {
+                    foreach (var file in msg.Files)
+                    {
+                        if (!batchFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+                        {
+                            batchFiles.Add(file);
+                        }
+                    }
+                }
+            }
+            else if (window != null)
             {
                 window.Dispatcher.Invoke(() =>
                 {
@@ -202,22 +263,101 @@ public class Program
             }
         });
 
-        var exitCode = RunWindow(() =>
+        var sw = Stopwatch.StartNew();
+        while (sw.ElapsedMilliseconds < 80)
         {
-            window = new ConversionProgressWindow(inputFiles, targetFormat, outputPath, isBatch);
+            Thread.Sleep(15);
             while (pendingMessages.TryDequeue(out var pending))
             {
-                window.EnqueueFiles(pending.Files, pending.TargetFormat, pending.OutputPath);
+                lock (batchLock)
+                {
+                    foreach (var file in pending.Files)
+                    {
+                        if (!batchFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+                        {
+                            batchFiles.Add(file);
+                        }
+                    }
+                }
             }
+        }
+
+        long totalBatchSize = 0;
+        lock (batchLock)
+        {
+            foreach (var file in batchFiles)
+            {
+                try
+                {
+                    if (File.Exists(file)) totalBatchSize += new FileInfo(file).Length;
+                }
+                catch { }
+            }
+        }
+
+        string effectiveTargetFormat = targetFormat;
+        if (!isSilent)
+        {
+            int currentBatchCount;
+            string? firstFile;
+            lock (batchLock)
+            {
+                currentBatchCount = batchFiles.Count;
+                firstFile = batchFiles.FirstOrDefault();
+            }
+
+            var promptResult = PromptOptionsIfNeeded(
+                targetFormat,
+                firstFile,
+                currentBatchCount,
+                totalBatchSize,
+                out var chosenFormat,
+                dlg => activeDialog = dlg);
+
+            activeDialog = null;
+
+            if (!promptResult)
+            {
+                Application.Current?.Shutdown();
+                try
+                {
+                    mutex?.ReleaseMutex();
+                    mutex?.Dispose();
+                }
+                catch { }
+                return 0;
+            }
+            if (!string.IsNullOrEmpty(chosenFormat))
+            {
+                effectiveTargetFormat = chosenFormat;
+            }
+        }
+
+        var exitCode = RunWindow(() =>
+        {
+            List<string> runFiles;
+            lock (batchLock)
+            {
+                while (pendingMessages.TryDequeue(out var pending))
+                {
+                    foreach (var file in pending.Files)
+                    {
+                        if (!batchFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+                        {
+                            batchFiles.Add(file);
+                        }
+                    }
+                }
+                runFiles = [.. batchFiles];
+            }
+
+            window = new ConversionProgressWindow(runFiles, effectiveTargetFormat, outputPath, isBatch || runFiles.Count > 1);
             return window;
         });
 
         try
         {
-            if (acquired)
-            {
-                mutex?.ReleaseMutex();
-            }
+            mutex?.ReleaseMutex();
             mutex?.Dispose();
         }
         catch { }
@@ -225,13 +365,179 @@ public class Program
         return exitCode;
     }
 
-    private static int RunWindow(Func<ConversionProgressWindow> windowFactory)
+    private static bool PromptOptionsIfNeeded(string targetFormat, string? firstInputFilePath)
     {
-        var app = new Application();
-        app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
-        app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
+        return PromptOptionsIfNeeded(targetFormat, firstInputFilePath, 1, null, out _, null);
+    }
+
+    private static bool PromptOptionsIfNeeded(
+        string targetFormat,
+        string? firstInputFilePath,
+        int batchCount,
+        long? totalBatchSizeBytes,
+        out string? chosenTargetFormat,
+        Action<ConversionOptionsDialog>? onDialogCreated = null)
+    {
+        chosenTargetFormat = null;
+        var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
+        if (fmt.StartsWith("preset:")) return true;
+        if (fmt is "reencode" or "frames" or "frames-png" or "frames-jpg" or "remux-mp4" or "remux-mkv" or "gif") return true;
+
+        var settings = AppSettings.Load();
+        var ffmpeg = ToolLocator.FindFfmpegPath();
+
+        var app = Application.Current;
+        if (app == null)
+        {
+            app = new Application();
+            app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
+            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
+        }
+
+        void StartBackgroundProbe(ConversionOptionsDialog dialog)
+        {
+            if (!string.IsNullOrEmpty(firstInputFilePath) && File.Exists(firstInputFilePath) && ffmpeg != null)
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        var info = await MediaProbe.ProbeAsync(ffmpeg, firstInputFilePath);
+                        if (info != null)
+                        {
+                            dialog.Dispatcher.Invoke(() => dialog.UpdateMediaInfo(info));
+                        }
+                    }
+                    catch { }
+                });
+            }
+        }
+
+        if (fmt is "mp4" or "webm" or "mkv" or "mov")
+        {
+            if (settings.TryGetSavedVideoQuality(fmt, out _) && batchCount <= 1) return true;
+
+            var dialog = new ConversionOptionsDialog(
+                fmt,
+                "video",
+                settings.GetEffectiveVideoQuality(fmt),
+                null,
+                settings.AppendQualitySuffix,
+                batchCount,
+                totalBatchSizeBytes
+            );
+            onDialogCreated?.Invoke(dialog);
+            StartBackgroundProbe(dialog);
+
+            var res = dialog.ShowDialog();
+            if (res != true) return false;
+
+            chosenTargetFormat = dialog.SelectedTargetFormat;
+            var effectiveFmt = chosenTargetFormat ?? fmt;
+
+            var selected = dialog.SelectedVideoQuality;
+            selected.IsRemembered = dialog.RememberChoice;
+            settings.SetVideoQuality(effectiveFmt, selected);
+            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.Save();
+            return true;
+        }
+
+        if (fmt == "remux")
+        {
+            if (settings.RemuxSetting.IsRemembered && batchCount <= 1) return true;
+
+            var dialog = new ConversionOptionsDialog(
+                "remux",
+                "remux",
+                settings.GetEffectiveRemuxSetting(),
+                null,
+                settings.AppendQualitySuffix,
+                batchCount,
+                totalBatchSizeBytes
+            );
+            onDialogCreated?.Invoke(dialog);
+            StartBackgroundProbe(dialog);
+
+            var res = dialog.ShowDialog();
+            if (res != true) return false;
+
+            chosenTargetFormat = dialog.SelectedRemuxSetting.TargetContainer;
+            settings.SetRemuxSetting(dialog.SelectedRemuxSetting);
+            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.Save();
+            return true;
+        }
+
+        if (fmt is "mp3" or "aac" or "m4a" or "ogg" or "opus")
+        {
+            if (settings.TryGetSavedAudioQuality(fmt, out _) && batchCount <= 1) return true;
+
+            var dialog = new ConversionOptionsDialog(
+                fmt,
+                "audio",
+                settings.GetEffectiveAudioQuality(fmt),
+                null,
+                settings.AppendQualitySuffix,
+                batchCount,
+                totalBatchSizeBytes
+            );
+            onDialogCreated?.Invoke(dialog);
+            StartBackgroundProbe(dialog);
+
+            var res = dialog.ShowDialog();
+            if (res != true) return false;
+
+            settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, dialog.RememberChoice);
+            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.Save();
+            return true;
+        }
+
+        if (AppSettings.SupportsQuality(fmt))
+        {
+            if (settings.TryGetSavedQuality(fmt, out _) && batchCount <= 1) return true;
+
+            var dialog = new ConversionOptionsDialog(
+                fmt,
+                "image",
+                settings.GetEffectiveQuality(fmt),
+                null,
+                settings.AppendQualitySuffix,
+                batchCount,
+                totalBatchSizeBytes
+            );
+            onDialogCreated?.Invoke(dialog);
+            StartBackgroundProbe(dialog);
+
+            var res = dialog.ShowDialog();
+            if (res != true) return false;
+
+            settings.SetQuality(fmt, dialog.SelectedImageQuality, dialog.RememberChoice);
+            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.Save();
+            return true;
+        }
+
+        return true;
+    }
+
+    private static int RunWindow(Func<Window> windowFactory)
+    {
+        TouchpadScrollHelper.Initialize();
+        var app = Application.Current;
+        if (app == null)
+        {
+            app = new Application();
+            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
+            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
+        }
+
+        app.ShutdownMode = ShutdownMode.OnMainWindowClose;
         var window = windowFactory();
+        app.MainWindow = window;
         app.Run(window);
-        return window.ExitCode;
+        return window is ConversionProgressWindow cpw ? cpw.ExitCode : 0;
     }
 }

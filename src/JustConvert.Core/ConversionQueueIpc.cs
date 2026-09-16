@@ -10,7 +10,7 @@ public static class ConversionQueueIpc
 {
     private static string GetPipeName() => $"JustConvert_Queue_{Environment.UserName}";
 
-    public static bool TrySend(IReadOnlyList<string> files, string targetFormat, string? outputPath = null, int timeoutMs = 1500)
+    public static bool TrySend(IReadOnlyList<string> files, string targetFormat, string? outputPath = null, int timeoutMs = 5000)
     {
         if (files.Count == 0) return false;
 
@@ -36,7 +36,7 @@ public static class ConversionQueueIpc
             catch
             {
                 if (Environment.TickCount64 >= deadline) break;
-                Thread.Sleep(50);
+                Thread.Sleep(25);
             }
         }
 
@@ -46,17 +46,21 @@ public static class ConversionQueueIpc
     public static IDisposable StartServer(Action<QueueIpcMessage> onMessageReceived)
     {
         var cts = new CancellationTokenSource();
-        var thread = new Thread(() => ServerLoop(onMessageReceived, cts.Token))
+        const int listenerCount = 4;
+        for (int i = 0; i < listenerCount; i++)
         {
-            IsBackground = true,
-            Name = "JustConvert_IpcServer"
-        };
-        thread.Start();
+            var thread = new Thread(() => ListenerWorker(onMessageReceived, cts.Token))
+            {
+                IsBackground = true,
+                Name = $"JustConvert_IpcListener_{i}"
+            };
+            thread.Start();
+        }
 
         return new ServerSubscription(cts);
     }
 
-    private static void ServerLoop(Action<QueueIpcMessage> onMessageReceived, CancellationToken ct)
+    private static void ListenerWorker(Action<QueueIpcMessage> onMessageReceived, CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
@@ -84,7 +88,7 @@ public static class ConversionQueueIpc
             catch
             {
                 if (ct.IsCancellationRequested) break;
-                Thread.Sleep(50);
+                Thread.Sleep(20);
             }
             finally
             {
