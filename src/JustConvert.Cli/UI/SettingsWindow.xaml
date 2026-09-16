@@ -1,24 +1,31 @@
-<ui:FluentWindow x:Class="JustConvert.Cli.UI.SettingsWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
-        Height="620" Width="780"
-        MinHeight="620" MaxHeight="620"
-        MinWidth="780" MaxWidth="780"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
-        ExtendsContentIntoTitleBar="True"
-        WindowBackdropType="Mica"
-        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+﻿<ui:FluentWindow x:Class="JustConvert.Cli.UI.SettingsWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
+                 mc:Ignorable="d"
+                 Title="{core:Loc SettingsTitle}"
+                 Height="620"
+                 Width="780"
+                 MinHeight="620"
+                 MaxHeight="620"
+                 MinWidth="780"
+                 MaxWidth="780"
+                 WindowStartupLocation="CenterScreen"
+                 ResizeMode="NoResize"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
     <ui:FluentWindow.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ui:ThemesDictionary Theme="Light" />
-                <ui:ControlsDictionary />
+                <ui:ThemesDictionary Theme="Light"/>
+                <ui:ControlsDictionary/>
             </ResourceDictionary.MergedDictionaries>
-            <BooleanToVisibilityConverter x:Key="BoolToVisConverter" />
+            <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
         </ResourceDictionary>
     </ui:FluentWindow.Resources>
 
@@ -30,70 +37,565 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ui:TitleBar Grid.Row="0" x:Name="AppTitleBar" Title="{core:Loc SettingsTitle}" ShowMaximize="False" ShowMinimize="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Height="36"/>
+        <ui:TitleBar Grid.Row="0"
+                     x:Name="AppTitleBar"
+                     Title="{core:Loc SettingsTitle}"
+                     ShowMaximize="False"
+                     ShowMinimize="True"
+                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                     Height="36"/>
 
-        <Border Grid.Row="1" Margin="24,6,24,12" Padding="16,14" CornerRadius="8" BorderThickness="1" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource ControlFillColorDefaultBrush}">
+        <Border Grid.Row="1"
+                Margin="24,6,24,12"
+                Padding="16,14"
+                CornerRadius="8"
+                BorderThickness="1"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Background="{DynamicResource ControlFillColorDefaultBrush}">
             <StackPanel>
-                <TextBlock Text="{core:Loc SettingsProfilesHeader}" FontSize="13" FontWeight="SemiBold" Margin="0,0,0,8" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <TextBlock Text="{core:Loc SettingsProfilesHeader}"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           Margin="0,0,0,8"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <ComboBox x:Name="CmbProfiles" Grid.Column="0" VerticalAlignment="Center" Height="34" SelectionChanged="OnProfileSelectionChanged">
+                    <ComboBox x:Name="CmbProfiles"
+                              Grid.Column="0"
+                              VerticalAlignment="Center"
+                              Height="34"
+                              SelectionChanged="OnProfileSelectionChanged">
                         <ComboBox.ItemTemplate>
                             <DataTemplate>
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="LockClosed20" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center" Visibility="{Binding IsReadOnly, Converter={StaticResource BoolToVisConverter}}" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    <TextBlock Text="{Binding Name}" VerticalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="LockClosed20"
+                                                   FontSize="14"
+                                                   Margin="0,0,6,0"
+                                                   VerticalAlignment="Center"
+                                                   Visibility="{Binding IsReadOnly, Converter={StaticResource BoolToVisConverter}}"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    <TextBlock Text="{Binding Name}"
+                                               VerticalAlignment="Center"/>
                                 </StackPanel>
                             </DataTemplate>
                         </ComboBox.ItemTemplate>
                     </ComboBox>
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Margin="10,0,0,0">
-                        <ui:Button x:Name="BtnDuplicate" Content="{core:Loc BtnDuplicate}" Icon="{ui:SymbolIcon Copy24}" Click="OnDuplicateProfileClick" Margin="0,0,6,0"/>
-                        <ui:Button x:Name="BtnRename" Content="{core:Loc BtnRename}" Icon="{ui:SymbolIcon Edit24}" Click="OnRenameProfileClick" Margin="0,0,6,0"/>
-                        <ui:Button x:Name="BtnDelete" Content="{core:Loc BtnDelete}" Icon="{ui:SymbolIcon Delete24}" Click="OnDeleteProfileClick" Margin="0,0,6,0"/>
-                        <ui:Button x:Name="BtnExport" Content="{core:Loc BtnExport}" Icon="{ui:SymbolIcon ArrowDownload24}" Click="OnExportClick" Margin="0,0,6,0"/>
-                        <ui:Button x:Name="BtnImport" Content="{core:Loc BtnImport}" Icon="{ui:SymbolIcon ArrowUpload24}" Click="OnImportClick"/>
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                Margin="10,0,0,0">
+                        <ui:Button x:Name="BtnDuplicate"
+                                   Content="{core:Loc BtnDuplicate}"
+                                   d:Content="Копия"
+                                   Icon="{ui:SymbolIcon Copy24}"
+                                   Click="OnDuplicateProfileClick"
+                                   Margin="0,0,6,0"/>
+                        <ui:Button x:Name="BtnRename"
+                                   Content="{core:Loc BtnRename}"
+                                   d:Content="Имя"
+                                   Icon="{ui:SymbolIcon Edit24}"
+                                   Click="OnRenameProfileClick"
+                                   Margin="0,0,6,0"/>
+                        <ui:Button x:Name="BtnDelete"
+                                   Content="{core:Loc BtnDelete}"
+                                   d:Content="Удалить"
+                                   Icon="{ui:SymbolIcon Delete24}"
+                                   Click="OnDeleteProfileClick"
+                                   Margin="0,0,6,0"/>
+                        <ui:Button x:Name="BtnExport"
+                                   Content="{core:Loc BtnExport}"
+                                   d:Content="Экспорт"
+                                   Icon="{ui:SymbolIcon ArrowDownload24}"
+                                   Click="OnExportClick"
+                                   Margin="0,0,6,0"/>
+                        <ui:Button x:Name="BtnImport"
+                                   Content="{core:Loc BtnImport}"
+                                   d:Content="Импорт"
+                                   Icon="{ui:SymbolIcon ArrowUpload24}"
+                                   Click="OnImportClick"/>
                     </StackPanel>
                 </Grid>
-                <TextBlock x:Name="TxtProfileNotice" Margin="0,8,0,0" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap"/>
+                <TextBlock x:Name="TxtProfileNotice"
+                           Margin="0,8,0,0"
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextWrapping="Wrap"/>
             </StackPanel>
         </Border>
 
-        <TabControl Grid.Row="2" x:Name="TabsCategory" Margin="24,0,24,12" SelectionChanged="OnCategoryTabChanged">
+        <TabControl Grid.Row="2"
+                    x:Name="TabsCategory"
+                    Margin="24,0,24,12"
+                    SelectionChanged="OnCategoryTabChanged">
             <TabItem Header="{core:Loc CategoryVideo}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly" CanContentScroll="False" PreviewMouseWheel="OnScrollViewerPreviewMouseWheel" Margin="4,8,4,4">
-                    <StackPanel x:Name="PanelVideoFormats"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              PanningMode="VerticalOnly"
+                              CanContentScroll="False"
+                              Margin="4,8,4,4">
+                    <StackPanel Margin="0,0,8,12">
+                        <StackPanel x:Name="PanelVideoFormats"/>
+
+                        <Border Margin="0,16,0,0"
+                                Padding="16,14"
+                                CornerRadius="8"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="{core:Loc SettingsRemuxTitle}"
+                                           d:Text="Параметры ремукса"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,8"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{core:Loc MenuRemux}"
+                                               d:Text="Ремукс (Без пережатия)"
+                                               FontWeight="SemiBold"
+                                               FontSize="13"
+                                               VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="TxtRemuxStatus"
+                                               Grid.Column="1"
+                                               Margin="12,0,0,0"
+                                               FontSize="12"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center"
+                                               d:Text="Спрашивать при конвертации"/>
+                                    <ui:Button x:Name="BtnResetRemux"
+                                               Grid.Column="2"
+                                               Content="{core:Loc ResetRemuxBtn}"
+                                               d:Content="Сбросить"
+                                               FontSize="12"
+                                               Padding="10,3"
+                                               Click="OnResetRemuxClick"/>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="150"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{core:Loc LabelRemuxContainer}"
+                                               d:Text="Целевой контейнер:"
+                                               VerticalAlignment="Center"
+                                               FontSize="12"/>
+                                    <ComboBox x:Name="CmbSettingsRemuxContainer"
+                                              Grid.Column="1"
+                                              Height="30"
+                                              SelectionChanged="OnSettingsRemuxOptionChanged"/>
+                                </Grid>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                    <CheckBox x:Name="ChkSettingsRemuxFastStart"
+                                              Content="{core:Loc LabelRemuxFastStart}"
+                                              d:Content="Оптимизация для веб (faststart)"
+                                              Margin="0,0,16,0"
+                                              Checked="OnSettingsRemuxOptionChanged"
+                                              Unchecked="OnSettingsRemuxOptionChanged"/>
+                                    <CheckBox x:Name="ChkSettingsRemuxSubtitles"
+                                              Content="{core:Loc LabelCopySubtitles}"
+                                              d:Content="Копировать субтитры"
+                                              Checked="OnSettingsRemuxOptionChanged"
+                                              Unchecked="OnSettingsRemuxOptionChanged"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="{core:Loc CategoryAudio}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly" CanContentScroll="False" PreviewMouseWheel="OnScrollViewerPreviewMouseWheel" Margin="4,8,4,4">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              PanningMode="VerticalOnly"
+                              CanContentScroll="False"
+                              Margin="4,8,4,4">
                     <StackPanel x:Name="PanelAudioFormats"/>
                 </ScrollViewer>
             </TabItem>
             <TabItem Header="{core:Loc CategoryImages}">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" PanningMode="VerticalOnly" CanContentScroll="False" PreviewMouseWheel="OnScrollViewerPreviewMouseWheel" Margin="4,8,4,4">
-                    <StackPanel x:Name="PanelImageFormats"/>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              PanningMode="VerticalOnly"
+                              CanContentScroll="False"
+                              Margin="4,8,4,4">
+                    <StackPanel Margin="0,0,8,12">
+                        <StackPanel x:Name="PanelImageFormats"/>
+
+                        <Border Margin="0,16,0,0"
+                                Padding="16,14"
+                                CornerRadius="8"
+                                BorderThickness="1"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}">
+                            <StackPanel>
+                                <TextBlock Text="{core:Loc SettingsGroupImageQuality}"
+                                           d:Text="Качество сжатия форматов"
+                                           FontSize="13"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,8"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+
+                                <CheckBox x:Name="ChkAppendQualitySuffix"
+                                          Content="{core:Loc ChkAppendQualitySuffix}"
+                                          d:Content="Добавлять суффикс качества в имя файла"
+                                          Margin="0,0,0,16"
+                                          Checked="OnAppendQualitySuffixChanged"
+                                          Unchecked="OnAppendQualitySuffixChanged"/>
+
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{core:Loc FormatJpg}"
+                                                   d:Text="JPEG"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtQualityStatusJpg"
+                                                   Grid.Column="1"
+                                                   Margin="12,0,0,0"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   d:Text="Запомнено: 92%"/>
+                                        <ui:Button x:Name="BtnResetQualityJpg"
+                                                   Grid.Column="2"
+                                                   Content="{core:Loc BtnResetQuality}"
+                                                   d:Content="Сбросить"
+                                                   FontSize="12"
+                                                   Padding="10,3"
+                                                   Click="OnResetQualityClick"
+                                                   Tag="jpg"/>
+                                    </Grid>
+                                    <Grid Grid.Row="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Slider x:Name="SliderQualityJpg"
+                                                Grid.Column="0"
+                                                Minimum="1"
+                                                Maximum="100"
+                                                Value="92"
+                                                SmallChange="1"
+                                                LargeChange="5"
+                                                TickFrequency="5"
+                                                VerticalAlignment="Center"
+                                                ValueChanged="OnQualitySliderValueChanged"
+                                                Tag="jpg"/>
+                                        <TextBlock Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   TextAlignment="Right"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                   Text="{Binding ElementName=SliderQualityJpg, Path=Value, StringFormat='{}{0:F0}%'}"
+                                                   d:Text="92%"/>
+                                    </Grid>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{core:Loc FormatWebp}"
+                                                   d:Text="WEBP"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtQualityStatusWebp"
+                                                   Grid.Column="1"
+                                                   Margin="12,0,0,0"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   d:Text="Спрашивать при конвертации"/>
+                                        <ui:Button x:Name="BtnResetQualityWebp"
+                                                   Grid.Column="2"
+                                                   Content="{core:Loc BtnResetQuality}"
+                                                   d:Content="Сбросить"
+                                                   FontSize="12"
+                                                   Padding="10,3"
+                                                   Click="OnResetQualityClick"
+                                                   Tag="webp"/>
+                                    </Grid>
+                                    <Grid Grid.Row="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Slider x:Name="SliderQualityWebp"
+                                                Grid.Column="0"
+                                                Minimum="1"
+                                                Maximum="100"
+                                                Value="85"
+                                                SmallChange="1"
+                                                LargeChange="5"
+                                                TickFrequency="5"
+                                                VerticalAlignment="Center"
+                                                ValueChanged="OnQualitySliderValueChanged"
+                                                Tag="webp"/>
+                                        <TextBlock Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   TextAlignment="Right"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                   Text="{Binding ElementName=SliderQualityWebp, Path=Value, StringFormat='{}{0:F0}%'}"
+                                                   d:Text="85%"/>
+                                    </Grid>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{core:Loc FormatAvif}"
+                                                   d:Text="AVIF"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtQualityStatusAvif"
+                                                   Grid.Column="1"
+                                                   Margin="12,0,0,0"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   d:Text="Спрашивать при конвертации"/>
+                                        <ui:Button x:Name="BtnResetQualityAvif"
+                                                   Grid.Column="2"
+                                                   Content="{core:Loc BtnResetQuality}"
+                                                   d:Content="Сбросить"
+                                                   FontSize="12"
+                                                   Padding="10,3"
+                                                   Click="OnResetQualityClick"
+                                                   Tag="avif"/>
+                                    </Grid>
+                                    <Grid Grid.Row="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Slider x:Name="SliderQualityAvif"
+                                                Grid.Column="0"
+                                                Minimum="1"
+                                                Maximum="100"
+                                                Value="80"
+                                                SmallChange="1"
+                                                LargeChange="5"
+                                                TickFrequency="5"
+                                                VerticalAlignment="Center"
+                                                ValueChanged="OnQualitySliderValueChanged"
+                                                Tag="avif"/>
+                                        <TextBlock Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   TextAlignment="Right"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                   Text="{Binding ElementName=SliderQualityAvif, Path=Value, StringFormat='{}{0:F0}%'}"
+                                                   d:Text="80%"/>
+                                    </Grid>
+                                </Grid>
+
+                                <Grid Margin="0,0,0,4">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid Grid.Row="0" Margin="0,0,0,4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{core:Loc FormatJp2}"
+                                                   d:Text="JPEG 2000"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="13"
+                                                   VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="TxtQualityStatusJp2"
+                                                   Grid.Column="1"
+                                                   Margin="12,0,0,0"
+                                                   FontSize="12"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   VerticalAlignment="Center"
+                                                   d:Text="Спрашивать при конвертации"/>
+                                        <ui:Button x:Name="BtnResetQualityJp2"
+                                                   Grid.Column="2"
+                                                   Content="{core:Loc BtnResetQuality}"
+                                                   d:Content="Сбросить"
+                                                   FontSize="12"
+                                                   Padding="10,3"
+                                                   Click="OnResetQualityClick"
+                                                   Tag="jp2"/>
+                                    </Grid>
+                                    <Grid Grid.Row="1">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="50"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Slider x:Name="SliderQualityJp2"
+                                                Grid.Column="0"
+                                                Minimum="1"
+                                                Maximum="100"
+                                                Value="85"
+                                                SmallChange="1"
+                                                LargeChange="5"
+                                                TickFrequency="5"
+                                                VerticalAlignment="Center"
+                                                ValueChanged="OnQualitySliderValueChanged"
+                                                Tag="jp2"/>
+                                        <TextBlock Grid.Column="1"
+                                                   VerticalAlignment="Center"
+                                                   TextAlignment="Right"
+                                                   FontSize="13"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                   Text="{Binding ElementName=SliderQualityJp2, Path=Value, StringFormat='{}{0:F0}%'}"
+                                                   d:Text="85%"/>
+                                    </Grid>
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
                 </ScrollViewer>
+            </TabItem>
+            <TabItem Header="{core:Loc TabPresets}">
+                <Grid Margin="4,8,4,4">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0"
+                                Orientation="Horizontal"
+                                Margin="0,0,0,10">
+                        <ui:Button x:Name="BtnCreatePreset"
+                                   Appearance="Primary"
+                                   Content="{core:Loc BtnCreatePreset}"
+                                   d:Content="Создать пресет..."
+                                   Icon="{ui:SymbolIcon Add24}"
+                                   Click="OnCreatePresetClick"
+                                   Margin="0,0,8,0"/>
+                        <ui:Button x:Name="BtnEditPreset"
+                                   Content="{core:Loc BtnEditPreset}"
+                                   d:Content="Изменить..."
+                                   Icon="{ui:SymbolIcon Edit24}"
+                                   Click="OnEditPresetClick"
+                                   IsEnabled="False"
+                                   Margin="0,0,8,0"/>
+                        <ui:Button x:Name="BtnDeletePreset"
+                                   Content="{core:Loc BtnDeletePreset}"
+                                   d:Content="Удалить"
+                                   Icon="{ui:SymbolIcon Delete24}"
+                                   Click="OnDeletePresetClick"
+                                   IsEnabled="False"/>
+                    </StackPanel>
+
+                    <ListView x:Name="ListPresets"
+                              Grid.Row="1"
+                              SelectionChanged="OnPresetSelectionChanged"
+                              MouseDoubleClick="OnPresetDoubleClick">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="4,6">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <ui:SymbolIcon Symbol="Bookmark24"
+                                                   FontSize="20"
+                                                   VerticalAlignment="Center"
+                                                   Margin="0,0,12,0"
+                                                   Foreground="{DynamicResource AccentFillColorDefaultBrush}"/>
+                                    <StackPanel Grid.Column="1"
+                                                VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="13"/>
+                                        <TextBlock Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   FontSize="11"
+                                                   Margin="0,2,0,0">
+                                            <TextBlock.Text>
+                                                <MultiBinding StringFormat="{}{0} • {1}">
+                                                    <Binding Path="Category"/>
+                                                    <Binding Path="ContainerFormat"/>
+                                                </MultiBinding>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </Grid>
             </TabItem>
         </TabControl>
 
-        <Border Grid.Row="3" Padding="24,12" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" Background="{DynamicResource ControlFillColorDefaultBrush}">
+        <Border Grid.Row="3"
+                Padding="24,12"
+                BorderThickness="0,1,0,0"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                Background="{DynamicResource ControlFillColorDefaultBrush}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <TextBlock x:Name="TxtApplyStatus" Grid.Column="0" VerticalAlignment="Center" FontSize="12" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
+                <TextBlock x:Name="TxtApplyStatus"
+                           Grid.Column="0"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"/>
 
-                <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <ui:Button x:Name="BtnApply" Appearance="Primary" Content="{core:Loc BtnApply}" Click="OnApplyClick" Width="100"/>
-                    <ui:Button x:Name="BtnClose" Content="{core:Loc BtnClose}" Click="OnCloseClick" Margin="8,0,0,0" Width="90"/>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal">
+                    <ui:Button x:Name="BtnApply"
+                               Appearance="Primary"
+                               Content="{core:Loc BtnApply}"
+                               d:Content="Применить"
+                               Click="OnApplyClick"
+                               Width="100"/>
+                    <ui:Button x:Name="BtnClose"
+                               Content="{core:Loc BtnClose}"
+                               d:Content="Закрыть"
+                               Click="OnCloseClick"
+                               Margin="8,0,0,0"
+                               Width="90"/>
                 </StackPanel>
             </Grid>
         </Border>

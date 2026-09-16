@@ -2,11 +2,14 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using JustConvert.Core;
+using JustConvert.Core.Scanning;
+using JustConvert.Core.Windows;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -24,18 +27,40 @@ public partial class ConversionProgressWindow : FluentWindow
     public ObservableCollection<ConversionQueueItem> Items { get; } = [];
     public int ExitCode { get; private set; }
 
+    public ConversionProgressWindow()
+    {
+        InitializeComponent();
+        if (DesignerProperties.GetIsInDesignMode(this))
+        {
+            var baseTitle = I18n.T("QueueTitle");
+            Title = baseTitle;
+            AppTitleBar.Title = baseTitle;
+            QueueItemsList.ItemsSource = DesignData.SampleItems;
+            TxtOverallCount.Text = "2 / 4";
+            OverallProgressBar.Value = 50;
+            TxtOverallStatus.Text = I18n.T("StatusConverting");
+            BtnPauseAll.Content = I18n.T("BtnPauseAll");
+            BtnCancelAll.Content = I18n.T("BtnCancelAll");
+        }
+    }
+
     public ConversionProgressWindow(IReadOnlyList<string> initialFiles, string targetFormat, string? outputPath = null, bool isBatch = false)
     {
         InitializeComponent();
         _isBatch = isBatch;
 
-        ApplicationThemeManager.ApplySystemTheme();
-        ApplicationAccentColorManager.ApplySystemAccent();
-        ApplicationThemeManager.Apply(this);
-        SystemThemeWatcher.Watch(this);
+        if (!DesignerProperties.GetIsInDesignMode(this))
+        {
+            ApplicationThemeManager.ApplySystemTheme();
+            ApplicationAccentColorManager.ApplySystemAccent();
+            ApplicationThemeManager.Apply(this);
+            SystemThemeWatcher.Watch(this);
+        }
 
         QueueItemsList.ItemsSource = Items;
-        AppTitleBar.Title = I18n.T("QueueTitle");
+        var baseTitle = I18n.T("QueueTitle");
+        Title = baseTitle;
+        AppTitleBar.Title = baseTitle;
 
         EnqueueFiles(initialFiles, targetFormat, outputPath);
 
@@ -49,6 +74,33 @@ public partial class ConversionProgressWindow : FluentWindow
     public ConversionProgressWindow(string inputPath, string targetFormat, string? outputPath = null, bool isBatch = false)
         : this([inputPath], targetFormat, outputPath, isBatch)
     {
+    }
+
+    public ConversionProgressWindow(IReadOnlyList<BatchConversionItem> batchItems)
+    {
+        InitializeComponent();
+        _isBatch = true;
+
+        if (!DesignerProperties.GetIsInDesignMode(this))
+        {
+            ApplicationThemeManager.ApplySystemTheme();
+            ApplicationAccentColorManager.ApplySystemAccent();
+            ApplicationThemeManager.Apply(this);
+            SystemThemeWatcher.Watch(this);
+        }
+
+        QueueItemsList.ItemsSource = Items;
+        var baseTitle = I18n.T("QueueTitle");
+        Title = baseTitle;
+        AppTitleBar.Title = baseTitle;
+
+        EnqueueBatchItems(batchItems);
+
+        StartIconRotation();
+        TxtParallelValue.Text = _maxParallel.ToString();
+        BtnParallelDec.IsEnabled = _maxParallel > 1;
+        BtnParallelInc.IsEnabled = _maxParallel < 16;
+        Loaded += OnLoaded;
     }
 
     public static ConversionProgressWindow CreateForError(string inputPath, string targetFormat, string errorMessage, string? errorLog)
@@ -74,6 +126,30 @@ public partial class ConversionProgressWindow : FluentWindow
             if (string.IsNullOrWhiteSpace(file)) continue;
 
             var item = new ConversionQueueItem(file, targetFormat, outputPath);
+            item.OnItemStateChanged += () => Dispatcher.Invoke(UpdateOverallState);
+            Items.Add(item);
+        }
+
+        UpdateOverallState();
+        ProcessQueue();
+    }
+
+    public void EnqueueBatchItems(IReadOnlyList<BatchConversionItem> batchItems)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.Invoke(() => EnqueueBatchItems(batchItems));
+            return;
+        }
+
+        _autoCloseCts?.Cancel();
+        _autoCloseCts = null;
+
+        foreach (var bi in batchItems)
+        {
+            if (string.IsNullOrWhiteSpace(bi.SourceFilePath)) continue;
+
+            var item = new ConversionQueueItem(bi.SourceFilePath, bi.TargetFormat, bi.DestinationFilePath);
             item.OnItemStateChanged += () => Dispatcher.Invoke(UpdateOverallState);
             Items.Add(item);
         }
@@ -134,7 +210,7 @@ public partial class ConversionProgressWindow : FluentWindow
         var sourceExt = Path.GetExtension(item.InputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = item.TargetFormat.TrimStart('.').ToLowerInvariant();
 
-        if (targetExt != "reencode" && sourceExt.Equals(targetExt, StringComparison.OrdinalIgnoreCase) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
+        if (targetExt != "reencode" && targetExt != "remux" && ClassicContextMenuManager.IsSameFormat(sourceExt, targetExt) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
         {
             item.Status = QueueItemStatus.Done;
             item.StatusText = I18n.T("StatusSkippedAlreadyTarget");
@@ -312,6 +388,11 @@ public partial class ConversionProgressWindow : FluentWindow
         int paused = Items.Count(i => i.Status == QueueItemStatus.Paused);
         int errors = Items.Count(i => i.Status == QueueItemStatus.Error);
 
+        var baseTitle = I18n.T("QueueTitle");
+        Title = total > 0 && completed < total
+            ? $"({completed}/{total}) {baseTitle}"
+            : baseTitle;
+
         TxtOverallCount.Text = total > 0 ? $"{completed} / {total}" : string.Empty;
         OverallProgressBar.Value = total > 0 ? (completed * 100.0 / total) : 0;
 
@@ -319,15 +400,21 @@ public partial class ConversionProgressWindow : FluentWindow
         {
             TxtOverallStatus.Text = I18n.T("StatusConverting");
             StartIconRotation();
+            BtnPauseAll.Visibility = Visibility.Visible;
+            BtnPauseAll.IsEnabled = true;
             BtnPauseAll.Content = I18n.T("BtnPauseAll");
             BtnCancelAll.Content = I18n.T("BtnCancelAll");
+            BtnCopyErrors.Visibility = Visibility.Collapsed;
         }
         else if (paused > 0 && completed < total)
         {
             TxtOverallStatus.Text = I18n.T("StatusPaused");
             StopIconRotation();
+            BtnPauseAll.Visibility = Visibility.Visible;
+            BtnPauseAll.IsEnabled = true;
             BtnPauseAll.Content = I18n.T("BtnResumeAll");
             BtnCancelAll.Content = I18n.T("BtnCancelAll");
+            BtnCopyErrors.Visibility = Visibility.Collapsed;
         }
         else if (total > 0 && completed == total)
         {
@@ -337,7 +424,8 @@ public partial class ConversionProgressWindow : FluentWindow
             {
                 TxtOverallStatus.Text = I18n.T("StatusAllDone");
                 BtnCancelAll.Content = I18n.T("BtnClose");
-                BtnPauseAll.IsEnabled = false;
+                BtnPauseAll.Visibility = Visibility.Collapsed;
+                BtnCopyErrors.Visibility = Visibility.Collapsed;
                 ExitCode = 0;
 
                 _autoCloseCts?.Cancel();
@@ -375,15 +463,19 @@ public partial class ConversionProgressWindow : FluentWindow
                     ? I18n.T("StatusCompletedWithErrors", completed - errors, errors)
                     : I18n.T("StatusAllDone");
                 BtnCancelAll.Content = I18n.T("BtnClose");
-                BtnPauseAll.IsEnabled = false;
+                BtnPauseAll.Visibility = Visibility.Collapsed;
+                BtnCopyErrors.Visibility = errors > 0 ? Visibility.Visible : Visibility.Collapsed;
             }
         }
         else
         {
             StopIconRotation();
             TxtOverallStatus.Text = I18n.T("StatusPreparing");
+            BtnPauseAll.Visibility = Visibility.Visible;
+            BtnPauseAll.IsEnabled = true;
             BtnPauseAll.Content = I18n.T("BtnPauseAll");
             BtnCancelAll.Content = I18n.T("BtnCancelAll");
+            BtnCopyErrors.Visibility = Visibility.Collapsed;
         }
     }
 
@@ -473,12 +565,65 @@ public partial class ConversionProgressWindow : FluentWindow
         }
     }
 
-    private void BtnCopy_Click(object sender, RoutedEventArgs e)
+    private async void BtnItemCopyError_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: ConversionQueueItem item })
+        {
+            try
+            {
+                var log = !string.IsNullOrWhiteSpace(item.ErrorLog) ? item.ErrorLog : item.ErrorMessage ?? I18n.T("ErrorDefault");
+                Clipboard.SetText(log);
+
+                if (sender is FrameworkElement elem)
+                {
+                    elem.ToolTip = I18n.T("BtnCopied");
+                    await Task.Delay(2000);
+                    elem.ToolTip = I18n.T("TooltipCopyError");
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async void BtnCopyErrors_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var errorItems = Items.Where(i => i.Status == QueueItemStatus.Error).ToList();
+            if (errorItems.Count == 0) return;
+
+            var sb = new StringBuilder();
+            for (int i = 0; i < errorItems.Count; i++)
+            {
+                var item = errorItems[i];
+                if (errorItems.Count > 1)
+                {
+                    sb.AppendLine($"=== [{i + 1}/{errorItems.Count}] {item.FileName} ({item.TargetFormatDisplay}) ===");
+                }
+                var log = !string.IsNullOrWhiteSpace(item.ErrorLog) ? item.ErrorLog : item.ErrorMessage;
+                sb.AppendLine(log);
+                if (i < errorItems.Count - 1)
+                {
+                    sb.AppendLine();
+                }
+            }
+
+            Clipboard.SetText(sb.ToString().TrimEnd());
+            TxtBtnCopyErrors.Text = I18n.T("BtnCopied");
+            await Task.Delay(2000);
+            TxtBtnCopyErrors.Text = I18n.T("BtnCopyAllErrors");
+        }
+        catch { }
+    }
+
+    private async void BtnCopy_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             Clipboard.SetText(TxtErrorLog.Text);
-            BtnCopy.Content = I18n.T("BtnCopied");
+            TxtBtnCopy.Text = I18n.T("BtnCopied");
+            await Task.Delay(2000);
+            TxtBtnCopy.Text = I18n.T("BtnCopyError");
         }
         catch { }
     }
@@ -526,14 +671,5 @@ public partial class ConversionProgressWindow : FluentWindow
     private void StopIconRotation()
     {
         IconRotateTransform.BeginAnimation(RotateTransform.AngleProperty, null);
-    }
-
-    private void OnScrollViewerPreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
-    {
-        if (sender is not ScrollViewer sv || sv.ScrollableHeight <= 0) return;
-
-        var offset = sv.VerticalOffset - (e.Delta * 0.25);
-        sv.ScrollToVerticalOffset(Math.Clamp(offset, 0, sv.ScrollableHeight));
-        e.Handled = true;
     }
 }

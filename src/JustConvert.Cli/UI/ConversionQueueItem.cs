@@ -179,29 +179,42 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
         _ => SymbolRegular.Document16
     };
 
+    private static Brush GetResourceBrush(string key, Brush fallback)
+    {
+        try
+        {
+            if (Application.Current?.TryFindResource(key) is Brush brush)
+            {
+                return brush;
+            }
+        }
+        catch { }
+        return fallback;
+    }
+
     public Brush StatusBrush => _status switch
     {
-        QueueItemStatus.Converting => (Brush)Application.Current.FindResource("AccentTextFillColorPrimaryBrush"),
-        QueueItemStatus.Done => (Brush)Application.Current.FindResource("AccentTextFillColorPrimaryBrush"),
-        QueueItemStatus.Error => (Brush)Application.Current.FindResource("SystemFillColorCriticalBrush"),
-        QueueItemStatus.Paused => (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush"),
-        _ => (Brush)Application.Current.FindResource("TextFillColorTertiaryBrush")
+        QueueItemStatus.Converting => GetResourceBrush("AccentTextFillColorPrimaryBrush", Brushes.DodgerBlue),
+        QueueItemStatus.Done => GetResourceBrush("AccentTextFillColorPrimaryBrush", Brushes.DodgerBlue),
+        QueueItemStatus.Error => GetResourceBrush("SystemFillColorCriticalBrush", Brushes.IndianRed),
+        QueueItemStatus.Paused => GetResourceBrush("TextFillColorSecondaryBrush", Brushes.Gray),
+        _ => GetResourceBrush("TextFillColorTertiaryBrush", Brushes.LightGray)
     };
 
     public Brush StatusTextBrush => _status switch
     {
-        QueueItemStatus.Error => (Brush)Application.Current.FindResource("SystemFillColorCriticalBrush"),
-        QueueItemStatus.Converting => (Brush)Application.Current.FindResource("TextFillColorPrimaryBrush"),
-        _ => (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush")
+        QueueItemStatus.Error => GetResourceBrush("SystemFillColorCriticalBrush", Brushes.IndianRed),
+        QueueItemStatus.Converting => GetResourceBrush("TextFillColorPrimaryBrush", Brushes.Black),
+        _ => GetResourceBrush("TextFillColorSecondaryBrush", Brushes.Gray)
     };
 
     public Brush ProgressBarBrush => _status switch
     {
-        QueueItemStatus.Converting => (Brush)Application.Current.FindResource("AccentFillColorDefaultBrush"),
-        QueueItemStatus.Done => (Brush)Application.Current.FindResource("AccentFillColorDefaultBrush"),
-        QueueItemStatus.Error => (Brush)Application.Current.FindResource("SystemFillColorCriticalBrush"),
-        QueueItemStatus.Paused => (Brush)Application.Current.FindResource("TextFillColorSecondaryBrush"),
-        _ => (Brush)Application.Current.FindResource("TextFillColorTertiaryBrush")
+        QueueItemStatus.Converting => GetResourceBrush("AccentFillColorDefaultBrush", Brushes.DodgerBlue),
+        QueueItemStatus.Done => GetResourceBrush("AccentFillColorDefaultBrush", Brushes.DodgerBlue),
+        QueueItemStatus.Error => GetResourceBrush("SystemFillColorCriticalBrush", Brushes.IndianRed),
+        QueueItemStatus.Paused => GetResourceBrush("TextFillColorSecondaryBrush", Brushes.Gray),
+        _ => GetResourceBrush("TextFillColorTertiaryBrush", Brushes.LightGray)
     };
 
     public Visibility ProgressBarVisibility => Visibility.Visible;
