@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.IO;
 using System.IO.Compression;
+using System.Net.Http;
 
-namespace JustConvert.Core.Converters;
+namespace JustConvert.Core.Converters.Tools;
 
 public static class FfmpegInstaller
 {
@@ -21,7 +23,6 @@ public static class FfmpegInstaller
             }
 
             var tempZip = Path.Combine(Path.GetTempPath(), $"ffmpeg_{Guid.NewGuid():N}.zip");
-            var tempExtract = Path.Combine(Path.GetTempPath(), $"ffmpeg_{Guid.NewGuid():N}");
 
             progress?.Report((null, I18n.T("SetupDownloadingFfmpeg")));
 
@@ -69,9 +70,10 @@ public static class FfmpegInstaller
             {
                 foreach (var entry in zipArchive.Entries)
                 {
-                    if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase))
+                    if (entry.Name.Equals("ffmpeg.exe", StringComparison.OrdinalIgnoreCase) ||
+                        entry.Name.Equals("ffprobe.exe", StringComparison.OrdinalIgnoreCase))
                     {
-                        var destFileName = Path.GetFullPath(Path.Combine(targetDir, "ffmpeg.exe"));
+                        var destFileName = Path.GetFullPath(Path.Combine(targetDir, entry.Name.ToLowerInvariant()));
                         if (destFileName.StartsWith(fullDestDirPath, StringComparison.OrdinalIgnoreCase))
                         {
                             try
@@ -92,12 +94,14 @@ public static class FfmpegInstaller
                                 }
                                 catch { }
                             }
-                            try { File.Delete(tempZip); } catch { }
-                            return true;
                         }
                     }
                 }
             }
+
+            try { File.Delete(tempZip); } catch { }
+
+            return File.Exists(ffmpegDest);
         }
         catch (Exception ex)
         {

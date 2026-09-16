@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using JustConvert.Core.Converters.Tools;
 
 namespace JustConvert.Core.Converters;
 
@@ -7,9 +8,15 @@ public class ImageConverter : IFormatConverter
 {
     public string Name => "Image Converter (ImageMagick)";
 
+    private static readonly HashSet<string> RawFormats = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dng", "cr2", "cr3", "nef", "arw"
+    };
+
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "png", "jpg", "jpeg", "webp", "ico", "bmp", "gif", "jp2", "jpeg2000", "tiff", "tif", "tga", "pcx", "ppm", "avif", "heic"
+        "png", "jpg", "jpeg", "webp", "ico", "bmp", "gif", "jp2", "jpeg2000", "tiff", "tif", "tga", "pcx", "ppm", "avif", "heic",
+        "svg", "psd", "dng", "cr2", "cr3", "nef", "arw"
     };
 
     private static readonly string[] FormatsOrder =
@@ -19,95 +26,6 @@ public class ImageConverter : IFormatConverter
         "tiff", "tga", "pcx", "ppm", "avif"
     ];
 
-    public static string? FindMagickPath()
-    {
-        var localExe = Path.Combine(AppContext.BaseDirectory, "magick.exe");
-        if (File.Exists(localExe)) return localExe;
-
-        string[] appLocations =
-        [
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "m1sh3r", "Just Convert", "magick.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "m1sh3r", "Just Convert", "magick.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "m1sh3r", "JustConvert", "magick.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "m1sh3r", "JustConvert", "magick.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "Just Convert", "magick.exe"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "JustConvert", "magick.exe")
-        ];
-
-        foreach (var loc in appLocations)
-        {
-            if (File.Exists(loc)) return loc;
-        }
-
-        var customPath = Environment.GetEnvironmentVariable("MAGICK_HOME") ?? Environment.GetEnvironmentVariable("MAGICK_PATH");
-        if (!string.IsNullOrEmpty(customPath))
-        {
-            if (File.Exists(customPath)) return customPath;
-            var binPath = Path.Combine(customPath, "magick.exe");
-            if (File.Exists(binPath)) return binPath;
-            binPath = Path.Combine(customPath, "bin", "magick.exe");
-            if (File.Exists(binPath)) return binPath;
-        }
-
-        var paths = (Environment.GetEnvironmentVariable("PATH") ?? "")
-            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
-
-        foreach (var p in paths)
-        {
-            try
-            {
-                var target = Path.Combine(p.Trim('\"'), "magick.exe");
-                if (File.Exists(target)) return target;
-            }
-            catch { }
-        }
-
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-
-        string[] knownLocations =
-        [
-            Path.Combine(localAppData, @"Microsoft\WinGet\Links\magick.exe"),
-            Path.Combine(userProfile, @"scoop\shims\magick.exe"),
-            Path.Combine(userProfile, @"scoop\apps\imagemagick\current\magick.exe"),
-            @"C:\ProgramData\chocolatey\bin\magick.exe",
-            @"C:\Program Files\ImageMagick\magick.exe"
-        ];
-
-        foreach (var loc in knownLocations)
-        {
-            if (File.Exists(loc)) return loc;
-        }
-
-        var progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-        if (Directory.Exists(progFiles))
-        {
-            try
-            {
-                var dirs = Directory.GetDirectories(progFiles, "ImageMagick*");
-                foreach (var d in dirs)
-                {
-                    var exe = Path.Combine(d, "magick.exe");
-                    if (File.Exists(exe)) return exe;
-                }
-            }
-            catch { }
-        }
-
-        var wingetPackagesDir = Path.Combine(localAppData, @"Microsoft\WinGet\Packages");
-        if (Directory.Exists(wingetPackagesDir))
-        {
-            try
-            {
-                var matches = Directory.GetFiles(wingetPackagesDir, "magick.exe", SearchOption.AllDirectories);
-                if (matches.Length > 0) return matches[0];
-            }
-            catch { }
-        }
-
-        return null;
-    }
-
     public bool CanConvert(string sourceExtension, string targetExtension)
     {
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
@@ -115,12 +33,12 @@ public class ImageConverter : IFormatConverter
 
         if (tgt == "reencode")
         {
-            return SupportedFormats.Contains(src) && src is not "heic";
+            return SupportedFormats.Contains(src) && src is not "heic" and not "svg" and not "psd" && !RawFormats.Contains(src);
         }
 
         if (src is "heic" && tgt is "heic") return false;
 
-        return SupportedFormats.Contains(src) && SupportedFormats.Contains(tgt) && !src.Equals(tgt, StringComparison.OrdinalIgnoreCase) && tgt is not "heic";
+        return SupportedFormats.Contains(src) && FormatsOrder.Contains(tgt, StringComparer.OrdinalIgnoreCase) && !src.Equals(tgt, StringComparison.OrdinalIgnoreCase);
     }
 
     public IReadOnlyList<string> GetSupportedTargetFormats(string sourceExtension)
@@ -138,7 +56,7 @@ public class ImageConverter : IFormatConverter
                 && !(src == "jpeg2000" && f == "jp2"))
             .ToList();
 
-        if (src is not "heic")
+        if (src is not "heic" and not "svg" and not "psd" && !RawFormats.Contains(src))
         {
             list.Add("reencode");
         }
@@ -155,7 +73,7 @@ public class ImageConverter : IFormatConverter
         IConversionController? controller = null)
     {
         var sw = Stopwatch.StartNew();
-        var magick = FindMagickPath();
+        var magick = ToolLocator.FindMagickPath();
 
         if (magick == null)
         {
@@ -184,21 +102,28 @@ public class ImageConverter : IFormatConverter
         {
             var dir = Path.GetDirectoryName(inputPath) ?? "";
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
-            outputPath = Path.Combine(dir, $"{fileNameWithoutExt}.{outputExt}");
-
-            int counter = 1;
-            while (File.Exists(outputPath))
+            var suffix = OutputFileNameHelper.BuildImageSuffix(targetExt);
+            outputPath = OutputFileNameHelper.GetUniquePath(dir, fileNameWithoutExt, suffix, $".{outputExt}");
+        }
+        else
+        {
+            if (string.IsNullOrEmpty(Path.GetExtension(outputPath)))
             {
-                outputPath = Path.Combine(dir, $"{fileNameWithoutExt}_{counter}.{outputExt}");
-                counter++;
+                outputPath = $"{outputPath}.{outputExt}";
             }
+        }
+
+        var outDir = Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(outDir) && !Directory.Exists(outDir))
+        {
+            Directory.CreateDirectory(outDir);
         }
 
         try
         {
             progress?.Report(new ConversionProgress(20, I18n.T("ImageLoading")));
 
-            var arguments = BuildArguments(inputPath, outputPath, targetExt, isReencode);
+            var arguments = BuildArguments(inputPath, outputPath, targetExt, sourceExt, isReencode);
             var startInfo = new ProcessStartInfo
             {
                 FileName = magick,
@@ -264,7 +189,7 @@ public class ImageConverter : IFormatConverter
             }
             catch { }
 
-            return new ConversionResult(false, null, I18n.T("ImageMagickExitError", proc.ExitCode), logs, sw.Elapsed);
+            return new ConversionResult(false, null, ExtractDiagnosticMessage(logs, proc.ExitCode), logs, sw.Elapsed);
         }
         catch (OperationCanceledException)
         {
@@ -280,32 +205,64 @@ public class ImageConverter : IFormatConverter
         }
     }
 
-    private static string BuildArguments(string input, string output, string targetExt, bool isReencode = false)
+    private static string BuildArguments(string input, string output, string targetExt, string sourceExt, bool isReencode = false)
     {
+        var inputSpecifier = sourceExt switch
+        {
+            "psd" => $"\"{input}[0]\"",
+            _ when RawFormats.Contains(sourceExt) => $"\"{input}[0]\"",
+            _ => $"\"{input}\""
+        };
+
         if (isReencode)
         {
             return targetExt switch
             {
-                "png" => $"\"{input}\" -strip -quality 95 \"{output}\"",
-                "jpg" or "jpeg" => $"\"{input}\" -strip -quality 92 \"{output}\"",
-                "webp" => $"\"{input}\" -quality 85 \"{output}\"",
-                "avif" => $"\"{input}\" -quality 80 \"{output}\"",
-                "tiff" or "tif" => $"\"{input}\" -compress lzw \"{output}\"",
-                "jp2" or "jpeg2000" => $"\"{input}\" -quality 85 \"{output}\"",
-                _ => $"\"{input}\" \"{output}\""
+                "png" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 95 \"{output}\"",
+                "jpg" or "jpeg" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 92 \"{output}\"",
+                "webp" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 85 \"{output}\"",
+                "avif" => $"{inputSpecifier} -auto-orient -strip -colorspace sRGB -quality 80 \"{output}\"",
+                "tiff" or "tif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -compress lzw \"{output}\"",
+                "jp2" or "jpeg2000" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 85 \"{output}\"",
+                _ => $"{inputSpecifier} -auto-orient -colorspace sRGB \"{output}\""
             };
         }
 
         return targetExt switch
         {
-            "png" => $"\"{input}\" -quality 95 \"{output}\"",
-            "jpg" or "jpeg" => $"\"{input}\" -background white -flatten -quality 92 \"{output}\"",
-            "webp" => $"\"{input}\" -quality 85 \"{output}\"",
-            "avif" => $"\"{input}\" -quality 80 \"{output}\"",
-            "ico" => $"\"{input}\" -resize 256x256 \"{output}\"",
-            "jp2" or "jpeg2000" => $"\"{input}\" -quality 85 \"{output}\"",
-            "tiff" or "tif" => $"\"{input}\" -compress lzw \"{output}\"",
-            _ => $"\"{input}\" \"{output}\""
+            "png" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 95 \"{output}\"",
+            "jpg" or "jpeg" => $"{inputSpecifier} -auto-orient -background white -flatten -colorspace sRGB -quality 92 \"{output}\"",
+            "webp" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 85 \"{output}\"",
+            "avif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 80 \"{output}\"",
+            "ico" => $"{inputSpecifier} -auto-orient -background transparent -define icon:auto-resize=256,128,64,48,32,16 \"{output}\"",
+            "jp2" or "jpeg2000" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 85 \"{output}\"",
+            "tiff" or "tif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -compress lzw \"{output}\"",
+            _ => $"{inputSpecifier} -auto-orient -colorspace sRGB \"{output}\""
         };
+    }
+
+    public static string ExtractDiagnosticMessage(string? logs, int exitCode)
+    {
+        if (string.IsNullOrWhiteSpace(logs))
+        {
+            return I18n.T("ImageMagickExitError", exitCode);
+        }
+
+        var lines = logs.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        for (int i = lines.Length - 1; i >= 0; i--)
+        {
+            var line = lines[i];
+            if (line.StartsWith("magick:", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("unable to", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("invalid", StringComparison.OrdinalIgnoreCase) ||
+                line.Contains("no such", StringComparison.OrdinalIgnoreCase))
+            {
+                return line;
+            }
+        }
+
+        return lines.Length > 0 ? lines[^1] : I18n.T("ImageMagickExitError", exitCode);
     }
 }

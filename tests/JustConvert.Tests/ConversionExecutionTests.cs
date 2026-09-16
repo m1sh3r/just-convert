@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using JustConvert.Core;
 using JustConvert.Core.Converters;
+using JustConvert.Core.Converters.Tools;
 
 namespace JustConvert.Tests;
 
@@ -35,10 +36,12 @@ public class ConversionExecutionTests : IDisposable
     [InlineData("wav")]
     [InlineData("flac")]
     [InlineData("ogg")]
+    [InlineData("opus")]
+    [InlineData("aiff")]
     [InlineData("reencode")]
     public async Task ConvertAudio_AllAudioFormats_Succeeds(string targetFormat)
     {
-        var ffmpeg = MediaConverter.FindFfmpegPath();
+        var ffmpeg = ToolLocator.FindFfmpegPath();
         if (ffmpeg == null) return;
 
         var inputWav = Path.Combine(_tempDir, $"input_{targetFormat}.wav");
@@ -66,7 +69,7 @@ public class ConversionExecutionTests : IDisposable
     [InlineData("jp2")]
     public async Task ConvertImage_AllImageFormats_Succeeds(string targetFormat)
     {
-        var magick = ImageConverter.FindMagickPath();
+        var magick = ToolLocator.FindMagickPath();
         if (magick == null) return;
 
         var inputBmp = Path.Combine(_tempDir, $"input_{targetFormat}.bmp");
@@ -93,7 +96,7 @@ public class ConversionExecutionTests : IDisposable
     [InlineData("reencode")]
     public async Task ConvertVideo_AllCommonVideoFormats_Succeeds(string targetFormat)
     {
-        var ffmpeg = MediaConverter.FindFfmpegPath();
+        var ffmpeg = ToolLocator.FindFfmpegPath();
         if (ffmpeg == null) return;
 
         var inputMp4 = Path.Combine(_tempDir, $"input_vid_{targetFormat}.mp4");
@@ -213,5 +216,39 @@ public class ConversionExecutionTests : IDisposable
         {
             return false;
         }
+    }
+
+    [Fact]
+    public void MediaConverter_ExtractDiagnosticMessage_ExtractsSpecificErrorLine()
+    {
+        var sampleLog = """
+            ffmpeg version 6.0 Copyright (c) 2000-2023 the FFmpeg developers
+              libavutil      58.  2.100 / 58.  2.100
+              libavcodec     60.  3.100 / 60.  3.100
+            [mp4 @ 000001878f8b3600] Could not find tag for codec pcm_s16le in stream #1, codec not currently supported in container
+            Could not write header for output file #0 (incorrect codec parameters ?): Invalid argument
+            Conversion failed!
+            """;
+
+        var result = MediaProbe.ExtractDiagnosticMessage(sampleLog, -22);
+        Assert.Equal("Could not write header for output file #0 (incorrect codec parameters ?): Invalid argument", result);
+    }
+
+    [Fact]
+    public void MediaConverter_ExtractDiagnosticMessage_FallsBackWhenEmpty()
+    {
+        var result = MediaProbe.ExtractDiagnosticMessage("", -22);
+        Assert.False(string.IsNullOrWhiteSpace(result));
+    }
+
+    [Fact]
+    public void ImageConverter_ExtractDiagnosticMessage_ExtractsMagickError()
+    {
+        var sampleLog = """
+            magick: unable to open image 'non_existing.png': No such file or directory @ error/blob.c/OpenBlob/3571.
+            """;
+
+        var result = ImageConverter.ExtractDiagnosticMessage(sampleLog, 1);
+        Assert.Equal("magick: unable to open image 'non_existing.png': No such file or directory @ error/blob.c/OpenBlob/3571.", result);
     }
 }

@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Windows;
 using JustConvert.Core;
-using JustConvert.Core.Converters;
+using JustConvert.Core.Converters.Tools;
 using JustConvert.Core.Windows;
 using JustConvert.Installer.UI;
 using Microsoft.Win32;
@@ -161,7 +161,7 @@ public class Program
 
         if (ensureDependencies)
         {
-            var hasFfmpeg = File.Exists(Path.Combine(installDir, "ffmpeg.exe")) || MediaConverter.FindFfmpegPath() != null;
+            var hasFfmpeg = File.Exists(Path.Combine(installDir, "ffmpeg.exe")) || ToolLocator.FindFfmpegPath() != null;
             if (!hasFfmpeg)
             {
                 await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
@@ -169,7 +169,7 @@ public class Program
 
             ct.ThrowIfCancellationRequested();
 
-            var hasMagick = File.Exists(Path.Combine(installDir, "magick.exe")) || ImageConverter.FindMagickPath() != null;
+            var hasMagick = File.Exists(Path.Combine(installDir, "magick.exe")) || ToolLocator.FindMagickPath() != null;
             if (!hasMagick)
             {
                 await ImageMagickInstaller.DownloadToDirectoryAsync(installDir, progress, ct);

@@ -7,7 +7,8 @@ public class ConverterRegistry
     private readonly List<IFormatConverter> _converters =
     [
         new ImageConverter(),
-        new MediaConverter()
+        new AudioConverter(),
+        new VideoConverter()
     ];
 
     public ConverterRegistry() { }

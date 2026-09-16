@@ -159,6 +159,8 @@ public class AppSettings
         video.Add("wav");
         video.Add("flac");
         video.Add("aac");
+        video.Add("m4a");
+        video.Add("opus");
         video.Add("reencode");
 
         return new MenuProfile
@@ -167,7 +169,7 @@ public class AppSettings
             Name = I18n.T("ProfileDefaultName"),
             IsReadOnly = true,
             VideoFormats = video,
-            AudioFormats = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "reencode"],
+            AudioFormats = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff", "reencode"],
             ImageFormats = ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
         };
     }
