@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using JustConvert.Core;
 using JustConvert.Core.Converters;
@@ -24,10 +25,13 @@ public partial class InstallerWindow : FluentWindow
         Title = title;
         AppTitleBar.Title = title;
 
-        ApplicationThemeManager.ApplySystemTheme();
-        ApplicationAccentColorManager.ApplySystemAccent();
-        ApplicationThemeManager.Apply(this);
-        SystemThemeWatcher.Watch(this);
+        if (!DesignerProperties.GetIsInDesignMode(this))
+        {
+            ApplicationThemeManager.ApplySystemTheme();
+            ApplicationAccentColorManager.ApplySystemAccent();
+            ApplicationThemeManager.Apply(this);
+            SystemThemeWatcher.Watch(this);
+        }
 
         if (initialScope == InstallScope.AllUsers)
         {
@@ -59,10 +63,7 @@ public partial class InstallerWindow : FluentWindow
         _cts = new CancellationTokenSource();
         _isWorking = true;
 
-        ConfigPanel.Visibility = Visibility.Collapsed;
-        ProgressPanel.Visibility = Visibility.Visible;
-        BtnInstall.Visibility = Visibility.Collapsed;
-        BtnUninstall.Visibility = Visibility.Collapsed;
+        VisualStateManager.GoToElementState(RootGrid, "ProgressState", false);
         BtnClose.Content = I18n.T("BtnCancel");
 
         var progress = new Progress<(double? Percent, string Status)>(update =>
@@ -90,11 +91,9 @@ public partial class InstallerWindow : FluentWindow
             }, _cts.Token);
 
             _isWorking = false;
-            ProgressPanel.Visibility = Visibility.Collapsed;
-            SuccessPanel.Visibility = Visibility.Visible;
+            VisualStateManager.GoToElementState(RootGrid, "SuccessState", false);
             InfoBarSuccess.Title = I18n.T("SetupSuccessHeader");
             TxtSuccessText.Text = I18n.T("SetupSuccessText");
-            BtnOpenSettings.Visibility = Visibility.Visible;
             BtnOpenSettings.IsDefault = true;
             BtnClose.Content = I18n.T("BtnClose");
         }
@@ -111,8 +110,7 @@ public partial class InstallerWindow : FluentWindow
         catch (Exception ex)
         {
             _isWorking = false;
-            ProgressPanel.Visibility = Visibility.Collapsed;
-            ErrorPanel.Visibility = Visibility.Visible;
+            VisualStateManager.GoToElementState(RootGrid, "ErrorState", false);
             InfoBarError.Title = I18n.T("SetupErrorHeader");
             TxtErrorLog.Text = ex.Message + "\n" + ex.StackTrace;
             BtnClose.Content = I18n.T("BtnClose");
@@ -157,10 +155,7 @@ public partial class InstallerWindow : FluentWindow
             return;
         }
 
-        ConfigPanel.Visibility = Visibility.Collapsed;
-        ProgressPanel.Visibility = Visibility.Visible;
-        BtnInstall.Visibility = Visibility.Collapsed;
-        BtnUninstall.Visibility = Visibility.Collapsed;
+        VisualStateManager.GoToElementState(RootGrid, "ProgressState", false);
 
         var progress = new Progress<(double? Percent, string Status)>(update =>
         {
@@ -178,20 +173,30 @@ public partial class InstallerWindow : FluentWindow
                 Program.UninstallCore(installDir, scope, progress);
             });
 
-            ProgressPanel.Visibility = Visibility.Collapsed;
-            SuccessPanel.Visibility = Visibility.Visible;
+            VisualStateManager.GoToElementState(RootGrid, "SuccessState", false);
             InfoBarSuccess.Title = I18n.T("SetupUninstallSuccessHeader");
             TxtSuccessText.Text = I18n.T("SetupUninstallSuccessText");
             BtnClose.Content = I18n.T("BtnClose");
         }
         catch (Exception ex)
         {
-            ProgressPanel.Visibility = Visibility.Collapsed;
-            ErrorPanel.Visibility = Visibility.Visible;
+            VisualStateManager.GoToElementState(RootGrid, "ErrorState", false);
             InfoBarError.Title = I18n.T("SetupErrorHeader");
             TxtErrorLog.Text = ex.Message + "\n" + ex.StackTrace;
             BtnClose.Content = I18n.T("BtnClose");
         }
+    }
+
+    private async void BtnCopyError_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Clipboard.SetText(TxtErrorLog.Text);
+            TxtBtnCopyError.Text = I18n.T("BtnCopied");
+            await Task.Delay(2000);
+            TxtBtnCopyError.Text = I18n.T("BtnCopyError");
+        }
+        catch { }
     }
 
     private async void BtnClose_Click(object sender, RoutedEventArgs e)

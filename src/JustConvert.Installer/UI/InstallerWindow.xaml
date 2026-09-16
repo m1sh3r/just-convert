@@ -1,71 +1,323 @@
-<ui:FluentWindow x:Class="JustConvert.Installer.UI.InstallerWindow"
-        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
-        xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
-        Title="{core:Loc SetupTitle}"
-        Height="420" Width="500"
-        MinHeight="420" MaxHeight="420"
-        MinWidth="500" MaxWidth="500"
-        WindowStartupLocation="CenterScreen"
-        ResizeMode="NoResize"
-        ExtendsContentIntoTitleBar="True"
-        WindowBackdropType="Mica"
-        Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+﻿<ui:FluentWindow x:Class="JustConvert.Installer.UI.InstallerWindow"
+                 xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                 xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                 xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                 xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                 xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                 xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
+                 mc:Ignorable="d"
+                 Title="{core:Loc SetupTitle}"
+                 Height="420"
+                 Width="500"
+                 MinHeight="420"
+                 MaxHeight="420"
+                 MinWidth="500"
+                 MaxWidth="500"
+                 WindowStartupLocation="CenterScreen"
+                 ResizeMode="NoResize"
+                 ExtendsContentIntoTitleBar="True"
+                 WindowBackdropType="Mica"
+                 Foreground="{DynamicResource TextFillColorPrimaryBrush}">
 
-    <ui:FluentWindow.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ui:ThemesDictionary Theme="Light" />
-                <ui:ControlsDictionary />
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </ui:FluentWindow.Resources>
+        <ui:FluentWindow.Resources>
+                <ResourceDictionary>
+                        <ResourceDictionary.MergedDictionaries>
+                                <ui:ThemesDictionary Theme="Light"/>
+                                <ui:ControlsDictionary/>
+                        </ResourceDictionary.MergedDictionaries>
+                </ResourceDictionary>
+        </ui:FluentWindow.Resources>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
+        <Grid x:Name="RootGrid">
+                <VisualStateManager.VisualStateGroups>
+                        <VisualStateGroup x:Name="WizardStates">
+                                <VisualStateGroup.Transitions>
+                                        <VisualTransition GeneratedDuration="00:00:00"/>
+                                </VisualStateGroup.Transitions>
+                                <VisualState x:Name="ConfigState">
+                                        <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ConfigPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Visible}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ProgressPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="SuccessPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ErrorPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnInstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Visible}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnUninstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Visible}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnOpenSettings"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="ProgressState">
+                                        <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ConfigPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ProgressPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Visible}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="SuccessPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ErrorPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnInstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnUninstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnOpenSettings"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="SuccessState">
+                                        <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ConfigPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ProgressPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="SuccessPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Visible}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ErrorPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnInstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnUninstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnOpenSettings"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Visible}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                </VisualState>
+                                <VisualState x:Name="ErrorState">
+                                        <Storyboard>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ConfigPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ProgressPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="SuccessPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="ErrorPanel"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Visible}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnInstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnUninstall"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                                <ObjectAnimationUsingKeyFrames Storyboard.TargetName="BtnOpenSettings"
+                                                                               Storyboard.TargetProperty="Visibility">
+                                                        <DiscreteObjectKeyFrame KeyTime="0"
+                                                                                Value="{x:Static Visibility.Collapsed}"/>
+                                                </ObjectAnimationUsingKeyFrames>
+                                        </Storyboard>
+                                </VisualState>
+                        </VisualStateGroup>
+                </VisualStateManager.VisualStateGroups>
 
-        <ui:TitleBar Grid.Row="0" x:Name="AppTitleBar" Title="{core:Loc SetupTitle}" ShowMaximize="False" ShowMinimize="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Height="36"/>
+                <Grid.RowDefinitions>
+                        <RowDefinition Height="9*"/>
+                        <RowDefinition Height="77*"/>
+                        <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-        <Grid Grid.Row="1" Margin="24,12,24,16">
-            <StackPanel x:Name="ConfigPanel">
-                <StackPanel>
-                    <TextBlock x:Name="TxtScopeLabel" Text="{core:Loc SetupScopeLabel}" FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,0,8"/>
-                    <RadioButton x:Name="RadioCurrentUser" Content="{core:Loc SetupScopeCurrentUser}" IsChecked="True" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Margin="0,0,0,6"/>
-                    <RadioButton x:Name="RadioAllUsers" Content="{core:Loc SetupScopeAllUsers}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                </StackPanel>
-            </StackPanel>
+                <ui:TitleBar Grid.Row="0"
+                             x:Name="AppTitleBar"
+                             Title="{core:Loc SetupTitle}"
+                             ShowMaximize="False"
+                             ShowMinimize="True"
+                             Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                             Height="36"/>
 
-            <StackPanel x:Name="ProgressPanel" Visibility="Collapsed">
-                <ProgressBar x:Name="ProgressBar" Height="6" IsIndeterminate="True" Foreground="{DynamicResource AccentFillColorDefaultBrush}" Margin="0,0,0,12"/>
-                <TextBlock x:Name="TxtStatus" FontSize="13" Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-            </StackPanel>
+                <Grid Grid.Row="1"
+                      Margin="24,12,24,16">
+                        <StackPanel x:Name="ConfigPanel">
+                                <StackPanel>
+                                        <TextBlock x:Name="TxtScopeLabel"
+                                                   Text="{core:Loc SetupScopeLabel}"
+                                                   FontWeight="SemiBold"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                   Margin="0,0,0,8"/>
+                                        <RadioButton x:Name="RadioCurrentUser"
+                                                     Content="{core:Loc SetupScopeCurrentUser}"
+                                                     IsChecked="True"
+                                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                     Margin="0,0,0,6"/>
+                                        <RadioButton x:Name="RadioAllUsers"
+                                                     Content="{core:Loc SetupScopeAllUsers}"
+                                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                </StackPanel>
+                        </StackPanel>
 
-            <StackPanel x:Name="SuccessPanel" Visibility="Collapsed">
-                <ui:InfoBar x:Name="InfoBarSuccess" Title="{core:Loc SetupSuccessHeader}" IsOpen="True" Severity="Success" IsClosable="False" Margin="0,0,0,16"/>
-                <TextBlock x:Name="TxtSuccessText" Text="{core:Loc SetupSuccessText}" TextWrapping="Wrap" FontSize="13" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-            </StackPanel>
+                        <StackPanel x:Name="ProgressPanel"
+                                    Visibility="Collapsed">
+                                <ProgressBar x:Name="ProgressBar"
+                                             Height="6"
+                                             IsIndeterminate="True"
+                                             Foreground="{DynamicResource AccentFillColorDefaultBrush}"
+                                             Margin="0,0,0,12"/>
+                                <TextBlock x:Name="TxtStatus"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                        </StackPanel>
 
-            <StackPanel x:Name="ErrorPanel" Visibility="Collapsed">
-                <ui:InfoBar x:Name="InfoBarError" Title="{core:Loc SetupErrorHeader}" IsOpen="True" Severity="Error" IsClosable="False" Margin="0,0,0,12"/>
-                <ui:TextBox x:Name="TxtErrorLog" IsReadOnly="True" TextWrapping="Wrap" MaxHeight="120" VerticalScrollBarVisibility="Auto"/>
-            </StackPanel>
+                        <StackPanel x:Name="SuccessPanel"
+                                    Visibility="Collapsed">
+                                <ui:InfoBar x:Name="InfoBarSuccess"
+                                            Title="{core:Loc SetupSuccessHeader}"
+                                            IsOpen="True"
+                                            Severity="Success"
+                                            IsClosable="False"
+                                            Margin="0,0,0,16"/>
+                                <TextBlock x:Name="TxtSuccessText"
+                                           Text="{core:Loc SetupSuccessText}"
+                                           TextWrapping="Wrap"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="ErrorPanel"
+                                    Visibility="Collapsed">
+                                <ui:InfoBar x:Name="InfoBarError"
+                                            Title="{core:Loc SetupErrorHeader}"
+                                            IsOpen="True"
+                                            Severity="Error"
+                                            IsClosable="False"
+                                            Margin="0,0,0,12"/>
+                                <ui:TextBox x:Name="TxtErrorLog"
+                                            IsReadOnly="True"
+                                            TextWrapping="Wrap"
+                                            MaxHeight="120"
+                                            VerticalScrollBarVisibility="Auto"/>
+                                <ui:Button x:Name="BtnCopyError"
+                                           Appearance="Transparent"
+                                           Margin="0,8,0,0"
+                                           HorizontalAlignment="Right"
+                                           Click="BtnCopyError_Click">
+                                        <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="Copy16"
+                                                               Margin="0,0,6,0"/>
+                                                <TextBlock x:Name="TxtBtnCopyError"
+                                                           Text="{core:Loc BtnCopyError}"
+                                                           d:Text="Скопировать ошибку"/>
+                                        </StackPanel>
+                                </ui:Button>
+                        </StackPanel>
+                </Grid>
+
+                <Border Grid.Row="2"
+                        Padding="24,14">
+                        <Grid>
+                                <ui:Button x:Name="BtnUninstall"
+                                           Content="{core:Loc SetupBtnUninstall}"
+                                           d:Content="Удалить"
+                                           Click="BtnUninstall_Click"
+                                           HorizontalAlignment="Left"
+                                           MinWidth="90"/>
+
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Right">
+                                        <ui:Button x:Name="BtnOpenSettings"
+                                                   Appearance="Primary"
+                                                   Content="{core:Loc SetupBtnOpenSettings}"
+                                                   d:Content="Открыть настройки"
+                                                   Click="BtnOpenSettings_Click"
+                                                   Visibility="Collapsed"
+                                                   MinWidth="130"
+                                                   Margin="0,0,8,0"/>
+                                        <ui:Button x:Name="BtnInstall"
+                                                   Content="{core:Loc SetupBtnInstall}"
+                                                   d:Content="Установить"
+                                                   Click="BtnInstall_Click"
+                                                   IsDefault="True"
+                                                   MinWidth="90"
+                                                   Margin="0,0,8,0"/>
+                                        <ui:Button x:Name="BtnClose"
+                                                   Content="{core:Loc BtnCancel}"
+                                                   d:Content="Отмена"
+                                                   Click="BtnClose_Click"
+                                                   IsCancel="True"
+                                                   MinWidth="80"/>
+                                </StackPanel>
+                        </Grid>
+                </Border>
         </Grid>
-
-        <Border Grid.Row="2" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,1,0,0" Padding="24,14">
-            <Grid>
-                <ui:Button x:Name="BtnUninstall" Content="{core:Loc SetupBtnUninstall}" Click="BtnUninstall_Click" HorizontalAlignment="Left" MinWidth="90"/>
-
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <ui:Button x:Name="BtnOpenSettings" Appearance="Primary" Content="{core:Loc SetupBtnOpenSettings}" Click="BtnOpenSettings_Click" Visibility="Collapsed" MinWidth="130" Margin="0,0,8,0"/>
-                    <ui:Button x:Name="BtnInstall" Content="{core:Loc SetupBtnInstall}" Click="BtnInstall_Click" IsDefault="True" MinWidth="90" Margin="0,0,8,0"/>
-                    <ui:Button x:Name="BtnClose" Content="{core:Loc BtnCancel}" Click="BtnClose_Click" IsCancel="True" MinWidth="80"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-    </Grid>
 </ui:FluentWindow>
