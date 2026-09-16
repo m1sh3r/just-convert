@@ -16,8 +16,8 @@ public class AppSettingsAndProfilesTests
         Assert.NotEmpty(profile.AudioFormats);
         Assert.NotEmpty(profile.ImageFormats);
 
-        Assert.Contains("mp4-h264", profile.VideoFormats);
-        Assert.Contains("remux-mp4", profile.VideoFormats);
+        Assert.Contains("mp4", profile.VideoFormats);
+        Assert.Contains("remux", profile.VideoFormats);
         Assert.Contains("mp3", profile.AudioFormats);
         Assert.Contains("png", profile.ImageFormats);
     }
@@ -71,5 +71,41 @@ public class AppSettingsAndProfilesTests
                 File.Delete(tempFile);
             }
         }
+    }
+
+    [Fact]
+    public void LastVideoCodec_PersistsAndPropagatesToEffectiveQuality()
+    {
+        var settings = new AppSettings();
+        Assert.Equal("h264", settings.LastVideoCodec);
+
+        settings.SetVideoQuality("mp4", new VideoQualitySetting { VideoCodec = "h265", VideoQualityCq = 20 });
+        Assert.Equal("h265", settings.LastVideoCodec);
+
+        var mkvQuality = settings.GetEffectiveVideoQuality("mkv");
+        Assert.Equal("h265", mkvQuality.VideoCodec);
+
+        var mp4Quality = settings.GetEffectiveVideoQuality("mp4");
+        Assert.Equal("h265", mp4Quality.VideoCodec);
+    }
+
+    [Fact]
+    public void LastVideoCodec_AdaptsToWebmAndNonWebmFormats()
+    {
+        var settings = new AppSettings { LastVideoCodec = "h265" };
+
+        var webmQuality = settings.GetEffectiveVideoQuality("webm");
+        Assert.Equal("vp9", webmQuality.VideoCodec);
+
+        settings.LastVideoCodec = "av1";
+        var webmAv1 = settings.GetEffectiveVideoQuality("webm");
+        Assert.Equal("av1", webmAv1.VideoCodec);
+
+        var mp4Av1 = settings.GetEffectiveVideoQuality("mp4");
+        Assert.Equal("av1", mp4Av1.VideoCodec);
+
+        settings.LastVideoCodec = "vp9";
+        var mp4Vp9 = settings.GetEffectiveVideoQuality("mp4");
+        Assert.Equal("h264", mp4Vp9.VideoCodec);
     }
 }
