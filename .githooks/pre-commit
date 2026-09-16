@@ -1,0 +1,10 @@
+#!/bin/sh
+echo "Running dotnet format..."
+dotnet format JustConvert.slnx
+STATUS=$?
+if [ $STATUS -ne 0 ]; then
+    echo "dotnet format failed with code $STATUS"
+    exit $STATUS
+fi
+
+git update-index --again
