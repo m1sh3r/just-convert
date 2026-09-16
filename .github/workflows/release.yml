@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*.*.*'
+      - "v*.*.*"
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +27,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: "10.0.x"
 
       - name: Restore Dependencies
         run: dotnet restore JustConvert.slnx
@@ -60,7 +60,7 @@ jobs:
           $installerFile = Get-ChildItem -Path "dist/installer/JustConvert-*-Setup.exe" | Select-Object -First 1
           $installerExe = $installerFile.Name
           Move-Item -Path $installerFile.FullName -Destination "." -Force
-          
+
           # Generate Checksum
           $hash = (Get-FileHash -Path $installerExe -Algorithm SHA256).Hash
           "$hash  $installerExe" | Out-File -FilePath "$installerExe.sha256" -Encoding ascii
@@ -78,4 +78,3 @@ jobs:
           generate_release_notes: true
           draft: false
           prerelease: false
-
