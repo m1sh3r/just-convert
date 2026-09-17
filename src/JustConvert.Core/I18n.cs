@@ -12,7 +12,7 @@ public static class I18n
             ["MenuTitle"] = "Convert to...",
             ["MenuToolTip"] = "Quick file format conversion",
             ["MenuCompress"] = "Compress video (H.264)",
-            ["MenuFrames"] = "Extract frames (PNG)",
+            ["MenuFrames"] = "Extract frames",
             ["MenuReencode"] = "Re-encode file",
             ["MenuConvertTo"] = "Convert to {0}",
 
@@ -241,6 +241,9 @@ public static class I18n
             ["BitrateOriginalValue"] = "Auto",
             ["DescAudioBitrateMatchOriginalBatch"] = "Bitrate is matched individually for each file based on original",
             ["DescAudioBitrateMatchOriginal"] = "Bitrate is matched automatically based on original",
+            ["LabelFramesFormat"] = "Frames format:",
+            ["DescFramesFormat"] = "Each video frame will be saved as an image file of the selected format",
+            ["FramesStatusRemembered"] = "Saved format: {0}",
             ["EncoderAuto"] = "Auto (Hardware acceleration)",
             ["EncoderCpu"] = "Software (CPU)",
             ["EncoderNvenc"] = "NVIDIA (NVENC)",
@@ -273,7 +276,7 @@ public static class I18n
             ["MenuTitle"] = "Конвертировать в...",
             ["MenuToolTip"] = "Быстрая конвертация файла в другой формат",
             ["MenuCompress"] = "Сжать видео (H.264)",
-            ["MenuFrames"] = "Разбить на кадры (PNG)",
+            ["MenuFrames"] = "Разбить на кадры",
             ["MenuReencode"] = "Перекодировать файл",
             ["MenuConvertTo"] = "Конвертировать в {0}",
 
@@ -502,6 +505,9 @@ public static class I18n
             ["BitrateOriginalValue"] = "Авто",
             ["DescAudioBitrateMatchOriginalBatch"] = "Битрейт подбирается индивидуально для каждого файла на основе оригинала",
             ["DescAudioBitrateMatchOriginal"] = "Битрейт подбирается автоматически на основе оригинала",
+            ["LabelFramesFormat"] = "Формат кадров:",
+            ["DescFramesFormat"] = "Каждый кадр видео будет сохранен в отдельный файл выбранного формата",
+            ["FramesStatusRemembered"] = "Запомнен формат: {0}",
             ["EncoderAuto"] = "Авто (Аппаратное ускорение)",
             ["EncoderCpu"] = "Программный (CPU)",
             ["EncoderNvenc"] = "NVIDIA (NVENC)",
@@ -574,7 +580,7 @@ public static class I18n
         return fmt switch
         {
             "reencode" => T("MenuReencode"),
-            "frames" or "frames-png" or "frames-jpg" => T("MenuFrames"),
+            "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" => T("MenuFrames"),
             "mp4" => T("FormatMp4"),
             "mp4-h264" or "h264" => T("FormatMp4H264"),
             "mp4-hevc" or "mp4-h265" or "hevc" or "h265" => T("FormatMp4H265"),
