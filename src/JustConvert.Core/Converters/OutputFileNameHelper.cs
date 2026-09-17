@@ -12,7 +12,7 @@ public static class OutputFileNameHelper
         var fmt = targetFormat.ToLowerInvariant();
         if (fmt == "reencode") return "Reencode";
         if (fmt is "remux-mp4" or "remux-mkv" or "remux") return "Remux";
-        if (fmt is "frames" or "frames-png" or "frames-jpg") return "Frames";
+        if (fmt is "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff") return "Frames";
         if (fmt is "compress" or "compress-video") return "H.264 - CRF 28";
         if (fmt == "gif") return null;
 
@@ -84,7 +84,7 @@ public static class OutputFileNameHelper
             "mov-prores4444" or "prores4444" => "ProRes 4444",
 
             "remux-mp4" or "remux-mkv" or "remux" => "Remux",
-            "frames" or "frames-png" or "frames-jpg" => "Frames",
+            "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" => "Frames",
             "compress" or "compress-video" => "H.264 - CRF 28",
             "gif" => null,
             "reencode" => "Reencode",

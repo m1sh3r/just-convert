@@ -75,7 +75,7 @@ public class ConverterRegistry
 
         var isVideoSameFormat = VideoExtensions.Contains(sourceExt) && VideoExtensions.Contains(targetExt);
 
-        if (!isVideoSameFormat && targetExt != "reencode" && targetExt != "remux" && IsSameFormat(sourceExt, targetExt) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
+        if (!isVideoSameFormat && targetExt != "reencode" && targetExt != "remux" && IsSameFormat(sourceExt, targetExt) && !targetExt.StartsWith("frames"))
         {
             var msg = I18n.T("StatusSkippedAlreadyTarget");
             AppLogger.Info($"[Registry] Skipped (already target format): \"{inputPath}\" ({sourceExt})");

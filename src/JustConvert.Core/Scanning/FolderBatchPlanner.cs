@@ -161,7 +161,7 @@ public static class FolderBatchPlanner
             case MediaCategory.Video:
                 {
                     var suffix = OutputFileNameHelper.BuildVideoSuffix(fmt);
-                    if (fmt is "frames" or "frames-png" or "frames-jpg")
+                    if (fmt is "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff")
                     {
                         return (suffix, "", true);
                     }

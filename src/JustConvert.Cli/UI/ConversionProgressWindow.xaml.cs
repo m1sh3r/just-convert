@@ -213,7 +213,7 @@ public partial class ConversionProgressWindow : FluentWindow
         var sourceExt = Path.GetExtension(item.InputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = item.TargetFormat.TrimStart('.').ToLowerInvariant();
 
-        if (targetExt != "reencode" && targetExt != "remux" && ClassicContextMenuManager.IsSameFormat(sourceExt, targetExt) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
+        if (targetExt != "reencode" && targetExt != "remux" && ClassicContextMenuManager.IsSameFormat(sourceExt, targetExt) && !targetExt.StartsWith("frames"))
         {
             item.Status = QueueItemStatus.Done;
             item.StatusText = I18n.T("StatusSkippedAlreadyTarget");

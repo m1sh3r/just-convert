@@ -257,7 +257,7 @@ public class ClassicContextMenuManager
             "webm-av1" or "av1" or "webm-av1-nvenc" or "webm-nvenc-av1" or "webm-av1-qsv" or "webm-qsv-av1" or "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" or "mp4-av1-amf" or "mp4-amf-av1" or "mp4-av1" => 5,
             "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 6,
 
-            "frames" or "frames-png" or "frames-jpg" => 10,
+            "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" => 10,
 
             "jpg" or "jpeg" or "png" or "webp" or "avif" => 15,
             "ico" or "bmp" => 16,

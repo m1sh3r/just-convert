@@ -383,7 +383,7 @@ public class Program
         chosenTargetFormat = null;
         var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
         if (fmt.StartsWith("preset:")) return true;
-        if (fmt is "reencode" or "frames" or "frames-png" or "frames-jpg" or "remux-mp4" or "remux-mkv" or "gif") return true;
+        if (fmt is "reencode" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" or "remux-mp4" or "remux-mkv" or "gif") return true;
 
         var settings = AppSettings.Load();
         var ffmpeg = ToolLocator.FindFfmpegPath();
@@ -467,6 +467,36 @@ public class Program
 
             chosenTargetFormat = dialog.SelectedRemuxSetting.TargetContainer;
             settings.SetRemuxSetting(dialog.SelectedRemuxSetting);
+            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.Save();
+            return true;
+        }
+
+        if (fmt == "frames")
+        {
+            if (settings.FramesSetting.IsRemembered && batchCount <= 1)
+            {
+                chosenTargetFormat = $"frames-{settings.FramesSetting.ImageFormat}";
+                return true;
+            }
+
+            var dialog = new ConversionOptionsDialog(
+                "frames",
+                "frames",
+                settings.GetEffectiveFramesSetting(),
+                null,
+                settings.AppendQualitySuffix,
+                batchCount,
+                totalBatchSizeBytes
+            );
+            onDialogCreated?.Invoke(dialog);
+            StartBackgroundProbe(dialog);
+
+            var res = dialog.ShowDialog();
+            if (res != true) return false;
+
+            chosenTargetFormat = dialog.SelectedFramesTargetFormat;
+            settings.SetFramesSetting(dialog.SelectedFramesSetting);
             settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
             settings.Save();
             return true;
