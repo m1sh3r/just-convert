@@ -93,12 +93,14 @@ public class AudioConverter : IFormatConverter
         var settings = AppSettings.Load();
         var effectiveBitrate = settings.GetEffectiveAudioQuality(targetExt);
         var appendSuffix = settings.AppendQualitySuffix;
+        int? customBitrate = effectiveBitrate > 0 ? effectiveBitrate : null;
+        var resolvedBitrate = customBitrate ?? MediaProbe.ResolveAudioBitrate(mediaInfo?.Audio, 320, 320);
 
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var dir = Path.GetDirectoryName(inputPath) ?? "";
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
-            var suffix = OutputFileNameHelper.BuildAudioSuffix(targetExt, mediaInfo?.Audio, effectiveBitrate, appendSuffix: appendSuffix);
+            var suffix = OutputFileNameHelper.BuildAudioSuffix(targetExt, mediaInfo?.Audio, resolvedBitrate, appendSuffix: appendSuffix);
             outputPath = OutputFileNameHelper.GetUniquePath(dir, fileNameWithoutExt, suffix, outputExt);
         }
         else
@@ -117,7 +119,7 @@ public class AudioConverter : IFormatConverter
 
         try
         {
-            var arguments = BuildAudioArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, effectiveBitrate);
+            var arguments = BuildAudioArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, customBitrate);
             AppLogger.Info($"[AudioConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
             AppLogger.Info($"[AudioConverter] Command: ffmpeg {arguments}");
 

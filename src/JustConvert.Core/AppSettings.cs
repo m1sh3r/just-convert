@@ -58,6 +58,12 @@ public class RemuxSetting
     public bool IsRemembered { get; set; }
 }
 
+public class FramesSetting
+{
+    public string ImageFormat { get; set; } = "png";
+    public bool IsRemembered { get; set; }
+}
+
 public class CustomPreset
 {
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
@@ -89,6 +95,7 @@ public class AppSettings
     public Dictionary<string, AudioQualitySetting> AudioQualitySettings { get; set; } = [];
     public Dictionary<string, ImageQualitySetting> ImageQualitySettings { get; set; } = [];
     public RemuxSetting RemuxSetting { get; set; } = new();
+    public FramesSetting FramesSetting { get; set; } = new();
     public string LastVideoCodec { get; set; } = "h264";
 
     public static string NormalizeQualityFormat(string format)
@@ -261,7 +268,7 @@ public class AppSettings
         var fmt = format.TrimStart('.').ToLowerInvariant();
         AudioQualitySettings[fmt] = new AudioQualitySetting
         {
-            AudioBitrateKbps = Math.Clamp(bitrateKbps, 32, 512),
+            AudioBitrateKbps = bitrateKbps <= 0 ? 0 : Math.Clamp(bitrateKbps, 32, 512),
             IsRemembered = remember
         };
     }
@@ -293,6 +300,25 @@ public class AppSettings
     public void ResetRemuxSetting()
     {
         RemuxSetting = new RemuxSetting();
+    }
+
+    public FramesSetting GetEffectiveFramesSetting()
+    {
+        return new FramesSetting
+        {
+            ImageFormat = string.IsNullOrWhiteSpace(FramesSetting.ImageFormat) ? "png" : FramesSetting.ImageFormat.TrimStart('.').ToLowerInvariant(),
+            IsRemembered = FramesSetting.IsRemembered
+        };
+    }
+
+    public void SetFramesSetting(FramesSetting setting)
+    {
+        FramesSetting = setting;
+    }
+
+    public void ResetFramesSetting()
+    {
+        FramesSetting = new FramesSetting();
     }
 
     public void AddPreset(CustomPreset preset)

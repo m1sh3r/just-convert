@@ -19,7 +19,7 @@ public class VideoConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "mkv", "mov", "webm", "gif", "remux", "remux-mp4", "remux-mkv", "frames",
+        "mp4", "mkv", "mov", "webm", "gif", "remux", "remux-mp4", "remux-mkv", "frames", "frames-png", "frames-jpg", "frames-webp", "frames-bmp", "frames-tiff",
         "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444",
         "mp4-h264-nvenc", "mp4-nvenc-h264", "mp4-h265-nvenc", "mp4-hevc-nvenc", "mp4-nvenc-h265", "mp4-nvenc-hevc", "webm-av1-nvenc", "webm-nvenc-av1", "mp4-av1-nvenc", "mp4-nvenc-av1",
         "mp4-h264-qsv", "mp4-qsv-h264", "mp4-h265-qsv", "mp4-hevc-qsv", "mp4-qsv-h265", "mp4-qsv-hevc", "webm-vp9-qsv", "webm-qsv-vp9", "webm-av1-qsv", "webm-qsv-av1", "mp4-av1-qsv", "mp4-qsv-av1",
@@ -103,7 +103,7 @@ public class VideoConverter : IFormatConverter
         var isRemux = rawTargetExt == "remux";
         var targetExt = isReencode ? sourceExt : rawTargetExt;
 
-        var isExtractFrames = targetExt is "frames" or "frames-png" or "frames-jpg";
+        var isExtractFrames = targetExt is "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff";
         var isCompress = targetExt is "compress" or "compressed";
 
         var settings = AppSettings.Load();
@@ -402,7 +402,7 @@ public class VideoConverter : IFormatConverter
         return sb.ToString();
     }
 
-    private static string BuildVideoArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo, bool isReencode, VideoStreamInfo? videoInfo, VideoQualitySetting? videoSetting = null, RemuxSetting? remuxSetting = null)
+    internal static string BuildVideoArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false, VideoStreamInfo? videoInfo = null, VideoQualitySetting? videoSetting = null, RemuxSetting? remuxSetting = null)
     {
         if (targetExt == "remux")
         {
@@ -424,6 +424,30 @@ public class VideoConverter : IFormatConverter
             return $"-y -i \"{input}\" -vf \"fps=1\" \"{pattern}\"";
         }
 
+        if (targetExt == "frames-jpg")
+        {
+            var pattern = Path.Combine(output, "frame_%04d.jpg");
+            return $"-y -i \"{input}\" -vf \"fps=1\" -qscale:v 2 \"{pattern}\"";
+        }
+
+        if (targetExt == "frames-webp")
+        {
+            var pattern = Path.Combine(output, "frame_%04d.webp");
+            return $"-y -i \"{input}\" -vf \"fps=1\" -qscale:v 85 \"{pattern}\"";
+        }
+
+        if (targetExt == "frames-bmp")
+        {
+            var pattern = Path.Combine(output, "frame_%04d.bmp");
+            return $"-y -i \"{input}\" -vf \"fps=1\" \"{pattern}\"";
+        }
+
+        if (targetExt == "frames-tiff")
+        {
+            var pattern = Path.Combine(output, "frame_%04d.tiff");
+            return $"-y -i \"{input}\" -vf \"fps=1\" \"{pattern}\"";
+        }
+
         if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy")
         {
             return $"-y -i \"{input}\" -map 0:v? -map 0:a? -c copy -movflags +faststart -map_metadata 0 \"{output}\"";
@@ -441,7 +465,7 @@ public class VideoConverter : IFormatConverter
 
         if (videoSetting != null && (targetExt is "mp4" or "webm" or "mkv" or "mov" || targetExt.StartsWith("preset:")))
         {
-            return BuildSettingBasedVideoArguments(input, output, targetExt, videoSetting, tonemapFilter);
+            return BuildSettingBasedVideoArguments(input, output, targetExt, videoSetting, tonemapFilter, audioInfo);
         }
 
         if (targetExt is "mp4" or "mp4-h264" or "h264")
@@ -587,10 +611,11 @@ public class VideoConverter : IFormatConverter
         string output,
         string targetExt,
         VideoQualitySetting setting,
-        string tonemapFilter)
+        string tonemapFilter,
+        AudioStreamInfo? audioInfo = null)
     {
         var codecArg = BuildVideoCodecArgument(setting);
-        var audioArg = BuildAudioCodecArgument(setting);
+        var audioArg = BuildAudioCodecArgument(setting, audioInfo);
         var container = targetExt.StartsWith("preset:") ? Path.GetExtension(output).TrimStart('.').ToLowerInvariant() : targetExt;
         var movflags = (container is "mp4" or "mov")
             ? "-movflags +faststart "
@@ -678,10 +703,12 @@ public class VideoConverter : IFormatConverter
         };
     }
 
-    private static string BuildAudioCodecArgument(VideoQualitySetting setting)
+    private static string BuildAudioCodecArgument(VideoQualitySetting setting, AudioStreamInfo? audioInfo = null)
     {
         var codec = setting.AudioCodec.ToLowerInvariant();
-        var bitrate = setting.AudioBitrateKbps;
+        var bitrate = setting.AudioBitrateKbps <= 0
+            ? MediaProbe.ResolveAudioBitrate(audioInfo, 192, 320)
+            : setting.AudioBitrateKbps;
 
         return codec switch
         {
