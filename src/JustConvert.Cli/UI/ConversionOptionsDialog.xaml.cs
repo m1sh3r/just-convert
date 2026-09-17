@@ -23,6 +23,9 @@ public partial class ConversionOptionsDialog : FluentWindow
     public int SelectedAudioBitrate { get; private set; } = 192;
     public int SelectedImageQuality { get; private set; } = 90;
     public RemuxSetting SelectedRemuxSetting { get; private set; } = new();
+    public FramesSetting SelectedFramesSetting { get; private set; } = new();
+    public string SelectedFramesImageFormat => SelectedFramesSetting.ImageFormat;
+    public string SelectedFramesTargetFormat => $"frames-{SelectedFramesSetting.ImageFormat}";
     public bool RememberChoice => ChkRemember?.IsChecked == true;
     public bool AppendQualitySuffix => ChkAppendSuffix?.IsChecked == true;
     public int BatchCount => _batchCount;
@@ -72,6 +75,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             TxtEstimatedSize.Text = string.Format(I18n.T("EstimatedFileSizeLabel"), "14.2 MB");
             BtnCancel.Content = I18n.T("BtnCancel");
             BtnConvert.Content = I18n.T("BtnConvert");
+            ChkMatchOriginalBitrate.Content = I18n.T("OptionMatchOriginalBitrateBatch");
             return;
         }
 
@@ -101,6 +105,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelAudioOptions.Visibility = Visibility.Collapsed;
             PanelImageOptions.Visibility = Visibility.Collapsed;
             PanelRemuxOptions.Visibility = Visibility.Collapsed;
+            PanelFramesOptions.Visibility = Visibility.Collapsed;
 
             var videoSetting = (initialSetting as VideoQualitySetting) ?? new VideoQualitySetting();
             SelectedVideoQuality.VideoCodec = videoSetting.VideoCodec;
@@ -152,6 +157,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelAudioOptions.Visibility = Visibility.Collapsed;
             PanelImageOptions.Visibility = Visibility.Collapsed;
             PanelRemuxOptions.Visibility = Visibility.Visible;
+            PanelFramesOptions.Visibility = Visibility.Collapsed;
 
             PopulateRemuxContainers();
 
@@ -213,22 +219,100 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelAudioOptions.Visibility = Visibility.Visible;
             PanelImageOptions.Visibility = Visibility.Collapsed;
             PanelRemuxOptions.Visibility = Visibility.Collapsed;
+            PanelFramesOptions.Visibility = Visibility.Collapsed;
 
-            var initialBitrate = initialSetting is int b ? b : (initialSetting is AudioQualitySetting aq ? aq.AudioBitrateKbps : 192);
-            if (_mediaInfo?.Audio != null)
+            var isBatch = _batchCount > 1;
+            ChkMatchOriginalBitrate.Content = isBatch
+                ? I18n.T("OptionMatchOriginalBitrateBatch")
+                : I18n.T("OptionMatchOriginalBitrateSingle");
+
+            var initialBitrate = initialSetting is int b ? b : (initialSetting is AudioQualitySetting aq ? aq.AudioBitrateKbps : (isBatch ? 0 : 192));
+            if (initialBitrate <= 0)
             {
-                initialBitrate = MediaProbe.ResolveAudioBitrate(_mediaInfo.Audio, initialBitrate, 320);
+                ChkMatchOriginalBitrate.IsChecked = true;
+                SelectedAudioBitrate = 0;
+                SliderAudioBitrate.Value = 192;
             }
-            SelectedAudioBitrate = Math.Clamp(initialBitrate, 64, 320);
-            SliderAudioBitrate.Value = SelectedAudioBitrate;
+            else
+            {
+                ChkMatchOriginalBitrate.IsChecked = false;
+                if (!isBatch && _mediaInfo?.Audio != null)
+                {
+                    initialBitrate = MediaProbe.ResolveAudioBitrate(_mediaInfo.Audio, initialBitrate, 320);
+                }
+                SelectedAudioBitrate = Math.Clamp(initialBitrate, 64, 320);
+                SliderAudioBitrate.Value = SelectedAudioBitrate;
+            }
+            UpdateAudioBitrateControlsState();
 
-            if (_mediaInfo?.Audio != null)
+            if (_batchCount > 1)
+            {
+                TxtFormatPrompt.Text = string.Format(I18n.T("BatchVideoConversionPrompt"), _batchCount);
+                var sizeStr = QualityEstimator.FormatFileSize(_totalBatchSizeBytes ?? (_mediaInfo?.FileSizeBytes * _batchCount));
+                TxtSourceInfo.Text = string.Format(I18n.T("LabelBatchSourceMedia"), _batchCount, sizeStr);
+                TxtSourceInfo.Visibility = Visibility.Visible;
+            }
+            else if (_mediaInfo?.Audio != null)
             {
                 var a = _mediaInfo.Audio;
                 var sampleRate = a.SampleRate > 0 ? a.SampleRate : 44100;
                 var codecStr = QualityEstimator.FormatCodecName(a.Codec);
                 if (string.IsNullOrEmpty(codecStr)) codecStr = "Audio";
                 TxtSourceInfo.Text = string.Format(I18n.T("LabelSourceAudio"), Path.GetFileName(_mediaInfo.FilePath ?? ""), codecStr, a.BitrateKbps, sampleRate);
+                TxtSourceInfo.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                TxtSourceInfo.Visibility = Visibility.Collapsed;
+            }
+        }
+        else if (_category == "frames")
+        {
+            IconCategory.Symbol = Wpf.Ui.Controls.SymbolRegular.ImageMultiple24;
+            TxtFormatPrompt.Text = I18n.T("MenuFrames");
+            PanelVideoOptions.Visibility = Visibility.Collapsed;
+            PanelAudioOptions.Visibility = Visibility.Collapsed;
+            PanelImageOptions.Visibility = Visibility.Collapsed;
+            PanelRemuxOptions.Visibility = Visibility.Collapsed;
+            PanelFramesOptions.Visibility = Visibility.Visible;
+
+            PopulateFramesFormats();
+
+            var framesSetting = (initialSetting as FramesSetting) ?? new FramesSetting();
+            SelectedFramesSetting = new FramesSetting
+            {
+                ImageFormat = framesSetting.ImageFormat,
+                IsRemembered = framesSetting.IsRemembered
+            };
+
+            for (int i = 0; i < CmbFramesFormat.Items.Count; i++)
+            {
+                if (CmbFramesFormat.Items[i] is CodecItem item && item.Id.Equals(SelectedFramesSetting.ImageFormat, StringComparison.OrdinalIgnoreCase))
+                {
+                    CmbFramesFormat.SelectedIndex = i;
+                    break;
+                }
+            }
+            if (CmbFramesFormat.SelectedIndex < 0 && CmbFramesFormat.Items.Count > 0)
+            {
+                CmbFramesFormat.SelectedIndex = 0;
+            }
+
+            if (_batchCount > 1)
+            {
+                var sizeStr = QualityEstimator.FormatFileSize(_totalBatchSizeBytes ?? (_mediaInfo?.FileSizeBytes * _batchCount));
+                TxtSourceInfo.Text = string.Format(I18n.T("LabelBatchSourceMedia"), _batchCount, sizeStr);
+                TxtSourceInfo.Visibility = Visibility.Visible;
+            }
+            else if (_mediaInfo?.Video != null)
+            {
+                var v = _mediaInfo.Video;
+                var fps = v.FrameRateFps > 0 ? v.FrameRateFps : 30;
+                var sizeStr = QualityEstimator.FormatFileSize(_mediaInfo.FileSizeBytes);
+                var codecStr = QualityEstimator.FormatCodecName(v.Codec);
+                if (string.IsNullOrEmpty(codecStr)) codecStr = "Video";
+                TxtSourceInfo.Text = string.Format(I18n.T("LabelSourceMedia"), Path.GetFileName(_mediaInfo.FilePath ?? ""), codecStr, v.Width, v.Height, fps, sizeStr);
+                TxtSourceInfo.Visibility = Visibility.Visible;
             }
             else
             {
@@ -242,6 +326,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelAudioOptions.Visibility = Visibility.Collapsed;
             PanelImageOptions.Visibility = Visibility.Visible;
             PanelRemuxOptions.Visibility = Visibility.Collapsed;
+            PanelFramesOptions.Visibility = Visibility.Collapsed;
 
             var initialQuality = initialSetting is int q ? q : (initialSetting is ImageQualitySetting iq ? iq.Quality : 90);
             SelectedImageQuality = Math.Clamp(initialQuality, 1, 100);
@@ -338,8 +423,13 @@ public partial class ConversionOptionsDialog : FluentWindow
 
     private void PopulateAudioBitrates()
     {
+        var originalLabel = _batchCount > 1
+            ? I18n.T("OptionMatchOriginalBitrateBatch")
+            : I18n.T("OptionMatchOriginalBitrateSingle");
+
         var bitrates = new List<BitrateItem>
         {
+            new(0, originalLabel),
             new(128, "128 " + I18n.T("UnitKB") + "/s"),
             new(192, "192 " + I18n.T("UnitKB") + "/s"),
             new(256, "256 " + I18n.T("UnitKB") + "/s"),
@@ -350,7 +440,8 @@ public partial class ConversionOptionsDialog : FluentWindow
         CmbAudioBitrate.DisplayMemberPath = nameof(BitrateItem.DisplayName);
         CmbAudioBitrate.SelectedValuePath = nameof(BitrateItem.Value);
 
-        var match = bitrates.FirstOrDefault(b => b.Value == SelectedVideoQuality.AudioBitrateKbps) ?? bitrates[1];
+        var match = bitrates.FirstOrDefault(b => b.Value == SelectedVideoQuality.AudioBitrateKbps)
+            ?? (_batchCount > 1 ? bitrates[0] : bitrates[2]);
         CmbAudioBitrate.SelectedItem = match;
     }
 
@@ -394,7 +485,62 @@ public partial class ConversionOptionsDialog : FluentWindow
     private void OnAudioBitrateValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         if (_isUpdating) return;
-        SelectedAudioBitrate = (int)e.NewValue;
+        if (ChkMatchOriginalBitrate?.IsChecked != true)
+        {
+            SelectedAudioBitrate = (int)e.NewValue;
+        }
+        UpdatePreview();
+    }
+
+    private void OnMatchOriginalBitrateChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdating) return;
+        UpdateAudioBitrateControlsState();
+        UpdatePreview();
+    }
+
+    private void UpdateAudioBitrateControlsState()
+    {
+        var isMatchOriginal = ChkMatchOriginalBitrate?.IsChecked == true;
+        if (SliderAudioBitrate != null)
+        {
+            SliderAudioBitrate.IsEnabled = !isMatchOriginal;
+            SliderAudioBitrate.Opacity = isMatchOriginal ? 0.45 : 1.0;
+        }
+
+        if (isMatchOriginal)
+        {
+            SelectedAudioBitrate = 0;
+        }
+        else if (SliderAudioBitrate != null)
+        {
+            SelectedAudioBitrate = (int)SliderAudioBitrate.Value;
+        }
+    }
+
+    private void PopulateFramesFormats()
+    {
+        var formats = new List<CodecItem>
+        {
+            new("png", "PNG"),
+            new("jpg", "JPEG"),
+            new("webp", "WEBP"),
+            new("bmp", "BMP"),
+            new("tiff", "TIFF")
+        };
+
+        CmbFramesFormat.ItemsSource = formats;
+        CmbFramesFormat.DisplayMemberPath = nameof(CodecItem.DisplayName);
+        CmbFramesFormat.SelectedValuePath = nameof(CodecItem.Id);
+    }
+
+    private void OnFramesOptionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdating) return;
+        if (CmbFramesFormat.SelectedItem is CodecItem item)
+        {
+            SelectedFramesSetting.ImageFormat = item.Id;
+        }
         UpdatePreview();
     }
 
@@ -455,10 +601,14 @@ public partial class ConversionOptionsDialog : FluentWindow
             var descKey = QualityEstimator.GetVideoQualityDescriptionKey(cq, width, height, fps);
             TxtVideoQualityDescription.Text = I18n.T(descKey);
 
+            var effectiveAudioBitrate = SelectedVideoQuality.AudioBitrateKbps <= 0
+                ? MediaProbe.ResolveAudioBitrate(_mediaInfo?.Audio, 192, 320)
+                : SelectedVideoQuality.AudioBitrateKbps;
+
             var estimatedBytes = QualityEstimator.EstimateVideoFileSize(
                 SelectedVideoQuality.VideoCodec,
                 cq,
-                SelectedVideoQuality.AudioBitrateKbps,
+                effectiveAudioBitrate,
                 _mediaInfo
             );
 
@@ -489,18 +639,79 @@ public partial class ConversionOptionsDialog : FluentWindow
             if (TxtAudioBitrateValue == null || TxtAudioQualityDescription == null) return;
 
             var bitrate = SelectedAudioBitrate;
-            TxtAudioBitrateValue.Text = $"{bitrate} {I18n.T("UnitKB")}/s";
+            if (bitrate <= 0)
+            {
+                TxtAudioBitrateValue.Text = I18n.T("BitrateOriginalValue");
+                TxtAudioQualityDescription.Text = _batchCount > 1
+                    ? I18n.T("DescAudioBitrateMatchOriginalBatch")
+                    : I18n.T("DescAudioBitrateMatchOriginal");
 
-            var descKey = QualityEstimator.GetAudioQualityDescriptionKey(bitrate);
-            TxtAudioQualityDescription.Text = I18n.T(descKey);
+                var probeBitrate = MediaProbe.ResolveAudioBitrate(_mediaInfo?.Audio, 192, 320);
+                var estimatedBytes = QualityEstimator.EstimateAudioFileSize(
+                    _targetFormat,
+                    probeBitrate,
+                    _mediaInfo
+                );
+                UpdateEstimatedSizeText(estimatedBytes);
+            }
+            else
+            {
+                TxtAudioBitrateValue.Text = $"{bitrate} {I18n.T("UnitKB")}/s";
 
-            var estimatedBytes = QualityEstimator.EstimateAudioFileSize(
-                _targetFormat,
-                bitrate,
-                _mediaInfo
-            );
+                var descKey = QualityEstimator.GetAudioQualityDescriptionKey(bitrate);
+                TxtAudioQualityDescription.Text = I18n.T(descKey);
 
-            UpdateEstimatedSizeText(estimatedBytes);
+                var estimatedBytes = QualityEstimator.EstimateAudioFileSize(
+                    _targetFormat,
+                    bitrate,
+                    _mediaInfo
+                );
+
+                UpdateEstimatedSizeText(estimatedBytes);
+            }
+        }
+        else if (_category == "frames")
+        {
+            var key = _batchCount > 1 ? "EstimatedBatchSizeLabel" : "EstimatedFileSizeLabel";
+            if (_mediaInfo?.Video != null && _mediaInfo.Video.FrameRateFps > 0 && _mediaInfo.DurationSeconds > 0)
+            {
+                var fps = _mediaInfo.Video.FrameRateFps;
+                var totalFrames = (long)(fps * _mediaInfo.DurationSeconds);
+                var width = (long)(_mediaInfo.Video.Width ?? 1920);
+                var height = (long)(_mediaInfo.Video.Height ?? 1080);
+                var estimatedPerFrame = SelectedFramesSetting.ImageFormat switch
+                {
+                    "jpg" => 150_000L,
+                    "webp" => 100_000L,
+                    "bmp" => width * height * 3L,
+                    "tiff" => width * height * 3L,
+                    _ => 800_000L
+                };
+                var totalBytes = totalFrames * estimatedPerFrame;
+                if (_batchCount > 1) totalBytes *= _batchCount;
+                var formatted = QualityEstimator.FormatFileSize(totalBytes);
+                TxtEstimatedSize.Text = string.Format(I18n.T(key), formatted);
+            }
+            else
+            {
+                var sourceBytes = (_batchCount > 1 && _totalBatchSizeBytes.HasValue)
+                    ? _totalBatchSizeBytes.Value
+                    : (_mediaInfo?.FileSizeBytes ?? 0L);
+                if (_batchCount > 1 && !_totalBatchSizeBytes.HasValue && _mediaInfo?.FileSizeBytes.HasValue == true)
+                {
+                    sourceBytes = _mediaInfo.FileSizeBytes.Value * _batchCount;
+                }
+
+                if (sourceBytes > 0)
+                {
+                    var formatted = QualityEstimator.FormatFileSize(sourceBytes);
+                    TxtEstimatedSize.Text = string.Format(I18n.T(key), $"~{formatted}");
+                }
+                else
+                {
+                    TxtEstimatedSize.Text = $"{I18n.T(key).Split('~')[0].TrimEnd()}: —";
+                }
+            }
         }
         else
         {
@@ -563,7 +774,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             TxtSourceInfo.Text = string.Format(I18n.T("LabelBatchSourceMedia"), _batchCount, sizeStr);
             TxtSourceInfo.Visibility = Visibility.Visible;
         }
-        else if (_category is "audio" or "image")
+        else if (_category is "audio" or "image" or "frames")
         {
             var sizeStr = QualityEstimator.FormatFileSize(_totalBatchSizeBytes);
             TxtSourceInfo.Text = string.Format(I18n.T("LabelBatchSourceMedia"), _batchCount, sizeStr);
@@ -578,7 +789,7 @@ public partial class ConversionOptionsDialog : FluentWindow
         _mediaInfo = mediaInfo;
         if (_category == "video")
         {
-            if (_mediaInfo.Audio != null && CmbAudioBitrate != null)
+            if (_batchCount <= 1 && SelectedVideoQuality.AudioBitrateKbps > 0 && _mediaInfo.Audio != null && CmbAudioBitrate != null)
             {
                 var resolved = MediaProbe.ResolveAudioBitrate(_mediaInfo.Audio, SelectedVideoQuality.AudioBitrateKbps, 320);
                 SelectedVideoQuality.AudioBitrateKbps = resolved;
@@ -599,9 +810,12 @@ public partial class ConversionOptionsDialog : FluentWindow
         {
             if (_mediaInfo.Audio != null)
             {
-                var resolved = MediaProbe.ResolveAudioBitrate(_mediaInfo.Audio, SelectedAudioBitrate, 320);
-                SelectedAudioBitrate = resolved;
-                SliderAudioBitrate.Value = resolved;
+                if (_batchCount <= 1 && ChkMatchOriginalBitrate?.IsChecked != true)
+                {
+                    var resolved = MediaProbe.ResolveAudioBitrate(_mediaInfo.Audio, SelectedAudioBitrate, 320);
+                    SelectedAudioBitrate = resolved;
+                    SliderAudioBitrate.Value = resolved;
+                }
                 if (_batchCount <= 1)
                 {
                     var a = _mediaInfo.Audio;
@@ -613,6 +827,19 @@ public partial class ConversionOptionsDialog : FluentWindow
                 }
             }
         }
+        else if (_category == "frames")
+        {
+            if (_batchCount <= 1 && _mediaInfo.Video != null)
+            {
+                var v = _mediaInfo.Video;
+                var fps = v.FrameRateFps > 0 ? v.FrameRateFps : 30;
+                var sizeStr = QualityEstimator.FormatFileSize(_mediaInfo.FileSizeBytes);
+                var codecStr = QualityEstimator.FormatCodecName(v.Codec);
+                if (string.IsNullOrEmpty(codecStr)) codecStr = "Video";
+                TxtSourceInfo.Text = string.Format(I18n.T("LabelSourceMedia"), Path.GetFileName(_mediaInfo.FilePath ?? ""), codecStr, v.Width, v.Height, fps, sizeStr);
+                TxtSourceInfo.Visibility = Visibility.Visible;
+            }
+        }
         UpdatePreview();
     }
 
@@ -621,6 +848,10 @@ public partial class ConversionOptionsDialog : FluentWindow
         if (_category == "remux")
         {
             SelectedRemuxSetting.IsRemembered = RememberChoice;
+        }
+        else if (_category == "frames")
+        {
+            SelectedFramesSetting.IsRemembered = RememberChoice;
         }
         try { DialogResult = true; } catch (InvalidOperationException) { }
         Close();

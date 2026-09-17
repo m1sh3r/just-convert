@@ -243,7 +243,14 @@ public partial class FolderBatchWindow : FluentWindow
             {
                 if (!settings.TryGetSavedQuality(target, out _))
                 {
-                    var dialog = new ConversionOptionsDialog(target, "image", settings.GetEffectiveQuality(target), null, settings.AppendQualitySuffix)
+                    var dialog = new ConversionOptionsDialog(
+                        target,
+                        "image",
+                        settings.GetEffectiveQuality(target),
+                        null,
+                        settings.AppendQualitySuffix,
+                        _scanResult.Images.Files.Count,
+                        CalculateCategoryTotalSizeBytes(_scanResult.Images))
                     {
                         Owner = this
                     };
@@ -264,11 +271,48 @@ public partial class FolderBatchWindow : FluentWindow
         if (ChkVideo.IsChecked == true && _scanResult.Video != null)
         {
             var target = (CmbVideoFormats.SelectedItem as FormatChoice)?.Format ?? "mp4";
-            if (target is "mp4" or "webm" or "mkv" or "mov")
+            if (target == "frames")
+            {
+                if (!settings.FramesSetting.IsRemembered)
+                {
+                    var dialog = new ConversionOptionsDialog(
+                        "frames",
+                        "frames",
+                        settings.GetEffectiveFramesSetting(),
+                        null,
+                        settings.AppendQualitySuffix,
+                        _scanResult.Video.Files.Count,
+                        CalculateCategoryTotalSizeBytes(_scanResult.Video))
+                    {
+                        Owner = this
+                    };
+                    if (dialog.ShowDialog() != true)
+                    {
+                        return;
+                    }
+
+                    settings.SetFramesSetting(dialog.SelectedFramesSetting);
+                    settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    settings.Save();
+                    target = dialog.SelectedFramesTargetFormat;
+                }
+                else
+                {
+                    target = $"frames-{settings.FramesSetting.ImageFormat}";
+                }
+            }
+            else if (target is "mp4" or "webm" or "mkv" or "mov")
             {
                 if (!settings.TryGetSavedVideoQuality(target, out _))
                 {
-                    var dialog = new ConversionOptionsDialog(target, "video", settings.GetEffectiveVideoQuality(target), null, settings.AppendQualitySuffix)
+                    var dialog = new ConversionOptionsDialog(
+                        target,
+                        "video",
+                        settings.GetEffectiveVideoQuality(target),
+                        null,
+                        settings.AppendQualitySuffix,
+                        _scanResult.Video.Files.Count,
+                        CalculateCategoryTotalSizeBytes(_scanResult.Video))
                     {
                         Owner = this
                     };
@@ -295,7 +339,14 @@ public partial class FolderBatchWindow : FluentWindow
             {
                 if (!settings.TryGetSavedAudioQuality(target, out _))
                 {
-                    var dialog = new ConversionOptionsDialog(target, "audio", settings.GetEffectiveAudioQuality(target), null, settings.AppendQualitySuffix)
+                    var dialog = new ConversionOptionsDialog(
+                        target,
+                        "audio",
+                        settings.GetEffectiveAudioQuality(target),
+                        null,
+                        settings.AppendQualitySuffix,
+                        _scanResult.Audio.Files.Count,
+                        CalculateCategoryTotalSizeBytes(_scanResult.Audio))
                     {
                         Owner = this
                     };
@@ -325,7 +376,24 @@ public partial class FolderBatchWindow : FluentWindow
             Application.Current.MainWindow = progressWindow;
         }
         progressWindow.Show();
-
         Close();
+    }
+
+    private static long? CalculateCategoryTotalSizeBytes(CategoryScanResult? category)
+    {
+        if (category == null || category.Files.Count == 0) return null;
+        long total = 0;
+        foreach (var file in category.Files)
+        {
+            try
+            {
+                var fi = new FileInfo(file.FullPath);
+                if (fi.Exists) total += fi.Length;
+            }
+            catch
+            {
+            }
+        }
+        return total;
     }
 }
