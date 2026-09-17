@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using JustConvert.Core.Converters.Tools;
+using JustConvert.Core.Logging;
 
 namespace JustConvert.Core.Converters;
 
@@ -128,6 +129,9 @@ public class ImageConverter : IFormatConverter
             progress?.Report(new ConversionProgress(20, I18n.T("ImageLoading")));
 
             var arguments = BuildArguments(inputPath, outputPath, targetExt, sourceExt, isReencode, effectiveQuality);
+            AppLogger.Info($"[ImageConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
+            AppLogger.Info($"[ImageConverter] Command: magick {arguments}");
+
             var startInfo = new ProcessStartInfo
             {
                 FileName = magick,
@@ -175,6 +179,7 @@ public class ImageConverter : IFormatConverter
             sw.Stop();
 
             var logs = fullLog.ToString();
+            AppLogger.LogProcess("magick", arguments, proc.ExitCode, sw.Elapsed, proc.ExitCode != 0 ? logs : null);
 
             ct.ThrowIfCancellationRequested();
 
@@ -193,17 +198,21 @@ public class ImageConverter : IFormatConverter
             }
             catch { }
 
-            return new ConversionResult(false, null, ExtractDiagnosticMessage(logs, proc.ExitCode), logs, sw.Elapsed);
+            var diagMsg = ExtractDiagnosticMessage(logs, proc.ExitCode);
+            AppLogger.Error($"[ImageConverter] Conversion failed for \"{inputPath}\": {diagMsg}");
+            return new ConversionResult(false, null, diagMsg, logs, sw.Elapsed);
         }
         catch (OperationCanceledException)
         {
             sw.Stop();
+            AppLogger.Warn($"[ImageConverter] Conversion cancelled for \"{inputPath}\"");
             try { if (outputPath != null && File.Exists(outputPath)) File.Delete(outputPath); } catch { }
             return new ConversionResult(false, null, I18n.T("StatusCancelled"), null, sw.Elapsed);
         }
         catch (Exception ex)
         {
             sw.Stop();
+            AppLogger.Error($"[ImageConverter] Unexpected exception for \"{inputPath}\"", ex);
             try { if (outputPath != null && File.Exists(outputPath)) File.Delete(outputPath); } catch { }
             return new ConversionResult(false, null, ex.Message, ex.ToString(), sw.Elapsed);
         }

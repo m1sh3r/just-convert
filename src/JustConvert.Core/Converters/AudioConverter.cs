@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using JustConvert.Core.Converters.Tools;
+using JustConvert.Core.Logging;
 
 namespace JustConvert.Core.Converters;
 
@@ -117,6 +118,8 @@ public class AudioConverter : IFormatConverter
         try
         {
             var arguments = BuildAudioArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, effectiveBitrate);
+            AppLogger.Info($"[AudioConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
+            AppLogger.Info($"[AudioConverter] Command: ffmpeg {arguments}");
 
             var startInfo = new ProcessStartInfo
             {
@@ -192,6 +195,7 @@ public class AudioConverter : IFormatConverter
             sw.Stop();
 
             var logs = fullLog.ToString();
+            AppLogger.LogProcess("ffmpeg", arguments, proc.ExitCode, sw.Elapsed, proc.ExitCode != 0 ? logs : null);
 
             ct.ThrowIfCancellationRequested();
 
@@ -210,17 +214,21 @@ public class AudioConverter : IFormatConverter
             }
             catch { }
 
-            return new ConversionResult(false, null, MediaProbe.ExtractDiagnosticMessage(logs, proc.ExitCode), logs, sw.Elapsed);
+            var diagMsg = MediaProbe.ExtractDiagnosticMessage(logs, proc.ExitCode);
+            AppLogger.Error($"[AudioConverter] Conversion failed for \"{inputPath}\": {diagMsg}");
+            return new ConversionResult(false, null, diagMsg, logs, sw.Elapsed);
         }
         catch (OperationCanceledException)
         {
             sw.Stop();
+            AppLogger.Warn($"[AudioConverter] Conversion cancelled for \"{inputPath}\"");
             try { if (outputPath != null && File.Exists(outputPath)) File.Delete(outputPath); } catch { }
             return new ConversionResult(false, null, I18n.T("StatusCancelled"), null, sw.Elapsed);
         }
         catch (Exception ex)
         {
             sw.Stop();
+            AppLogger.Error($"[AudioConverter] Unexpected exception for \"{inputPath}\"", ex);
             try { if (outputPath != null && File.Exists(outputPath)) File.Delete(outputPath); } catch { }
             return new ConversionResult(false, null, ex.Message, ex.ToString(), sw.Elapsed);
         }

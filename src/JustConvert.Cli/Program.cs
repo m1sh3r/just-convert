@@ -4,6 +4,7 @@ using System.Windows;
 using JustConvert.Cli.UI;
 using JustConvert.Core;
 using JustConvert.Core.Converters.Tools;
+using JustConvert.Core.Logging;
 using JustConvert.Core.Scanning;
 using JustConvert.Core.Windows;
 using File = System.IO.File;
@@ -17,15 +18,16 @@ public class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        AppLogger.Initialize("just-convert");
+        AppLogger.Info($"Application started with {args.Length} args: {string.Join(" ", args.Select(a => $"\"{a}\""))}");
+        AppLogger.Info($"Tools: ffmpeg='{ToolLocator.FindFfmpegPath() ?? "not found"}', ffprobe='{ToolLocator.FindFfprobePath() ?? "not found"}', magick='{ToolLocator.FindMagickPath() ?? "not found"}'");
+        AppLogger.Info($"Hardware Acceleration: NVENC(H264={HardwareAccelerationDetector.HasNvencH264}, HEVC={HardwareAccelerationDetector.HasNvencHevc}, AV1={HardwareAccelerationDetector.HasNvencAv1}), QSV(H264={HardwareAccelerationDetector.HasQsvH264}, HEVC={HardwareAccelerationDetector.HasQsvHevc}, VP9={HardwareAccelerationDetector.HasQsvVp9}, AV1={HardwareAccelerationDetector.HasQsvAv1}), AMF(H264={HardwareAccelerationDetector.HasAmfH264}, HEVC={HardwareAccelerationDetector.HasAmfHevc}, AV1={HardwareAccelerationDetector.HasAmfAv1})");
+
         TouchpadScrollHelper.Initialize();
 
         if (args.Length == 0 || (args.Length == 1 && args[0] is "--settings" or "-s" or "settings"))
         {
-            var app = new Application();
-            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
-            app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
-            var settingsWindow = new SettingsWindow();
-            return app.Run(settingsWindow);
+            return RunWindow(() => new SettingsWindow());
         }
 
         if (args.Length >= 1 && args[0].Equals("register", StringComparison.OrdinalIgnoreCase))
@@ -530,6 +532,10 @@ public class Program
         if (app == null)
         {
             app = new Application();
+            app.DispatcherUnhandledException += (s, e) =>
+            {
+                AppLogger.Error("DispatcherUnhandledException in RunWindow", e.Exception);
+            };
             app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
             app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
         }

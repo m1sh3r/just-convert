@@ -15,10 +15,12 @@ public class ConversionExecutionTests : IDisposable
     {
         _tempDir = Path.Combine(Path.GetTempPath(), $"jc_exec_tests_{Guid.NewGuid():N}");
         Directory.CreateDirectory(_tempDir);
+        AppSettings.CustomSettingsFilePath = Path.Combine(_tempDir, "settings.json");
     }
 
     public void Dispose()
     {
+        AppSettings.CustomSettingsFilePath = null;
         try
         {
             if (Directory.Exists(_tempDir))
@@ -204,7 +206,7 @@ public class ConversionExecutionTests : IDisposable
             var psi = new ProcessStartInfo
             {
                 FileName = ffmpegPath,
-                Arguments = $"-f lavfi -i testsrc=duration=1:size=160x120:rate=10 -f lavfi -i sine=frequency=440:duration=1 -c:v libx264 -pix_fmt yuv420p -c:a aac -y \"{destination}\"",
+                Arguments = $"-f lavfi -i testsrc=duration=1:size=320x240:rate=10 -f lavfi -i sine=frequency=440:duration=1 -c:v libx264 -pix_fmt yuv420p -c:a aac -y \"{destination}\"",
                 CreateNoWindow = true,
                 UseShellExecute = false
             };

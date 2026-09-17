@@ -1,4 +1,5 @@
 using JustConvert.Core.Converters;
+using JustConvert.Core.Logging;
 
 namespace JustConvert.Core;
 
@@ -65,6 +66,7 @@ public class ConverterRegistry
     {
         if (!File.Exists(inputPath))
         {
+            AppLogger.Warn($"[Registry] File not found: \"{inputPath}\"");
             return new ConversionResult(false, null, I18n.T("FileNotFound", inputPath));
         }
 
@@ -76,6 +78,7 @@ public class ConverterRegistry
         if (!isVideoSameFormat && targetExt != "reencode" && targetExt != "remux" && IsSameFormat(sourceExt, targetExt) && targetExt is not "frames" and not "frames-png" and not "frames-jpg")
         {
             var msg = I18n.T("StatusSkippedAlreadyTarget");
+            AppLogger.Info($"[Registry] Skipped (already target format): \"{inputPath}\" ({sourceExt})");
             progress?.Report(new ConversionProgress(100, msg));
             return new ConversionResult(true, inputPath, msg, null, TimeSpan.Zero, Skipped: true);
         }
@@ -86,14 +89,19 @@ public class ConverterRegistry
             if (isBatch)
             {
                 var msg = I18n.T("StatusSkippedUnsupported");
+                AppLogger.Warn($"[Registry] Skipped (unsupported in batch): \"{inputPath}\" ({sourceExt} -> {targetExt})");
                 progress?.Report(new ConversionProgress(100, msg));
                 return new ConversionResult(true, inputPath, msg, null, TimeSpan.Zero, Skipped: true);
             }
 
+            AppLogger.Error($"[Registry] No converter found: \"{inputPath}\" ({sourceExt} -> {targetExt})");
             return new ConversionResult(false, null, I18n.T("NoConverterFound", sourceExt, targetExt));
         }
 
-        return await converter.ConvertAsync(inputPath, targetExt, outputPath, progress, ct, controller);
+        AppLogger.Info($"[Registry] Dispatching to {converter.Name}: \"{inputPath}\" -> {targetExt}");
+        var result = await converter.ConvertAsync(inputPath, targetExt, outputPath, progress, ct, controller);
+        AppLogger.Info($"[Registry] Completed: \"{inputPath}\" (Success={result.Success}, Skipped={result.Skipped}, Duration={result.Duration.TotalSeconds:F2}s)");
+        return result;
     }
 
     private static bool IsSameFormat(string src, string tgt)

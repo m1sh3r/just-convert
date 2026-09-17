@@ -323,7 +323,9 @@ public class AppSettings
         return CustomPresets.FirstOrDefault(p => p.Id == presetId);
     }
 
-    public static string SettingsFilePath => Path.Combine(
+    public static string? CustomSettingsFilePath { get; set; }
+
+    public static string SettingsFilePath => CustomSettingsFilePath ?? Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
         "m1sh3r",
         "Just Convert",
