@@ -540,10 +540,11 @@ public class Program
             app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
         }
 
-        app.ShutdownMode = ShutdownMode.OnMainWindowClose;
+        app.ShutdownMode = ShutdownMode.OnLastWindowClose;
         var window = windowFactory();
         app.MainWindow = window;
-        app.Run(window);
-        return window is ConversionProgressWindow cpw ? cpw.ExitCode : 0;
+        window.Show();
+        app.Run();
+        return (app.MainWindow as ConversionProgressWindow)?.ExitCode ?? 0;
     }
 }

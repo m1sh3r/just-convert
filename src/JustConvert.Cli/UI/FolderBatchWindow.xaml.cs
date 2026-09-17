@@ -320,6 +320,10 @@ public partial class FolderBatchWindow : FluentWindow
         if (items.Count == 0) return;
 
         var progressWindow = new ConversionProgressWindow(items);
+        if (Application.Current != null)
+        {
+            Application.Current.MainWindow = progressWindow;
+        }
         progressWindow.Show();
 
         Close();
