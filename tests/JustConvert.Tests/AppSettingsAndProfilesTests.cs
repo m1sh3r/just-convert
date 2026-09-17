@@ -108,4 +108,34 @@ public class AppSettingsAndProfilesTests
         var mp4Vp9 = settings.GetEffectiveVideoQuality("mp4");
         Assert.Equal("h264", mp4Vp9.VideoCodec);
     }
+
+    [Fact]
+    public void SetAudioQuality_AllowsZeroForAutoMatching()
+    {
+        var settings = new AppSettings();
+        settings.SetAudioQuality("mp3", 0, true);
+
+        Assert.True(settings.TryGetSavedAudioQuality("mp3", out var bitrate));
+        Assert.Equal(0, bitrate);
+        Assert.Equal(0, settings.GetEffectiveAudioQuality("mp3"));
+    }
+
+    [Fact]
+    public void FramesSetting_DefaultsAndPersistence()
+    {
+        var settings = new AppSettings();
+        var initial = settings.GetEffectiveFramesSetting();
+        Assert.Equal("png", initial.ImageFormat);
+        Assert.False(initial.IsRemembered);
+
+        settings.SetFramesSetting(new FramesSetting { ImageFormat = "jpg", IsRemembered = true });
+        var effective = settings.GetEffectiveFramesSetting();
+        Assert.Equal("jpg", effective.ImageFormat);
+        Assert.True(effective.IsRemembered);
+
+        settings.ResetFramesSetting();
+        var reset = settings.GetEffectiveFramesSetting();
+        Assert.Equal("png", reset.ImageFormat);
+        Assert.False(reset.IsRemembered);
+    }
 }

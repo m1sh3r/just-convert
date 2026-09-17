@@ -253,4 +253,41 @@ public class ConversionExecutionTests : IDisposable
         var result = ImageConverter.ExtractDiagnosticMessage(sampleLog, 1);
         Assert.Equal("magick: unable to open image 'non_existing.png': No such file or directory @ error/blob.c/OpenBlob/3571.", result);
     }
+
+    [Fact]
+    public void BuildAudioArguments_WhenCustomBitrateNull_ResolvesProbeBitrate()
+    {
+        var info = new AudioStreamInfo(128, false, "mp3", false, 16, 44100, 2);
+        var args = AudioConverter.BuildAudioArguments("in.wav", "out.mp3", "mp3", info, false, null);
+        Assert.Contains("-b:a 128k", args);
+    }
+
+    [Theory]
+    [InlineData("frames", "frame_%04d.png")]
+    [InlineData("frames-png", "frame_%04d.png")]
+    [InlineData("frames-jpg", "frame_%04d.jpg")]
+    [InlineData("frames-webp", "frame_%04d.webp")]
+    [InlineData("frames-bmp", "frame_%04d.bmp")]
+    [InlineData("frames-tiff", "frame_%04d.tiff")]
+    public void BuildVideoArguments_FramesFormats_ProducesExpectedOutputPattern(string targetExt, string expectedPattern)
+    {
+        var args = VideoConverter.BuildVideoArguments("in.mp4", "outDir", targetExt);
+        Assert.Contains(expectedPattern, args);
+        Assert.Contains("-vf \"fps=1\"", args);
+    }
+
+    [Fact]
+    public void BuildVideoArguments_WhenAudioBitrateZero_ResolvesFromAudioInfo()
+    {
+        var audioInfo = new AudioStreamInfo(128, false, "aac", false, 16, 44100, 2);
+        var setting = new VideoQualitySetting
+        {
+            VideoCodec = "h264",
+            AudioCodec = "aac",
+            AudioBitrateKbps = 0
+        };
+
+        var args = VideoConverter.BuildVideoArguments("in.mkv", "out.mp4", "mp4", audioInfo, false, null, setting);
+        Assert.Contains("-b:a 128k", args);
+    }
 }
