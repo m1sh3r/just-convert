@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using JustConvert.Core;
+using JustConvert.Core.Logging;
 using JustConvert.Core.Scanning;
 using JustConvert.Core.Windows;
 using Wpf.Ui.Appearance;
@@ -41,6 +42,8 @@ public partial class ConversionProgressWindow : FluentWindow
             TxtOverallStatus.Text = I18n.T("StatusConverting");
             BtnPauseAll.Content = I18n.T("BtnPauseAll");
             BtnCancelAll.Content = I18n.T("BtnCancelAll");
+            InfoBarGpuWarning.Title = I18n.T("BannerGpuFallbackWarningTitle");
+            InfoBarGpuWarning.Message = I18n.T("BannerGpuFallbackWarning");
         }
     }
 
@@ -280,11 +283,18 @@ public partial class ConversionProgressWindow : FluentWindow
                 {
                     if (result.Success)
                     {
+                        item.CpuFallback = result.CpuFallback;
                         item.ProgressPercentage = 100;
                         item.IsIndeterminate = false;
                         item.Status = QueueItemStatus.Done;
-                        item.StatusText = result.Skipped ? (result.ErrorMessage ?? I18n.T("StatusSkipped")) : I18n.T("StatusDone");
+                        item.StatusText = result.Skipped
+                            ? (result.ErrorMessage ?? I18n.T("StatusSkipped"))
+                            : (result.CpuFallback ? I18n.T("StatusDoneCpuFallback") : I18n.T("StatusDone"));
                         item.Detail = "100%";
+                        if (result.CpuFallback)
+                        {
+                            InfoBarGpuWarning.IsOpen = true;
+                        }
                     }
                     else if (item.Cts.IsCancellationRequested)
                     {
@@ -313,6 +323,7 @@ public partial class ConversionProgressWindow : FluentWindow
             }
             catch (Exception ex)
             {
+                AppLogger.Error($"[Queue] Unhandled exception converting \"{item.InputPath}\"", ex);
                 Dispatcher.Invoke(() =>
                 {
                     item.Status = QueueItemStatus.Error;

@@ -28,6 +28,7 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
     private double _progressPercentage;
     private bool _isIndeterminate = true;
     private bool _autoPaused;
+    private bool _cpuFallback;
     private Process? _runningProcess;
 
     public string Id { get; } = Guid.NewGuid().ToString("N");
@@ -168,12 +169,28 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
         }
     }
 
+    public bool CpuFallback
+    {
+        get => _cpuFallback;
+        set
+        {
+            if (_cpuFallback != value)
+            {
+                _cpuFallback = value;
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(StatusSymbol));
+                OnPropertyChanged(nameof(StatusBrush));
+                OnPropertyChanged(nameof(StatusTextBrush));
+            }
+        }
+    }
+
     public SymbolRegular StatusSymbol => _status switch
     {
         QueueItemStatus.Queued => SymbolRegular.Clock16,
         QueueItemStatus.Converting => SymbolRegular.ArrowSync16,
         QueueItemStatus.Paused => SymbolRegular.Pause16,
-        QueueItemStatus.Done => SymbolRegular.Checkmark16,
+        QueueItemStatus.Done => _cpuFallback ? SymbolRegular.Warning16 : SymbolRegular.Checkmark16,
         QueueItemStatus.Error => SymbolRegular.ErrorCircle16,
         QueueItemStatus.Cancelled => SymbolRegular.Dismiss16,
         _ => SymbolRegular.Document16
@@ -195,7 +212,9 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
     public Brush StatusBrush => _status switch
     {
         QueueItemStatus.Converting => GetResourceBrush("AccentTextFillColorPrimaryBrush", Brushes.DodgerBlue),
-        QueueItemStatus.Done => GetResourceBrush("AccentTextFillColorPrimaryBrush", Brushes.DodgerBlue),
+        QueueItemStatus.Done => _cpuFallback
+            ? GetResourceBrush("SystemFillColorCautionBrush", Brushes.Orange)
+            : GetResourceBrush("AccentTextFillColorPrimaryBrush", Brushes.DodgerBlue),
         QueueItemStatus.Error => GetResourceBrush("SystemFillColorCriticalBrush", Brushes.IndianRed),
         QueueItemStatus.Paused => GetResourceBrush("TextFillColorSecondaryBrush", Brushes.Gray),
         _ => GetResourceBrush("TextFillColorTertiaryBrush", Brushes.LightGray)
@@ -204,6 +223,7 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
     public Brush StatusTextBrush => _status switch
     {
         QueueItemStatus.Error => GetResourceBrush("SystemFillColorCriticalBrush", Brushes.IndianRed),
+        QueueItemStatus.Done when _cpuFallback => GetResourceBrush("SystemFillColorCautionBrush", Brushes.Orange),
         QueueItemStatus.Converting => GetResourceBrush("TextFillColorPrimaryBrush", Brushes.Black),
         _ => GetResourceBrush("TextFillColorSecondaryBrush", Brushes.Gray)
     };

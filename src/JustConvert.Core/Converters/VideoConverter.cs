@@ -4,6 +4,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using JustConvert.Core.Converters.Tools;
+using JustConvert.Core.Logging;
 
 namespace JustConvert.Core.Converters;
 
@@ -198,149 +199,192 @@ public class VideoConverter : IFormatConverter
         try
         {
             var arguments = BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting, remuxSetting);
+            AppLogger.Info($"[VideoConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
+            AppLogger.Info($"[VideoConverter] Command: ffmpeg {arguments}");
 
-            var startInfo = new ProcessStartInfo
+            var (exitCode, logs) = await ExecuteFfmpegAsync(ffmpeg, arguments, progress, controller, ct, isCompress, isExtractFrames);
+
+            var isCpuFallback = false;
+            if (exitCode != 0 && !ct.IsCancellationRequested && UsesHardwareEncoder(arguments))
             {
-                FileName = ffmpeg,
-                Arguments = arguments,
-                UseShellExecute = false,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true
-            };
+                var diagMsg = MediaProbe.ExtractDiagnosticMessage(logs, exitCode);
+                AppLogger.Warn($"[VideoConverter] Hardware encoder failed: {diagMsg}. Falling back to CPU encoder...");
 
-            using var proc = new Process { StartInfo = startInfo };
-            var fullLog = new System.Text.StringBuilder();
+                progress?.Report(new ConversionProgress(0, I18n.T("StatusGpuFailedCpuFallback")));
 
-            TimeSpan totalDuration = TimeSpan.Zero;
-            var durationRegex = new Regex(@"Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)", RegexOptions.Compiled);
-            var timeRegex = new Regex(@"time=(\d{2}):(\d{2}):(\d{2}\.\d+)", RegexOptions.Compiled);
+                if (arguments.Contains("_nvenc")) HardwareAccelerationDetector.DisableNvenc();
+                if (arguments.Contains("_qsv")) HardwareAccelerationDetector.DisableQsv();
+                if (arguments.Contains("_amf")) HardwareAccelerationDetector.DisableAmf();
 
-            proc.ErrorDataReceived += (sender, e) =>
-            {
-                if (string.IsNullOrEmpty(e.Data)) return;
+                DeleteOutputArtifacts(outputPath, isExtractFrames);
 
-                lock (fullLog)
+                var fallbackTargetExt = MapToCpuTarget(targetExt);
+                var fallbackSetting = videoSetting != null ? new VideoQualitySetting
                 {
-                    fullLog.AppendLine(e.Data);
-                }
+                    VideoCodec = videoSetting.VideoCodec,
+                    Encoder = "cpu",
+                    VideoQualityCq = videoSetting.VideoQualityCq,
+                    AudioCodec = videoSetting.AudioCodec,
+                    AudioBitrateKbps = videoSetting.AudioBitrateKbps,
+                    IsRemembered = videoSetting.IsRemembered
+                } : null;
+                arguments = BuildVideoArguments(inputPath, outputPath, fallbackTargetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, fallbackSetting, remuxSetting);
 
-                if (totalDuration == TimeSpan.Zero)
-                {
-                    var match = durationRegex.Match(e.Data);
-                    if (match.Success && TimeSpan.TryParse(match.Groups[1].Value + ":" + match.Groups[2].Value + ":" + match.Groups[3].Value, CultureInfo.InvariantCulture, out var parsed))
-                    {
-                        totalDuration = parsed;
-                    }
-                }
+                AppLogger.Info($"[VideoConverter] Fallback Command: ffmpeg {arguments}");
+                (exitCode, logs) = await ExecuteFfmpegAsync(ffmpeg, arguments, progress, controller, ct, isCompress, isExtractFrames);
+                isCpuFallback = true;
+            }
 
-                var timeMatch = timeRegex.Match(e.Data);
-                if (timeMatch.Success && TimeSpan.TryParse(timeMatch.Groups[1].Value + ":" + timeMatch.Groups[2].Value + ":" + timeMatch.Groups[3].Value, CultureInfo.InvariantCulture, out var currentTime))
-                {
-                    if (totalDuration > TimeSpan.Zero)
-                    {
-                        var pct = Math.Clamp((currentTime.TotalSeconds / totalDuration.TotalSeconds) * 100.0, 0, 99);
-                        var status = isCompress ? I18n.T("VideoCompressing") : isExtractFrames ? I18n.T("VideoExtractingFrames") : I18n.T("MediaConverting");
-                        var timeFormat = totalDuration.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss";
-                        progress?.Report(new ConversionProgress(pct, status, $"{currentTime.ToString(timeFormat)} / {totalDuration.ToString(timeFormat)}"));
-                    }
-                    else
-                    {
-                        var timeLabel = I18n.T("TimeLabel");
-                        var timeFormat = currentTime.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss";
-                        progress?.Report(new ConversionProgress(50, I18n.T("FfmpegProcessing"), $"{timeLabel}{currentTime.ToString(timeFormat)}"));
-                    }
-                }
-            };
-
-            proc.Start();
-            controller?.OnProcessStarted(proc);
-            proc.BeginErrorReadLine();
-
-            using var registration = ct.Register(() =>
-            {
-                try
-                {
-                    Windows.ProcessSuspender.Resume(proc);
-                    if (!proc.HasExited)
-                    {
-                        proc.Kill();
-                    }
-                }
-                catch { }
-            });
-
-            await proc.WaitForExitAsync(CancellationToken.None);
             sw.Stop();
-
-            var logs = fullLog.ToString();
-
             ct.ThrowIfCancellationRequested();
 
-            if (proc.ExitCode == 0)
+            if (exitCode == 0)
             {
-                progress?.Report(new ConversionProgress(100, I18n.T("StatusDone")));
-                return new ConversionResult(true, outputPath, null, logs, sw.Elapsed);
+                progress?.Report(new ConversionProgress(100, isCpuFallback ? I18n.T("StatusDoneCpuFallback") : I18n.T("StatusDone")));
+                return new ConversionResult(true, outputPath, null, logs, sw.Elapsed, CpuFallback: isCpuFallback);
             }
 
-            try
-            {
-                if (outputPath != null)
-                {
-                    if (isExtractFrames && Directory.Exists(outputPath))
-                    {
-                        Directory.Delete(outputPath, true);
-                    }
-                    else if (File.Exists(outputPath))
-                    {
-                        File.Delete(outputPath);
-                    }
-                }
-            }
-            catch { }
+            DeleteOutputArtifacts(outputPath, isExtractFrames);
 
-            return new ConversionResult(false, null, MediaProbe.ExtractDiagnosticMessage(logs, proc.ExitCode), logs, sw.Elapsed);
+            var finalDiagMsg = MediaProbe.ExtractDiagnosticMessage(logs, exitCode);
+            AppLogger.Error($"[VideoConverter] Conversion failed for \"{inputPath}\": {finalDiagMsg}");
+            return new ConversionResult(false, null, finalDiagMsg, logs, sw.Elapsed);
         }
         catch (OperationCanceledException)
         {
             sw.Stop();
-            try
-            {
-                if (outputPath != null)
-                {
-                    if (isExtractFrames && Directory.Exists(outputPath))
-                    {
-                        Directory.Delete(outputPath, true);
-                    }
-                    else if (File.Exists(outputPath))
-                    {
-                        File.Delete(outputPath);
-                    }
-                }
-            }
-            catch { }
+            AppLogger.Warn($"[VideoConverter] Conversion cancelled for \"{inputPath}\"");
+            DeleteOutputArtifacts(outputPath, isExtractFrames);
             return new ConversionResult(false, null, I18n.T("StatusCancelled"), null, sw.Elapsed);
         }
         catch (Exception ex)
         {
             sw.Stop();
+            AppLogger.Error($"[VideoConverter] Unexpected exception for \"{inputPath}\"", ex);
+            DeleteOutputArtifacts(outputPath, isExtractFrames);
+            return new ConversionResult(false, null, ex.Message, ex.ToString(), sw.Elapsed);
+        }
+    }
+
+    private static bool UsesHardwareEncoder(string arguments) =>
+        arguments.Contains("_nvenc") || arguments.Contains("_qsv") || arguments.Contains("_amf");
+
+    private static string MapToCpuTarget(string targetExt) => targetExt switch
+    {
+        "mp4-h264-nvenc" or "mp4-nvenc-h264" or "mp4-h264-qsv" or "mp4-qsv-h264" or "mp4-h264-amf" or "mp4-amf-h264" => "mp4-h264",
+        "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" or "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" or "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" => "mp4-hevc",
+        "webm-av1-nvenc" or "webm-nvenc-av1" or "webm-av1-qsv" or "webm-qsv-av1" or "webm-av1-amf" or "webm-amf-av1" => "webm-av1",
+        "mp4-av1-nvenc" or "mp4-nvenc-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" or "mp4-av1-amf" or "mp4-amf-av1" => "mp4-av1",
+        "webm-vp9-qsv" or "webm-qsv-vp9" => "webm-vp9",
+        _ => targetExt
+    };
+
+    private static void DeleteOutputArtifacts(string? outputPath, bool isExtractFrames)
+    {
+        try
+        {
+            if (outputPath != null)
+            {
+                if (isExtractFrames && Directory.Exists(outputPath))
+                {
+                    Directory.Delete(outputPath, true);
+                }
+                else if (File.Exists(outputPath))
+                {
+                    File.Delete(outputPath);
+                }
+            }
+        }
+        catch { }
+    }
+
+    private static async Task<(int ExitCode, string Logs)> ExecuteFfmpegAsync(
+        string ffmpeg,
+        string arguments,
+        IProgress<ConversionProgress>? progress,
+        IConversionController? controller,
+        CancellationToken ct,
+        bool isCompress,
+        bool isExtractFrames)
+    {
+        var sw = Stopwatch.StartNew();
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = ffmpeg,
+            Arguments = arguments,
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            CreateNoWindow = true
+        };
+
+        using var proc = new Process { StartInfo = startInfo };
+        var fullLog = new System.Text.StringBuilder();
+
+        TimeSpan totalDuration = TimeSpan.Zero;
+        var durationRegex = new Regex(@"Duration:\s*(\d{2}):(\d{2}):(\d{2}\.\d+)", RegexOptions.Compiled);
+        var timeRegex = new Regex(@"time=(\d{2}):(\d{2}):(\d{2}\.\d+)", RegexOptions.Compiled);
+
+        proc.ErrorDataReceived += (sender, e) =>
+        {
+            if (string.IsNullOrEmpty(e.Data)) return;
+
+            lock (fullLog)
+            {
+                fullLog.AppendLine(e.Data);
+            }
+
+            if (totalDuration == TimeSpan.Zero)
+            {
+                var match = durationRegex.Match(e.Data);
+                if (match.Success && TimeSpan.TryParse(match.Groups[1].Value + ":" + match.Groups[2].Value + ":" + match.Groups[3].Value, CultureInfo.InvariantCulture, out var parsed))
+                {
+                    totalDuration = parsed;
+                }
+            }
+
+            var timeMatch = timeRegex.Match(e.Data);
+            if (timeMatch.Success && TimeSpan.TryParse(timeMatch.Groups[1].Value + ":" + timeMatch.Groups[2].Value + ":" + timeMatch.Groups[3].Value, CultureInfo.InvariantCulture, out var currentTime))
+            {
+                if (totalDuration > TimeSpan.Zero)
+                {
+                    var pct = Math.Clamp((currentTime.TotalSeconds / totalDuration.TotalSeconds) * 100.0, 0, 99);
+                    var status = isCompress ? I18n.T("VideoCompressing") : isExtractFrames ? I18n.T("VideoExtractingFrames") : I18n.T("MediaConverting");
+                    var timeFormat = totalDuration.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss";
+                    progress?.Report(new ConversionProgress(pct, status, $"{currentTime.ToString(timeFormat)} / {totalDuration.ToString(timeFormat)}"));
+                }
+                else
+                {
+                    var timeLabel = I18n.T("TimeLabel");
+                    var timeFormat = currentTime.TotalHours >= 1 ? @"hh\:mm\:ss" : @"mm\:ss";
+                    progress?.Report(new ConversionProgress(50, I18n.T("FfmpegProcessing"), $"{timeLabel}{currentTime.ToString(timeFormat)}"));
+                }
+            }
+        };
+
+        proc.Start();
+        controller?.OnProcessStarted(proc);
+        proc.BeginErrorReadLine();
+
+        using var registration = ct.Register(() =>
+        {
             try
             {
-                if (outputPath != null)
+                Windows.ProcessSuspender.Resume(proc);
+                if (!proc.HasExited)
                 {
-                    if (isExtractFrames && Directory.Exists(outputPath))
-                    {
-                        Directory.Delete(outputPath, true);
-                    }
-                    else if (File.Exists(outputPath))
-                    {
-                        File.Delete(outputPath);
-                    }
+                    proc.Kill();
                 }
             }
             catch { }
-            return new ConversionResult(false, null, ex.Message, ex.ToString(), sw.Elapsed);
-        }
+        });
+
+        await proc.WaitForExitAsync(CancellationToken.None);
+        sw.Stop();
+
+        var logs = fullLog.ToString();
+        AppLogger.LogProcess("ffmpeg", arguments, proc.ExitCode, sw.Elapsed, proc.ExitCode != 0 ? logs : null);
+        return (proc.ExitCode, logs);
     }
 
     public static string BuildRemuxArguments(string input, string output, RemuxSetting? setting = null)

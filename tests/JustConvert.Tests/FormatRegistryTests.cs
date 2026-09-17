@@ -242,4 +242,36 @@ public class FormatRegistryTests
         Assert.Equal(92, qAfterReset);
         Assert.Equal(92, settings.GetEffectiveQuality("jpg"));
     }
+
+    [Fact]
+    public void HardwareAccelerationDetector_DisableAndReset_TogglesAvailability()
+    {
+        try
+        {
+            HardwareAccelerationDetector.DisableNvenc();
+            HardwareAccelerationDetector.DisableQsv();
+            HardwareAccelerationDetector.DisableAmf();
+
+            Assert.False(HardwareAccelerationDetector.HasNvenc);
+            Assert.False(HardwareAccelerationDetector.HasNvencH264);
+            Assert.False(HardwareAccelerationDetector.HasNvencHevc);
+            Assert.False(HardwareAccelerationDetector.HasNvencAv1);
+
+            Assert.False(HardwareAccelerationDetector.HasQsv);
+            Assert.False(HardwareAccelerationDetector.HasQsvH264);
+            Assert.False(HardwareAccelerationDetector.HasQsvHevc);
+            Assert.False(HardwareAccelerationDetector.HasQsvVp9);
+            Assert.False(HardwareAccelerationDetector.HasQsvAv1);
+
+            Assert.False(HardwareAccelerationDetector.HasAmf);
+            Assert.False(HardwareAccelerationDetector.HasAmfH264);
+            Assert.False(HardwareAccelerationDetector.HasAmfHevc);
+            Assert.False(HardwareAccelerationDetector.HasAmfAv1);
+            Assert.False(HardwareAccelerationDetector.HasAny);
+        }
+        finally
+        {
+            HardwareAccelerationDetector.ResetDisabledEncodersForTesting();
+        }
+    }
 }

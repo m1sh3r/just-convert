@@ -43,23 +43,38 @@ public static class HardwareAccelerationDetector
 
     public static GpuCapabilities Capabilities => DetectedCapabilities.Value;
 
-    public static bool HasNvenc => Capabilities.HasNvenc;
-    public static bool HasNvencH264 => Capabilities.HasNvencH264;
-    public static bool HasNvencHevc => Capabilities.HasNvencHevc;
-    public static bool HasNvencAv1 => Capabilities.HasNvencAv1;
+    private static volatile bool _nvencDisabled;
+    private static volatile bool _qsvDisabled;
+    private static volatile bool _amfDisabled;
 
-    public static bool HasQsv => Capabilities.HasQsv;
-    public static bool HasQsvH264 => Capabilities.HasQsvH264;
-    public static bool HasQsvHevc => Capabilities.HasQsvHevc;
-    public static bool HasQsvVp9 => Capabilities.HasQsvVp9;
-    public static bool HasQsvAv1 => Capabilities.HasQsvAv1;
+    public static void DisableNvenc() => _nvencDisabled = true;
+    public static void DisableQsv() => _qsvDisabled = true;
+    public static void DisableAmf() => _amfDisabled = true;
 
-    public static bool HasAmf => Capabilities.HasAmf;
-    public static bool HasAmfH264 => Capabilities.HasAmfH264;
-    public static bool HasAmfHevc => Capabilities.HasAmfHevc;
-    public static bool HasAmfAv1 => Capabilities.HasAmfAv1;
+    internal static void ResetDisabledEncodersForTesting()
+    {
+        _nvencDisabled = false;
+        _qsvDisabled = false;
+        _amfDisabled = false;
+    }
 
-    public static bool HasAny => Capabilities.HasAny;
+    public static bool HasNvenc => !_nvencDisabled && Capabilities.HasNvenc;
+    public static bool HasNvencH264 => !_nvencDisabled && Capabilities.HasNvencH264;
+    public static bool HasNvencHevc => !_nvencDisabled && Capabilities.HasNvencHevc;
+    public static bool HasNvencAv1 => !_nvencDisabled && Capabilities.HasNvencAv1;
+
+    public static bool HasQsv => !_qsvDisabled && Capabilities.HasQsv;
+    public static bool HasQsvH264 => !_qsvDisabled && Capabilities.HasQsvH264;
+    public static bool HasQsvHevc => !_qsvDisabled && Capabilities.HasQsvHevc;
+    public static bool HasQsvVp9 => !_qsvDisabled && Capabilities.HasQsvVp9;
+    public static bool HasQsvAv1 => !_qsvDisabled && Capabilities.HasQsvAv1;
+
+    public static bool HasAmf => !_amfDisabled && Capabilities.HasAmf;
+    public static bool HasAmfH264 => !_amfDisabled && Capabilities.HasAmfH264;
+    public static bool HasAmfHevc => !_amfDisabled && Capabilities.HasAmfHevc;
+    public static bool HasAmfAv1 => !_amfDisabled && Capabilities.HasAmfAv1;
+
+    public static bool HasAny => HasNvenc || HasQsv || HasAmf;
 
     private static GpuCapabilities DetectCapabilities()
     {

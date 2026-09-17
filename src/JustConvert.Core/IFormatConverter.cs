@@ -6,7 +6,8 @@ public record ConversionResult(
     string? ErrorMessage = null,
     string? FullLog = null,
     TimeSpan Duration = default,
-    bool Skipped = false
+    bool Skipped = false,
+    bool CpuFallback = false
 );
 
 public record ConversionProgress(

@@ -108,4 +108,18 @@ public class UiConversionProgressWindowTests
             Assert.NotEqual(I18n.T("StatusSkippedAlreadyTarget"), window.Items[0].StatusText);
         });
     }
+
+    [Fact]
+    public void QueueItem_CpuFallback_UpdatesSymbolAndBrushes()
+    {
+        var item = new ConversionQueueItem("video.mp4", "mp4")
+        {
+            Status = QueueItemStatus.Done,
+            CpuFallback = true
+        };
+
+        Assert.Equal(Wpf.Ui.Controls.SymbolRegular.Warning16, item.StatusSymbol);
+        Assert.NotNull(item.StatusBrush);
+        Assert.NotNull(item.StatusTextBrush);
+    }
 }
