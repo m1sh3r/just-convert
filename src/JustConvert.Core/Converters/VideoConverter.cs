@@ -421,31 +421,41 @@ public class VideoConverter : IFormatConverter
         if (targetExt is "frames" or "frames-png")
         {
             var pattern = Path.Combine(output, "frame_%04d.png");
-            return $"-y -i \"{input}\" -vf \"fps=1\" \"{pattern}\"";
+            return string.IsNullOrEmpty(tonemapFilter)
+                ? $"-y -i \"{input}\" \"{pattern}\""
+                : $"-y -i \"{input}\" {tonemapFilter}\"{pattern}\"";
         }
 
         if (targetExt == "frames-jpg")
         {
             var pattern = Path.Combine(output, "frame_%04d.jpg");
-            return $"-y -i \"{input}\" -vf \"fps=1\" -qscale:v 2 \"{pattern}\"";
+            return string.IsNullOrEmpty(tonemapFilter)
+                ? $"-y -i \"{input}\" -qscale:v 2 \"{pattern}\""
+                : $"-y -i \"{input}\" {tonemapFilter}-qscale:v 2 \"{pattern}\"";
         }
 
         if (targetExt == "frames-webp")
         {
             var pattern = Path.Combine(output, "frame_%04d.webp");
-            return $"-y -i \"{input}\" -vf \"fps=1\" -qscale:v 85 \"{pattern}\"";
+            return string.IsNullOrEmpty(tonemapFilter)
+                ? $"-y -i \"{input}\" -qscale:v 85 \"{pattern}\""
+                : $"-y -i \"{input}\" {tonemapFilter}-qscale:v 85 \"{pattern}\"";
         }
 
         if (targetExt == "frames-bmp")
         {
             var pattern = Path.Combine(output, "frame_%04d.bmp");
-            return $"-y -i \"{input}\" -vf \"fps=1\" \"{pattern}\"";
+            return string.IsNullOrEmpty(tonemapFilter)
+                ? $"-y -i \"{input}\" \"{pattern}\""
+                : $"-y -i \"{input}\" {tonemapFilter}\"{pattern}\"";
         }
 
         if (targetExt == "frames-tiff")
         {
             var pattern = Path.Combine(output, "frame_%04d.tiff");
-            return $"-y -i \"{input}\" -vf \"fps=1\" \"{pattern}\"";
+            return string.IsNullOrEmpty(tonemapFilter)
+                ? $"-y -i \"{input}\" \"{pattern}\""
+                : $"-y -i \"{input}\" {tonemapFilter}\"{pattern}\"";
         }
 
         if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy")

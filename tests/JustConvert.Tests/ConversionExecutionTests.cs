@@ -273,7 +273,7 @@ public class ConversionExecutionTests : IDisposable
     {
         var args = VideoConverter.BuildVideoArguments("in.mp4", "outDir", targetExt);
         Assert.Contains(expectedPattern, args);
-        Assert.Contains("-vf \"fps=1\"", args);
+        Assert.DoesNotContain("fps=1", args);
     }
 
     [Fact]
