@@ -57,6 +57,12 @@ public static class OutputFileNameHelper
                 return codecName;
             }
 
+            var rc = (setting.RateControl ?? "cq").ToLowerInvariant();
+            if (rc is "vbr" or "cbr")
+            {
+                return $"{codecName} - {rc.ToUpperInvariant()} {setting.VideoBitrateKbps}k";
+            }
+
             return $"{codecName} - CQ {setting.VideoQualityCq}";
         }
 
@@ -120,10 +126,20 @@ public static class OutputFileNameHelper
         };
     }
 
-    public static string? BuildImageSuffix(string targetFormat, int? quality = null, bool appendQualitySuffix = true)
+    public static string? BuildImageSuffix(string targetFormat, int? quality = null, bool appendQualitySuffix = true, string? sourceExt = null, int? svgWidth = null)
     {
         var fmt = targetFormat.ToLowerInvariant();
         if (fmt == "reencode") return "Reencode";
+
+        if (sourceExt == "svg" && svgWidth > 0 && appendQualitySuffix)
+        {
+            if (AppSettings.SupportsQuality(fmt))
+            {
+                var q = quality ?? AppSettings.GetDefaultQuality(fmt);
+                return $"{svgWidth}px - Q{q}";
+            }
+            return $"{svgWidth}px";
+        }
 
         if (AppSettings.SupportsQuality(fmt))
         {

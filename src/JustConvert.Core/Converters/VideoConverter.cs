@@ -19,11 +19,7 @@ public class VideoConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "mkv", "mov", "webm", "gif", "remux", "remux-mp4", "remux-mkv", "frames", "frames-png", "frames-jpg", "frames-webp", "frames-bmp", "frames-tiff",
-        "mp4-h264", "mp4-h265", "mp4-hevc", "h264", "h265", "hevc", "webm-vp9", "vp9", "webm-av1", "av1", "mp4-av1", "mov-prores422", "mov-prores4444",
-        "mp4-h264-nvenc", "mp4-nvenc-h264", "mp4-h265-nvenc", "mp4-hevc-nvenc", "mp4-nvenc-h265", "mp4-nvenc-hevc", "webm-av1-nvenc", "webm-nvenc-av1", "mp4-av1-nvenc", "mp4-nvenc-av1",
-        "mp4-h264-qsv", "mp4-qsv-h264", "mp4-h265-qsv", "mp4-hevc-qsv", "mp4-qsv-h265", "mp4-qsv-hevc", "webm-vp9-qsv", "webm-qsv-vp9", "webm-av1-qsv", "webm-qsv-av1", "mp4-av1-qsv", "mp4-qsv-av1",
-        "mp4-h264-amf", "mp4-amf-h264", "mp4-h265-amf", "mp4-hevc-amf", "mp4-amf-h265", "mp4-amf-hevc", "webm-av1-amf", "webm-amf-av1", "mp4-av1-amf", "mp4-amf-av1",
+        "mp4", "webm", "mkv", "mov", "gif", "frames", "frames-png", "frames-jpg", "frames-webp", "frames-bmp", "frames-tiff", "remux", "remux-mp4", "remux-mkv",
         "mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "aiff"
     };
 
@@ -43,23 +39,12 @@ public class VideoConverter : IFormatConverter
         }
 
         if (!VideoFormats.Contains(src)) return false;
-        if (tgt.StartsWith("preset:")) return true;
-        if (!VideoTargetFormats.Contains(tgt)) return false;
-
-        if (tgt is "mp4-h264-nvenc" or "mp4-nvenc-h264" && !HardwareAccelerationDetector.HasNvencH264) return false;
-        if (tgt is "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" && !HardwareAccelerationDetector.HasNvencHevc) return false;
-        if (tgt is "webm-av1-nvenc" or "webm-nvenc-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" && !HardwareAccelerationDetector.HasNvencAv1) return false;
-
-        if (tgt is "mp4-h264-qsv" or "mp4-qsv-h264" && !HardwareAccelerationDetector.HasQsvH264) return false;
-        if (tgt is "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" && !HardwareAccelerationDetector.HasQsvHevc) return false;
-        if (tgt is "webm-vp9-qsv" or "webm-qsv-vp9" && !HardwareAccelerationDetector.HasQsvVp9) return false;
-        if (tgt is "webm-av1-qsv" or "webm-qsv-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" && !HardwareAccelerationDetector.HasQsvAv1) return false;
-
-        if (tgt is "mp4-h264-amf" or "mp4-amf-h264" && !HardwareAccelerationDetector.HasAmfH264) return false;
-        if (tgt is "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" && !HardwareAccelerationDetector.HasAmfHevc) return false;
-        if (tgt is "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-amf" or "mp4-amf-av1" && !HardwareAccelerationDetector.HasAmfAv1) return false;
-
-        return true;
+        if (tgt.StartsWith("preset:"))
+        {
+            var preset = AppSettings.Load().FindPreset(tgt[7..]);
+            return preset == null || preset.Category == "video";
+        }
+        return VideoTargetFormats.Contains(tgt);
     }
 
     public IReadOnlyList<string> GetSupportedTargetFormats(string sourceExtension)
@@ -69,9 +54,9 @@ public class VideoConverter : IFormatConverter
 
         return
         [
-            "mp4", "mkv", "mov", "webm", "gif", "frames",
-            "mp3", "m4a", "aac", "wav", "flac", "opus",
-            "remux", "reencode"
+            "mp4", "webm", "mkv", "mov", "gif", "frames", "remux",
+            "mp3", "wav", "flac", "aac", "m4a", "opus",
+            "reencode"
         ];
     }
 
@@ -121,7 +106,7 @@ public class VideoConverter : IFormatConverter
         }
         else if (targetExt.StartsWith("preset:"))
         {
-            var presetId = targetExt.Substring(7);
+            var presetId = targetExt[7..];
             preset = settings.FindPreset(presetId);
             if (preset != null)
             {
@@ -130,7 +115,9 @@ public class VideoConverter : IFormatConverter
                 {
                     VideoCodec = preset.VideoCodec,
                     Encoder = preset.Encoder,
+                    RateControl = preset.RateControl,
                     VideoQualityCq = preset.VideoQualityCq,
+                    VideoBitrateKbps = preset.VideoBitrateKbps,
                     AudioCodec = preset.AudioCodec,
                     AudioBitrateKbps = preset.AudioBitrateKbps
                 };
@@ -198,7 +185,9 @@ public class VideoConverter : IFormatConverter
 
         try
         {
-            var arguments = BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting, remuxSetting);
+            var arguments = (preset != null && preset.IsCustomCommand && !string.IsNullOrWhiteSpace(preset.CustomArguments))
+                ? $"-y -i \"{inputPath}\" {preset.CustomArguments} \"{outputPath}\""
+                : BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting, remuxSetting);
             AppLogger.Info($"[VideoConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
             AppLogger.Info($"[VideoConverter] Command: ffmpeg {arguments}");
 
@@ -223,7 +212,9 @@ public class VideoConverter : IFormatConverter
                 {
                     VideoCodec = videoSetting.VideoCodec,
                     Encoder = "cpu",
+                    RateControl = videoSetting.RateControl,
                     VideoQualityCq = videoSetting.VideoQualityCq,
+                    VideoBitrateKbps = videoSetting.VideoBitrateKbps,
                     AudioCodec = videoSetting.AudioCodec,
                     AudioBitrateKbps = videoSetting.AudioBitrateKbps,
                     IsRemembered = videoSetting.IsRemembered
@@ -638,7 +629,9 @@ public class VideoConverter : IFormatConverter
     {
         var codec = setting.VideoCodec.ToLowerInvariant();
         var encoder = setting.Encoder.ToLowerInvariant();
+        var rc = (setting.RateControl ?? "cq").ToLowerInvariant();
         var cq = setting.VideoQualityCq;
+        var bitrate = setting.VideoBitrateKbps > 0 ? setting.VideoBitrateKbps : 15000;
 
         if (codec == "copy") return "-c:v copy";
         if (codec == "prores422") return "-c:v prores_ks -profile:v 2";
@@ -676,6 +669,83 @@ public class VideoConverter : IFormatConverter
             {
                 encoder = "cpu";
             }
+        }
+
+        if (rc == "vbr")
+        {
+            var maxRate = (int)(bitrate * 1.5);
+            var bufSize = bitrate * 2;
+            return encoder switch
+            {
+                "nvenc" => codec switch
+                {
+                    "h264" => $"-c:v h264_nvenc -rc:v vbr -b:v {bitrate}k -maxrate:v {maxRate}k -bufsize:v {bufSize}k -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle",
+                    "h265" or "hevc" => $"-c:v hevc_nvenc -rc:v vbr -b:v {bitrate}k -maxrate:v {maxRate}k -bufsize:v {bufSize}k -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle -tag:v hvc1",
+                    "av1" => $"-c:v av1_nvenc -rc:v vbr -b:v {bitrate}k -maxrate:v {maxRate}k -bufsize:v {bufSize}k -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -maxrate {maxRate}k -bufsize {bufSize}k -preset medium"
+                },
+                "qsv" => codec switch
+                {
+                    "h264" => $"-c:v h264_qsv -b:v {bitrate}k -maxrate:v {maxRate}k -preset medium -adaptive_i 1 -adaptive_b 1",
+                    "h265" or "hevc" => $"-c:v hevc_qsv -b:v {bitrate}k -maxrate:v {maxRate}k -preset medium -adaptive_i 1 -adaptive_b 1 -tag:v hvc1",
+                    "av1" => $"-c:v av1_qsv -b:v {bitrate}k -maxrate:v {maxRate}k -preset medium -adaptive_i 1 -adaptive_b 1",
+                    "vp9" => $"-c:v vp9_qsv -b:v {bitrate}k -maxrate:v {maxRate}k -adaptive_i 1 -adaptive_b 1",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -maxrate {maxRate}k -bufsize {bufSize}k -preset medium"
+                },
+                "amf" => codec switch
+                {
+                    "h264" => $"-c:v h264_amf -rc vbr_peak -b:v {bitrate}k -maxrate {maxRate}k -quality balanced",
+                    "h265" or "hevc" => $"-c:v hevc_amf -rc vbr_peak -b:v {bitrate}k -maxrate {maxRate}k -quality balanced -tag:v hvc1",
+                    "av1" => $"-c:v av1_amf -rc vbr_peak -b:v {bitrate}k -maxrate {maxRate}k -quality balanced",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -maxrate {maxRate}k -bufsize {bufSize}k -preset medium"
+                },
+                _ => codec switch
+                {
+                    "h264" => $"-c:v libx264 -b:v {bitrate}k -maxrate {maxRate}k -bufsize {bufSize}k -preset medium",
+                    "h265" or "hevc" => $"-c:v libx265 -b:v {bitrate}k -maxrate {maxRate}k -bufsize {bufSize}k -preset medium -tag:v hvc1",
+                    "av1" => $"-c:v libsvtav1 -b:v {bitrate}k -preset 6 -svtav1-params tune=0",
+                    "vp9" => $"-c:v libvpx-vp9 -b:v {bitrate}k -deadline good -cpu-used 2 -row-mt 1",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -maxrate {maxRate}k -bufsize {bufSize}k -preset medium"
+                }
+            };
+        }
+
+        if (rc == "cbr")
+        {
+            var bufSize = bitrate * 2;
+            return encoder switch
+            {
+                "nvenc" => codec switch
+                {
+                    "h264" => $"-c:v h264_nvenc -rc:v cbr -b:v {bitrate}k -minrate:v {bitrate}k -maxrate:v {bitrate}k -bufsize:v {bufSize}k -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle",
+                    "h265" or "hevc" => $"-c:v hevc_nvenc -rc:v cbr -b:v {bitrate}k -minrate:v {bitrate}k -maxrate:v {bitrate}k -bufsize:v {bufSize}k -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1 -b_ref_mode middle -tag:v hvc1",
+                    "av1" => $"-c:v av1_nvenc -rc:v cbr -b:v {bitrate}k -minrate:v {bitrate}k -maxrate:v {bitrate}k -bufsize:v {bufSize}k -preset p5 -tune hq -multipass fullres -rc-lookahead 20 -spatial-aq 1 -aq-strength 7 -temporal-aq 1",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -preset medium"
+                },
+                "qsv" => codec switch
+                {
+                    "h264" => $"-c:v h264_qsv -b:v {bitrate}k -minrate:v {bitrate}k -maxrate:v {bitrate}k -bufsize:v {bufSize}k -preset medium -adaptive_i 1 -adaptive_b 1",
+                    "h265" or "hevc" => $"-c:v hevc_qsv -b:v {bitrate}k -minrate:v {bitrate}k -maxrate:v {bitrate}k -bufsize:v {bufSize}k -preset medium -adaptive_i 1 -adaptive_b 1 -tag:v hvc1",
+                    "av1" => $"-c:v av1_qsv -b:v {bitrate}k -minrate:v {bitrate}k -maxrate:v {bitrate}k -bufsize:v {bufSize}k -preset medium -adaptive_i 1 -adaptive_b 1",
+                    "vp9" => $"-c:v vp9_qsv -b:v {bitrate}k -minrate:v {bitrate}k -maxrate:v {bitrate}k -bufsize:v {bufSize}k -adaptive_i 1 -adaptive_b 1",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -preset medium"
+                },
+                "amf" => codec switch
+                {
+                    "h264" => $"-c:v h264_amf -rc cbr -b:v {bitrate}k -quality balanced",
+                    "h265" or "hevc" => $"-c:v hevc_amf -rc cbr -b:v {bitrate}k -quality balanced -tag:v hvc1",
+                    "av1" => $"-c:v av1_amf -rc cbr -b:v {bitrate}k -quality balanced",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -preset medium"
+                },
+                _ => codec switch
+                {
+                    "h264" => $"-c:v libx264 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -preset medium",
+                    "h265" or "hevc" => $"-c:v libx265 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -preset medium -tag:v hvc1",
+                    "av1" => $"-c:v libsvtav1 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -preset 6 -svtav1-params tune=0",
+                    "vp9" => $"-c:v libvpx-vp9 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -deadline good -cpu-used 2 -row-mt 1",
+                    _ => $"-c:v libx264 -b:v {bitrate}k -minrate {bitrate}k -maxrate {bitrate}k -bufsize {bufSize}k -preset medium"
+                }
+            };
         }
 
         return encoder switch
