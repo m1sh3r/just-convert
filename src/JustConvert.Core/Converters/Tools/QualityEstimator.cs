@@ -2,26 +2,86 @@ namespace JustConvert.Core.Converters.Tools;
 
 public static class QualityEstimator
 {
-    public static int EstimateVideoBitrateKbps(int width, int height, double fps, int cq, string codec)
+    public static int EstimateVideoBitrateKbps(
+        int width,
+        int height,
+        double fps,
+        int cq,
+        string codec,
+        string encoder = "auto",
+        int? sourceBitrateKbps = null)
     {
         var w = width > 0 ? width : 1920;
         var h = height > 0 ? height : 1080;
         var f = fps > 0 ? fps : 30.0;
-        var clampedCq = Math.Clamp(cq, 10, 45);
-
         var c = codec.ToLowerInvariant();
-        var baseBpp = c switch
+        var enc = encoder.ToLowerInvariant();
+
+        if (c is "copy")
         {
-            "h265" or "hevc" or "x265" or "libx265" => 0.060,
-            "av1" or "svtav1" or "libsvtav1" => 0.055,
-            "vp9" or "libvpx-vp9" => 0.065,
-            _ => 0.090
+            return sourceBitrateKbps ?? 5000;
+        }
+
+        if (c is "prores422" or "prores")
+        {
+            var pBps = 147_000_000.0 * ((w * (double)h) / (1920.0 * 1080.0)) * (f / 30.0);
+            return (int)(pBps / 1000.0);
+        }
+
+        if (c is "prores4444")
+        {
+            var pBps = 330_000_000.0 * ((w * (double)h) / (1920.0 * 1080.0)) * (f / 30.0);
+            return (int)(pBps / 1000.0);
+        }
+
+        if (c is "proreshq")
+        {
+            var pBps = 220_000_000.0 * ((w * (double)h) / (1920.0 * 1080.0)) * (f / 30.0);
+            return (int)(pBps / 1000.0);
+        }
+
+        if (c is "proreslt")
+        {
+            var pBps = 102_000_000.0 * ((w * (double)h) / (1920.0 * 1080.0)) * (f / 30.0);
+            return (int)(pBps / 1000.0);
+        }
+
+        if (c is "proresproxy")
+        {
+            var pBps = 45_000_000.0 * ((w * (double)h) / (1920.0 * 1080.0)) * (f / 30.0);
+            return (int)(pBps / 1000.0);
+        }
+
+        var clampedCq = Math.Clamp(cq, 10, 45);
+        var baseKbps1080p30 = c switch
+        {
+            "h265" or "hevc" or "x265" or "libx265" => 3200.0,
+            "av1" or "svtav1" or "libsvtav1" => 2500.0,
+            "vp9" or "libvpx-vp9" => 3300.0,
+            "mpeg4" or "xvid" => 6500.0,
+            _ => 4500.0
         };
 
-        var bpp = baseBpp * Math.Pow(2, (23.0 - clampedCq) / 6.0);
-        var bitrateKbps = (int)((w * h * f * bpp) / 1000.0);
+        var cqScale = Math.Pow(2.0, (23.0 - clampedCq) / 6.0);
+        var encMultiplier = enc switch
+        {
+            "nvenc" or "qsv" or "amf" => 1.30,
+            _ => 1.0
+        };
 
-        return Math.Clamp(bitrateKbps, 250, 150000);
+        var normFactor = Math.Pow((w * (double)h) / (1920.0 * 1080.0), 0.75) * Math.Pow(f / 30.0, 0.65);
+        var estimatedKbps = (int)(baseKbps1080p30 * cqScale * encMultiplier * normFactor);
+
+        if (sourceBitrateKbps.HasValue && sourceBitrateKbps.Value > 0)
+        {
+            var maxAllowed = (int)(sourceBitrateKbps.Value * 1.15);
+            if (clampedCq >= 20 && estimatedKbps > maxAllowed)
+            {
+                estimatedKbps = maxAllowed;
+            }
+        }
+
+        return Math.Clamp(estimatedKbps, 200, 500_000);
     }
 
     public static long EstimateVideoFileSize(
@@ -31,26 +91,60 @@ public static class QualityEstimator
         double durationSeconds,
         int cq,
         string videoCodec,
-        int audioBitrateKbps = 192)
+        int audioBitrateKbps = 192,
+        string encoder = "auto",
+        int? sourceBitrateKbps = null,
+        long? sourceFileSizeBytes = null,
+        string? rateControl = "cq",
+        int videoBitrateKbps = 15000)
     {
         var dur = durationSeconds > 0 ? durationSeconds : 60.0;
-        var videoKbps = EstimateVideoBitrateKbps(width, height, fps, cq, videoCodec);
+        var c = videoCodec.ToLowerInvariant();
+
+        if (c is "copy" or "remux")
+        {
+            if (sourceFileSizeBytes.HasValue && sourceFileSizeBytes.Value > 0)
+            {
+                return (long)(sourceFileSizeBytes.Value * 1.01);
+            }
+        }
+
+        var rc = (rateControl ?? "cq").ToLowerInvariant();
+        int videoKbps;
+        if (rc is "vbr" or "cbr" && videoBitrateKbps > 0)
+        {
+            videoKbps = videoBitrateKbps;
+        }
+        else
+        {
+            videoKbps = EstimateVideoBitrateKbps(width, height, fps, cq, videoCodec, encoder, sourceBitrateKbps);
+        }
+
         var totalBitrateKbps = videoKbps + Math.Clamp(audioBitrateKbps, 32, 640);
 
-        return (long)((totalBitrateKbps * 1000.0 / 8.0) * dur);
+        return (long)((totalBitrateKbps * 1000.0 / 8.0) * dur * 1.015);
     }
 
     public static long EstimateVideoFileSize(
         string videoCodec,
         int cq,
         int audioBitrateKbps,
-        MediaStreamInfo? mediaInfo)
+        MediaStreamInfo? mediaInfo,
+        string encoder = "auto",
+        string? rateControl = "cq",
+        int videoBitrateKbps = 15000)
     {
         var w = mediaInfo?.Video?.Width ?? 1920;
         var h = mediaInfo?.Video?.Height ?? 1080;
         var fps = mediaInfo?.Video?.FrameRateFps ?? 30.0;
         var dur = mediaInfo?.DurationSeconds ?? 60.0;
-        return EstimateVideoFileSize(w, h, fps, dur, cq, videoCodec, audioBitrateKbps);
+        int? srcBitrate = null;
+        if (mediaInfo?.FileSizeBytes.HasValue == true && dur > 0)
+        {
+            srcBitrate = (int)((mediaInfo.FileSizeBytes.Value * 8.0) / (dur * 1000.0));
+        }
+
+        return EstimateVideoFileSize(w, h, fps, dur, cq, videoCodec, audioBitrateKbps, encoder, srcBitrate, mediaInfo?.FileSizeBytes, rateControl, videoBitrateKbps);
     }
 
     public static string GetVideoQualityDescriptionKey(int cq, int width = 1920, int height = 1080, double fps = 30.0)
@@ -77,34 +171,46 @@ public static class QualityEstimator
         MediaStreamInfo? mediaInfo)
     {
         var dur = mediaInfo?.DurationSeconds ?? 60.0;
-        var isLossless = targetFormat is "flac" or "wav" or "aiff" or "alac";
+        var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
+        var isLossless = fmt is "flac" or "wav" or "aiff" or "alac";
         var sr = mediaInfo?.Audio?.SampleRate ?? 44100;
         var ch = mediaInfo?.Audio?.Channels ?? 2;
         var bps = mediaInfo?.Audio?.BitsPerSample ?? 16;
-        return EstimateAudioFileSize(dur, bitrateKbps, isLossless, sr, ch, bps);
+        return EstimateAudioFileSize(dur, bitrateKbps, fmt, isLossless, sr, ch, bps);
     }
 
     public static long EstimateAudioFileSize(
         double durationSeconds,
         int bitrateKbps,
+        string format = "mp3",
         bool isLossless = false,
         int sampleRate = 44100,
         int channels = 2,
         int bitsPerSample = 16)
     {
         var dur = durationSeconds > 0 ? durationSeconds : 60.0;
+        var fmt = format.TrimStart('.').ToLowerInvariant();
 
-        if (isLossless)
+        if (fmt is "wav" or "aiff")
         {
             var sr = sampleRate > 0 ? sampleRate : 44100;
             var ch = channels > 0 ? channels : 2;
             var bps = bitsPerSample > 0 ? bitsPerSample : 16;
-            var rawPcmBytes = (long)(sr * ch * (bps / 8.0) * dur);
-            return (long)(rawPcmBytes * 0.60);
+            return (long)(sr * ch * (bps / 8.0) * dur) + 44L;
+        }
+
+        if (isLossless || fmt is "flac" or "alac")
+        {
+            var sr = sampleRate > 0 ? sampleRate : 44100;
+            var ch = channels > 0 ? channels : 2;
+            var bps = bitsPerSample > 0 ? bitsPerSample : 16;
+            var rawPcmBytes = sr * ch * (bps / 8.0) * dur;
+            var ratio = bps > 16 ? 0.68 : 0.58;
+            return (long)(rawPcmBytes * ratio) + 1024L;
         }
 
         var kbps = Math.Clamp(bitrateKbps, 32, 512);
-        return (long)((kbps * 1000.0 / 8.0) * dur);
+        return (long)((kbps * 1000.0 / 8.0) * dur * 1.02);
     }
 
     public static string GetAudioQualityDescriptionKey(int bitrateKbps, bool isLossless = false)
@@ -124,37 +230,45 @@ public static class QualityEstimator
     {
         var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
         var q = Math.Clamp(quality, 1, 100);
-
-        if (sourceSizeBytes > 0)
-        {
-            var factor = q / 100.0;
-            var estimated = fmt switch
-            {
-                "jpg" or "jpeg" => sourceSizeBytes * factor * 0.85,
-                "webp" => sourceSizeBytes * factor * 0.65,
-                "avif" => sourceSizeBytes * factor * 0.50,
-                "jp2" => sourceSizeBytes * factor * 0.80,
-                "png" => sourceSizeBytes * 1.05,
-                "bmp" => Math.Max(sourceSizeBytes, (width > 0 ? width : 1920) * (height > 0 ? height : 1080) * 4L + 54L),
-                _ => sourceSizeBytes * factor
-            };
-
-            return Math.Max(1024L, (long)estimated);
-        }
-
         var w = width > 0 ? width : 1920;
         var h = height > 0 ? height : 1080;
         var pixels = (long)w * h;
 
-        var bpp = q switch
+        if (fmt is "bmp")
         {
-            <= 50 => 0.45,
-            <= 75 => 0.85,
-            <= 90 => 1.50,
-            _ => 2.40
-        };
+            return pixels * 3L + 54L;
+        }
 
-        return Math.Max(1024L, (long)(pixels * bpp / 8.0));
+        if (fmt is "tiff" or "tif")
+        {
+            return (long)(pixels * 3.0 * 0.65) + 1024L;
+        }
+
+        if (fmt is "png")
+        {
+            return (long)(pixels * 1.5) + 1024L;
+        }
+
+        var factor = q / 100.0;
+        var bpp = 0.05 + 0.22 * Math.Pow(factor, 3) + 0.15 * factor;
+        var jpegBytes = (long)(pixels * bpp) + 2048L;
+
+        if (sourceSizeBytes > 0 && pixels > 0)
+        {
+            var srcBpp = (double)sourceSizeBytes / pixels;
+            if (srcBpp is >= 0.05 and <= 1.2)
+            {
+                var complexityMod = Math.Clamp(srcBpp / 0.20, 0.6, 1.8);
+                jpegBytes = (long)(jpegBytes * complexityMod);
+            }
+        }
+
+        return fmt switch
+        {
+            "webp" => Math.Max(1024L, (long)(jpegBytes * 0.72)),
+            "avif" => Math.Max(1024L, (long)(jpegBytes * 0.55)),
+            _ => Math.Max(1024L, jpegBytes)
+        };
     }
 
     public static long EstimateImageFileSize(string targetFormat, int quality, MediaStreamInfo? mediaInfo)
@@ -163,6 +277,29 @@ public static class QualityEstimator
         var h = mediaInfo?.Video?.Height ?? 1080;
         var srcSize = mediaInfo?.FileSizeBytes ?? 0L;
         return EstimateImageFileSize(w, h, srcSize, quality, targetFormat);
+    }
+
+    public static long EstimateGifFileSize(int width, int height, double durationSeconds)
+    {
+        var w = width > 0 ? width : 1920;
+        var h = height > 0 ? height : 1080;
+        var dur = durationSeconds > 0 ? durationSeconds : 5.0;
+
+        var gifWidth = 480;
+        var gifHeight = Math.Max(180, (int)(480.0 * h / w));
+        var frameCount = (long)(dur * 15.0);
+        var bytesPerFrame = (long)(gifWidth * gifHeight * 0.25);
+
+        return Math.Max(1024L, frameCount * bytesPerFrame);
+    }
+
+    public static long EstimateFramesFolderSize(int width, int height, double fps, double durationSeconds, string imageFormat)
+    {
+        var f = fps > 0 ? fps : 30.0;
+        var dur = durationSeconds > 0 ? durationSeconds : 10.0;
+        var totalFrames = (long)(f * dur);
+        var perFrame = EstimateImageFileSize(width, height, 0, 90, imageFormat);
+        return Math.Max(1024L, totalFrames * perFrame);
     }
 
     public static string GetImageQualityDescriptionKey(int quality) => quality switch
