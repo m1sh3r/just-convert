@@ -79,7 +79,7 @@ public static class AppLogger
     {
         if (ex != null)
         {
-            WriteEntry("ERROR", $"{message}\n{ex.GetType().FullName}: {ex.Message}\n{ex.StackTrace}");
+            WriteEntry("ERROR", $"{message}\n{ex}");
         }
         else
         {
