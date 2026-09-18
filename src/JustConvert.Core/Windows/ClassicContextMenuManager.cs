@@ -39,18 +39,18 @@ public class ClassicContextMenuManager
 
     private static readonly Dictionary<string, Func<IReadOnlyList<string>>> CategoryTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        ["audio"] = () => ["mp3", "m4a", "aac", "wav", "flac", "ogg", "opus", "aiff", "reencode"],
+        ["audio"] = () => ["mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff", "reencode"],
         ["video"] = GetVideoTargetFormats,
-        ["image"] = () => ["jpg", "png", "webp", "avif", "gif", "ico", "bmp", "tiff", "jp2", "tga", "pcx", "ppm", "reencode"]
+        ["image"] = () => ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
     };
 
     private static IReadOnlyList<string> GetVideoTargetFormats()
     {
         return
         [
-            "mp4", "mkv", "mov", "webm", "gif", "frames",
-            "mp3", "m4a", "aac", "wav", "flac", "opus",
-            "remux", "reencode"
+            "mp4", "webm", "mkv", "mov", "gif", "frames", "remux",
+            "mp3", "wav", "flac", "aac", "m4a", "opus",
+            "reencode"
         ];
     }
 
@@ -77,14 +77,7 @@ public class ClassicContextMenuManager
         var videoTargets = FilterAvailableFormats(activeProfile.VideoFormats);
         var audioTargets = FilterAvailableFormats(activeProfile.AudioFormats);
         var imageTargets = FilterAvailableFormats(activeProfile.ImageFormats);
-
-        var videoPresets = settings.CustomPresets.Where(p => p.Category == "video").Select(p => $"preset:{p.Id}").ToList();
-        var audioPresets = settings.CustomPresets.Where(p => p.Category == "audio").Select(p => $"preset:{p.Id}").ToList();
-        var imagePresets = settings.CustomPresets.Where(p => p.Category == "image").Select(p => $"preset:{p.Id}").ToList();
-
-        videoTargets.AddRange(videoPresets);
-        audioTargets.AddRange(audioPresets);
-        imageTargets.AddRange(imagePresets);
+        var sortedPresets = settings.CustomPresets.OrderBy(p => p.Order).ToList();
 
         foreach (var category in CategoryTargetFormats.Keys)
         {
@@ -98,26 +91,36 @@ public class ClassicContextMenuManager
 
         foreach (var ext in KnownExtensions)
         {
+            string cat;
             IReadOnlyList<string> baseTargets;
             if (ImageExtensions.Contains(ext))
             {
+                cat = "image";
                 baseTargets = imageTargets;
             }
             else if (AudioExtensions.Contains(ext))
             {
+                cat = "audio";
                 baseTargets = audioTargets;
             }
             else if (VideoExtensions.Contains(ext))
             {
+                cat = "video";
                 baseTargets = videoTargets;
             }
             else
             {
+                cat = string.Empty;
                 baseTargets = _registry.GetAvailableTargetFormats(ext);
             }
 
-            var targets = baseTargets
-                .Where(t => !IsSameFormat(ext, t))
+            var applicablePresets = sortedPresets
+                .Where(p => string.Equals(p.Category, cat, StringComparison.OrdinalIgnoreCase) && IsPresetApplicableToExtension(p, ext))
+                .Select(p => $"preset:{p.Id}")
+                .ToList();
+
+            var targets = applicablePresets
+                .Concat(baseTargets.Where(t => !IsSameFormat(ext, t)))
                 .ToList();
 
             if (targets.Count == 0) continue;
@@ -134,26 +137,7 @@ public class ClassicContextMenuManager
 
     public static List<string> FilterAvailableFormats(IEnumerable<string> formats)
     {
-        var result = new List<string>();
-        foreach (var fmt in formats)
-        {
-            var f = fmt.TrimStart('.').ToLowerInvariant();
-            if (f is "mp4-h264-nvenc" or "mp4-nvenc-h264" && !HardwareAccelerationDetector.HasNvencH264) continue;
-            if (f is "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" && !HardwareAccelerationDetector.HasNvencHevc) continue;
-            if (f is "webm-av1-nvenc" or "webm-nvenc-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" && !HardwareAccelerationDetector.HasNvencAv1) continue;
-
-            if (f is "mp4-h264-qsv" or "mp4-qsv-h264" && !HardwareAccelerationDetector.HasQsvH264) continue;
-            if (f is "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" && !HardwareAccelerationDetector.HasQsvHevc) continue;
-            if (f is "webm-vp9-qsv" or "webm-qsv-vp9" && !HardwareAccelerationDetector.HasQsvVp9) continue;
-            if (f is "webm-av1-qsv" or "webm-qsv-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" && !HardwareAccelerationDetector.HasQsvAv1) continue;
-
-            if (f is "mp4-h264-amf" or "mp4-amf-h264" && !HardwareAccelerationDetector.HasAmfH264) continue;
-            if (f is "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" && !HardwareAccelerationDetector.HasAmfHevc) continue;
-            if (f is "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-amf" or "mp4-amf-av1" && !HardwareAccelerationDetector.HasAmfAv1) continue;
-
-            result.Add(fmt);
-        }
-        return result;
+        return formats.Select(f => f.TrimStart('.').ToLowerInvariant()).ToList();
     }
 
     private static void RegisterKey(RegistryKey classesRoot, string shellPath, IReadOnlyList<string> targetFormats, string exePath)
@@ -239,35 +223,38 @@ public class ClassicContextMenuManager
         if (src is "jp2" or "jpeg2000" && tgt is "jp2" or "jpeg2000") return true;
         if (src is "aiff" or "aif" && tgt is "aiff" or "aif") return true;
 
-        if (src == "mp4" && tgt is "remux-mp4" or "mp4-remux" or "mp4-copy") return true;
-        if (src == "mkv" && tgt is "remux-mkv" or "mkv-remux" or "mkv-copy") return true;
-
         return false;
+    }
+
+    public static bool IsPresetApplicableToExtension(CustomPreset preset, string ext)
+    {
+        if (string.IsNullOrWhiteSpace(preset.InputExtensions))
+        {
+            return true;
+        }
+
+        var cleanExt = ext.TrimStart('.').ToLowerInvariant();
+        var allowed = preset.InputExtensions
+            .Split(new[] { ',', ';', ' ', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(e => e.TrimStart('.').ToLowerInvariant());
+
+        return allowed.Contains(cleanExt);
     }
 
     private static int GetFormatGroup(string format)
     {
         var fmt = format.TrimStart('.').ToLowerInvariant();
+        if (fmt.StartsWith("preset:")) return 0;
         return fmt switch
         {
             "mp4" or "mkv" or "mov" or "webm" or "gif" => 1,
-            "mp4-h264" or "h264" or "mp4-h264-nvenc" or "mp4-nvenc-h264" or "mp4-h264-qsv" or "mp4-qsv-h264" or "mp4-h264-amf" or "mp4-amf-h264" => 2,
-            "mp4-h265" or "h265" or "hevc" or "mp4-hevc" or "mp4-h265-nvenc" or "mp4-hevc-nvenc" or "mp4-nvenc-h265" or "mp4-nvenc-hevc" or "mp4-h265-qsv" or "mp4-hevc-qsv" or "mp4-qsv-h265" or "mp4-qsv-hevc" or "mp4-h265-amf" or "mp4-hevc-amf" or "mp4-amf-h265" or "mp4-amf-hevc" => 3,
-            "webm-vp9" or "vp9" or "webm-vp9-qsv" or "webm-qsv-vp9" => 4,
-            "webm-av1" or "av1" or "webm-av1-nvenc" or "webm-nvenc-av1" or "webm-av1-qsv" or "webm-qsv-av1" or "webm-av1-amf" or "webm-amf-av1" or "mp4-av1-nvenc" or "mp4-nvenc-av1" or "mp4-av1-qsv" or "mp4-qsv-av1" or "mp4-av1-amf" or "mp4-amf-av1" or "mp4-av1" => 5,
-            "mov-prores422" or "mov-prores4444" or "prores422" or "prores4444" => 6,
-
             "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" => 10,
-
-            "jpg" or "jpeg" or "png" or "webp" or "avif" => 15,
-            "ico" or "bmp" => 16,
-            "tiff" or "tif" or "jp2" or "jpeg2000" or "tga" or "pcx" or "ppm" or "heic" => 17,
-
+            "remux" or "remux-mp4" or "remux-mkv" or "mp4-remux" or "mkv-remux" => 15,
             "mp3" or "m4a" or "aac" or "wav" or "flac" or "opus" or "ogg" or "aiff" or "aif" => 20,
-
-            "remux" or "remux-mp4" or "remux-mkv" or "mp4-remux" or "mkv-remux" => 40,
-            "reencode" => 41,
-
+            "jpg" or "jpeg" or "png" or "webp" or "avif" => 30,
+            "ico" or "bmp" => 31,
+            "tiff" or "tif" or "jp2" or "jpeg2000" or "tga" or "pcx" or "ppm" or "heic" => 32,
+            "reencode" => 40,
             _ => 99
         };
     }

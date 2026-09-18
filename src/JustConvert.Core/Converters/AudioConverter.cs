@@ -36,6 +36,13 @@ public class AudioConverter : IFormatConverter
             return AudioSourceFormats.Contains(src);
         }
 
+        if (tgt.StartsWith("preset:"))
+        {
+            if (!AudioSourceFormats.Contains(src)) return false;
+            var preset = AppSettings.Load().FindPreset(tgt[7..]);
+            return preset == null || preset.Category == "audio";
+        }
+
         if (src == tgt) return false;
 
         return AudioSourceFormats.Contains(src) && AudioTargetFormats.Contains(tgt);
@@ -91,8 +98,20 @@ public class AudioConverter : IFormatConverter
         catch { }
 
         var settings = AppSettings.Load();
-        var effectiveBitrate = settings.GetEffectiveAudioQuality(targetExt);
-        var appendSuffix = settings.AppendQualitySuffix;
+        CustomPreset? preset = null;
+        if (rawTargetExt.StartsWith("preset:"))
+        {
+            var presetId = rawTargetExt[7..];
+            preset = settings.FindPreset(presetId);
+            if (preset != null)
+            {
+                targetExt = preset.ContainerFormat.TrimStart('.').ToLowerInvariant();
+                outputExt = $".{targetExt}";
+            }
+        }
+
+        var effectiveBitrate = preset != null ? preset.AudioBitrateKbps : settings.GetEffectiveAudioQuality(targetExt);
+        var appendSuffix = preset != null ? preset.AppendSuffix : settings.AppendQualitySuffix;
         int? customBitrate = effectiveBitrate > 0 ? effectiveBitrate : null;
         var resolvedBitrate = customBitrate ?? MediaProbe.ResolveAudioBitrate(mediaInfo?.Audio, 320, 320);
 
@@ -119,7 +138,9 @@ public class AudioConverter : IFormatConverter
 
         try
         {
-            var arguments = BuildAudioArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, customBitrate);
+            var arguments = (preset != null && preset.IsCustomCommand && !string.IsNullOrWhiteSpace(preset.CustomArguments))
+                ? $"-y -i \"{inputPath}\" {preset.CustomArguments} \"{outputPath}\""
+                : BuildAudioArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, customBitrate);
             AppLogger.Info($"[AudioConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
             AppLogger.Info($"[AudioConverter] Command: ffmpeg {arguments}");
 
