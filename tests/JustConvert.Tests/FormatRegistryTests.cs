@@ -188,9 +188,8 @@ public class FormatRegistryTests
     [InlineData("wav", "wav", true)]
     [InlineData("aif", "aiff", true)]
     [InlineData("tiff", "tif", true)]
-    [InlineData("mp4", "remux-mp4", true)]
-    [InlineData("mkv", "remux-mkv", true)]
-    [InlineData("mp4", "mp4-h264", false)]
+    [InlineData("mp4", "remux", false)]
+    [InlineData("mkv", "remux", false)]
     [InlineData("jpg", "reencode", false)]
     [InlineData("mp4", "frames", false)]
     public void IsSameFormat_CorrectlyIdentifiesDuplicates(string sourceExt, string targetFormat, bool expectedDuplicate)

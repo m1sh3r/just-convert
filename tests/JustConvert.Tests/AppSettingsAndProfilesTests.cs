@@ -138,4 +138,18 @@ public class AppSettingsAndProfilesTests
         Assert.Equal("png", reset.ImageFormat);
         Assert.False(reset.IsRemembered);
     }
+
+    [Fact]
+    public void SvgSetting_DefaultsAndPersistence()
+    {
+        var settings = new AppSettings();
+        var initial = settings.GetEffectiveSvgSetting();
+        Assert.Equal(0, initial.Width);
+        Assert.False(initial.IsRemembered);
+
+        settings.SvgSetting = new SvgRasterSetting { Width = 1024, IsRemembered = true };
+        var effective = settings.GetEffectiveSvgSetting();
+        Assert.Equal(1024, effective.Width);
+        Assert.True(effective.IsRemembered);
+    }
 }
