@@ -86,10 +86,12 @@ public class ConversionExecutionTests : IDisposable
     }
 
     [Theory]
-    [InlineData("mp4-h264")]
-    [InlineData("remux-mp4")]
-    [InlineData("remux-mkv")]
-    [InlineData("mov-prores422")]
+    [InlineData("mp4")]
+    [InlineData("webm")]
+    [InlineData("mkv")]
+    [InlineData("mov")]
+    [InlineData("gif")]
+    [InlineData("remux")]
     [InlineData("frames")]
     [InlineData("mp3")]
     [InlineData("wav")]
@@ -289,5 +291,54 @@ public class ConversionExecutionTests : IDisposable
 
         var args = VideoConverter.BuildVideoArguments("in.mkv", "out.mp4", "mp4", audioInfo, false, null, setting);
         Assert.Contains("-b:a 128k", args);
+    }
+
+    [Fact]
+    public void BuildVideoArguments_RateControl_CqGeneratesCrf()
+    {
+        var setting = new VideoQualitySetting
+        {
+            VideoCodec = "h264",
+            Encoder = "cpu",
+            RateControl = "cq",
+            VideoQualityCq = 21
+        };
+
+        var args = VideoConverter.BuildVideoArguments("in.mp4", "out.mp4", "mp4", null, false, null, setting);
+        Assert.Contains("-crf 21", args);
+    }
+
+    [Fact]
+    public void BuildVideoArguments_RateControl_VbrGeneratesBitrate()
+    {
+        var setting = new VideoQualitySetting
+        {
+            VideoCodec = "h264",
+            Encoder = "cpu",
+            RateControl = "vbr",
+            VideoBitrateKbps = 4500
+        };
+
+        var args = VideoConverter.BuildVideoArguments("in.mp4", "out.mp4", "mp4", null, false, null, setting);
+        Assert.Contains("-b:v 4500k", args);
+        Assert.DoesNotContain("-crf", args);
+    }
+
+    [Fact]
+    public void BuildVideoArguments_RateControl_CbrGeneratesBitrateAndMinRate()
+    {
+        var setting = new VideoQualitySetting
+        {
+            VideoCodec = "h264",
+            Encoder = "cpu",
+            RateControl = "cbr",
+            VideoBitrateKbps = 6000
+        };
+
+        var args = VideoConverter.BuildVideoArguments("in.mp4", "out.mp4", "mp4", null, false, null, setting);
+        Assert.Contains("-b:v 6000k", args);
+        Assert.Contains("-minrate 6000k", args);
+        Assert.Contains("-maxrate 6000k", args);
+        Assert.DoesNotContain("-crf", args);
     }
 }

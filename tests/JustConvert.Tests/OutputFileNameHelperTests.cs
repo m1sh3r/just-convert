@@ -1,4 +1,5 @@
 using System.IO;
+using JustConvert.Core;
 using JustConvert.Core.Converters;
 using JustConvert.Core.Converters.Tools;
 
@@ -33,7 +34,7 @@ public class OutputFileNameHelperTests : IDisposable
     [InlineData("webm-av1-amf", "AV1 AMF - CQ 23")]
     [InlineData("mov-prores422", "ProRes 422")]
     [InlineData("mov-prores4444", "ProRes 4444")]
-    [InlineData("remux-mp4", "Remux")]
+    [InlineData("remux", "Remux")]
     [InlineData("frames", "Frames")]
     [InlineData("frames-jpg", "Frames")]
     [InlineData("gif", null)]
@@ -41,6 +42,26 @@ public class OutputFileNameHelperTests : IDisposable
     {
         var suffix = OutputFileNameHelper.BuildVideoSuffix(targetFormat);
         Assert.Equal(expectedSuffix, suffix);
+    }
+
+    [Fact]
+    public void BuildVideoSuffix_WithVbrOrCbrSetting_ReturnsBitrateSuffix()
+    {
+        var vbrSetting = new VideoQualitySetting
+        {
+            VideoCodec = "h264",
+            RateControl = "vbr",
+            VideoBitrateKbps = 6000
+        };
+        var cbrSetting = new VideoQualitySetting
+        {
+            VideoCodec = "hevc",
+            RateControl = "cbr",
+            VideoBitrateKbps = 8000
+        };
+
+        Assert.Equal("H.264 - VBR 6000k", OutputFileNameHelper.BuildVideoSuffix("mp4", vbrSetting));
+        Assert.Equal("H.265 - CBR 8000k", OutputFileNameHelper.BuildVideoSuffix("mp4", cbrSetting));
     }
 
     [Theory]
@@ -135,6 +156,17 @@ public class OutputFileNameHelperTests : IDisposable
     public void BuildImageSuffix_WhenQualitySuffixDisabled_ReturnsNullForLossyFormats(string targetFormat, string? expectedSuffix)
     {
         var suffix = OutputFileNameHelper.BuildImageSuffix(targetFormat, quality: null, appendQualitySuffix: false);
+        Assert.Equal(expectedSuffix, suffix);
+    }
+
+    [Theory]
+    [InlineData("png", "svg", 1024, true, "1024px")]
+    [InlineData("jpg", "svg", 2048, true, "2048px - Q92")]
+    [InlineData("png", "svg", 0, true, null)]
+    [InlineData("png", "svg", 1024, false, null)]
+    public void BuildImageSuffix_WithSvgSource_ReturnsExpectedSvgSuffix(string targetFormat, string sourceExt, int svgWidth, bool appendSuffix, string? expectedSuffix)
+    {
+        var suffix = OutputFileNameHelper.BuildImageSuffix(targetFormat, quality: null, appendQualitySuffix: appendSuffix, sourceExt: sourceExt, svgWidth: svgWidth);
         Assert.Equal(expectedSuffix, suffix);
     }
 
