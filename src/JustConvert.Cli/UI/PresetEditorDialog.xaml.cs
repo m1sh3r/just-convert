@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using JustConvert.Core;
+using JustConvert.Core.Converters.Tools;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -17,28 +18,42 @@ public partial class PresetEditorDialog : FluentWindow
     private record ComboItem(string Id, string DisplayName);
     private record BitrateItem(int Value, string DisplayName);
 
-    public PresetEditorDialog() : this(null)
+    public PresetEditorDialog() : this(null, false)
     {
     }
 
-    public PresetEditorDialog(CustomPreset? initial)
+    public PresetEditorDialog(CustomPreset? initial, bool isNew = false)
     {
         _isUpdating = true;
-        _isEdit = initial != null;
-        Preset = initial != null ? new CustomPreset
+        _isEdit = initial != null && !isNew;
+        if (initial != null)
         {
-            Id = initial.Id,
-            Name = initial.Name,
-            Category = initial.Category,
-            ContainerFormat = initial.ContainerFormat,
-            VideoCodec = initial.VideoCodec,
-            Encoder = initial.Encoder,
-            VideoQualityCq = initial.VideoQualityCq,
-            AudioCodec = initial.AudioCodec,
-            AudioBitrateKbps = initial.AudioBitrateKbps,
-            ImageQuality = initial.ImageQuality,
-            AppendSuffix = initial.AppendSuffix
-        } : new CustomPreset();
+            Preset = new CustomPreset
+            {
+                Id = isNew ? Guid.NewGuid().ToString("N")[..8] : initial.Id,
+                Name = initial.Name,
+                Category = initial.Category,
+                ContainerFormat = initial.ContainerFormat,
+                PresetType = initial.PresetType,
+                IsCustomCommand = initial.IsCustomCommand,
+                CustomArguments = initial.CustomArguments,
+                InputExtensions = initial.InputExtensions,
+                Order = initial.Order,
+                VideoCodec = initial.VideoCodec,
+                Encoder = initial.Encoder,
+                RateControl = initial.RateControl,
+                VideoQualityCq = initial.VideoQualityCq,
+                VideoBitrateKbps = initial.VideoBitrateKbps,
+                AudioCodec = initial.AudioCodec,
+                AudioBitrateKbps = initial.AudioBitrateKbps,
+                ImageQuality = initial.ImageQuality,
+                AppendSuffix = initial.AppendSuffix
+            };
+        }
+        else
+        {
+            Preset = new CustomPreset();
+        }
 
         InitializeComponent();
 
@@ -48,6 +63,23 @@ public partial class PresetEditorDialog : FluentWindow
             AppTitleBar.Title = Title;
             BtnCancel.Content = I18n.T("BtnCancel");
             BtnSave.Content = I18n.T("BtnApply");
+            BtnValidateCommand.Content = I18n.T("BtnValidateCommand");
+            RadioPresetQuick.Content = I18n.T("PresetTypeQuick");
+            RadioPresetTemplate.Content = I18n.T("PresetTypeTemplate");
+            RadioModeStandard.Content = I18n.T("PresetModeStandard");
+            RadioModeCustom.Content = I18n.T("PresetModeCustom");
+            RadioExtAll.Content = I18n.T("InputExtensionsAll");
+            RadioExtCustom.Content = I18n.T("InputExtensionsCustom");
+            CmbCategory.ItemsSource = new[] { "Видео", "Аудио", "Изображения" };
+            CmbCategory.SelectedIndex = 0;
+            CmbContainer.ItemsSource = new[] { "MP4 (.mp4)", "MKV (.mkv)", "WebM (.webm)" };
+            CmbContainer.SelectedIndex = 0;
+            CmbVideoCodec.ItemsSource = new[] { "H.264 / AVC", "H.265 / HEVC", "AV1" };
+            CmbVideoCodec.SelectedIndex = 0;
+            CmbEncoder.ItemsSource = new[] { "CPU (libx264)", "NVIDIA NVENC" };
+            CmbEncoder.SelectedIndex = 0;
+            CmbAudioBitrate.ItemsSource = new[] { "128 kbps", "192 kbps", "256 kbps", "320 kbps" };
+            CmbAudioBitrate.SelectedIndex = 1;
             return;
         }
 
@@ -69,6 +101,39 @@ public partial class PresetEditorDialog : FluentWindow
         TxtPresetName.Text = Preset.Name;
         ChkAppendSuffix.IsChecked = Preset.AppendSuffix;
 
+        if (string.Equals(Preset.PresetType, "template", StringComparison.OrdinalIgnoreCase))
+        {
+            RadioPresetTemplate.IsChecked = true;
+        }
+        else
+        {
+            RadioPresetQuick.IsChecked = true;
+        }
+
+        if (Preset.IsCustomCommand)
+        {
+            RadioModeCustom.IsChecked = true;
+        }
+        else
+        {
+            RadioModeStandard.IsChecked = true;
+        }
+
+        TxtCustomArgs.Text = Preset.CustomArguments;
+
+        if (!string.IsNullOrWhiteSpace(Preset.InputExtensions))
+        {
+            RadioExtCustom.IsChecked = true;
+            TxtInputExtensions.Text = Preset.InputExtensions;
+            TxtInputExtensions.IsEnabled = true;
+        }
+        else
+        {
+            RadioExtAll.IsChecked = true;
+            TxtInputExtensions.Text = string.Empty;
+            TxtInputExtensions.IsEnabled = false;
+        }
+
         CmbCategory.ItemsSource = new List<ComboItem>
         {
             new("video", I18n.T("CategoryVideo")),
@@ -86,6 +151,8 @@ public partial class PresetEditorDialog : FluentWindow
 
         _isUpdating = false;
         UpdateCategoryDisplay(selCat);
+        UpdateModeDisplay();
+        UpdateCommandPreview();
     }
 
     private void PopulateContainers(string category)
@@ -147,9 +214,15 @@ public partial class PresetEditorDialog : FluentWindow
             CmbVideoCodec.SelectedItem = matchCodec;
 
             PopulateEncoders();
+            PopulateRateControls();
 
             SliderVideoCq.Value = Math.Clamp(Preset.VideoQualityCq, 15, 35);
             TxtVideoCq.Text = $"CQ {Preset.VideoQualityCq}";
+
+            SliderVideoBitrate.Value = Math.Clamp(Preset.VideoBitrateKbps, 500, 50000);
+            TxtVideoBitrate.Text = $"{Preset.VideoBitrateKbps} {I18n.T("BitrateUnitKbps")}";
+
+            UpdateVideoRateControlVisibility();
 
             var bitrates = new List<BitrateItem>
             {
@@ -216,11 +289,79 @@ public partial class PresetEditorDialog : FluentWindow
         CmbEncoder.SelectedItem = match;
     }
 
+    private void PopulateRateControls()
+    {
+        var items = new List<ComboItem>
+        {
+            new("cq", I18n.T("RateControlCq")),
+            new("vbr", I18n.T("RateControlVbr")),
+            new("cbr", I18n.T("RateControlCbr"))
+        };
+
+        CmbRateControl.ItemsSource = items;
+        CmbRateControl.DisplayMemberPath = nameof(ComboItem.DisplayName);
+        CmbRateControl.SelectedValuePath = nameof(ComboItem.Id);
+
+        var rc = Preset.RateControl?.ToLowerInvariant() ?? "cq";
+        var match = items.FirstOrDefault(i => i.Id.Equals(rc, StringComparison.OrdinalIgnoreCase)) ?? items[0];
+        CmbRateControl.SelectedItem = match;
+    }
+
+    private void UpdateVideoRateControlVisibility()
+    {
+        var isSpecial = Preset.VideoCodec is "copy" or "prores422" or "prores4444";
+        if (GridRateControl != null) GridRateControl.Visibility = isSpecial ? Visibility.Collapsed : Visibility.Visible;
+
+        if (isSpecial)
+        {
+            if (PanelVideoCq != null) PanelVideoCq.Visibility = Visibility.Collapsed;
+            if (PanelVideoBitrate != null) PanelVideoBitrate.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var rc = (Preset.RateControl ?? "cq").ToLowerInvariant();
+        if (rc is "vbr" or "cbr")
+        {
+            if (PanelVideoCq != null) PanelVideoCq.Visibility = Visibility.Collapsed;
+            if (PanelVideoBitrate != null)
+            {
+                PanelVideoBitrate.Visibility = Visibility.Visible;
+                if (TxtVideoBitrate != null && SliderVideoBitrate != null)
+                {
+                    TxtVideoBitrate.Text = $"{(int)SliderVideoBitrate.Value} {I18n.T("BitrateUnitKbps")}";
+                }
+            }
+        }
+        else
+        {
+            if (PanelVideoCq != null) PanelVideoCq.Visibility = Visibility.Visible;
+            if (PanelVideoBitrate != null) PanelVideoBitrate.Visibility = Visibility.Collapsed;
+        }
+    }
+
     private void UpdateCategoryDisplay(string category)
     {
+        if (PanelVideoSettings == null || PanelAudioSettings == null || PanelImageSettings == null) return;
         PanelVideoSettings.Visibility = category == "video" ? Visibility.Visible : Visibility.Collapsed;
         PanelAudioSettings.Visibility = category == "audio" ? Visibility.Visible : Visibility.Collapsed;
         PanelImageSettings.Visibility = category == "image" ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateModeDisplay()
+    {
+        if (PanelStandardSettings == null || PanelCustomSettings == null) return;
+        var isCustom = RadioModeCustom?.IsChecked == true;
+        PanelStandardSettings.Visibility = isCustom ? Visibility.Collapsed : Visibility.Visible;
+        PanelCustomSettings.Visibility = isCustom ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateCommandPreview()
+    {
+        if (TxtCommandPreview == null) return;
+        var container = (CmbContainer?.SelectedItem as ComboItem)?.Id ?? Preset?.ContainerFormat ?? "mp4";
+        var args = TxtCustomArgs?.Text?.Trim() ?? string.Empty;
+        var argsStr = string.IsNullOrWhiteSpace(args) ? "[arguments]" : args;
+        TxtCommandPreview.Text = $"ffmpeg -i \"<input>\" {argsStr} \"<output>.{container}\"";
     }
 
     private void OnCategoryChanged(object sender, SelectionChangedEventArgs e)
@@ -233,6 +374,53 @@ public partial class PresetEditorDialog : FluentWindow
         PopulateCategoryPanels(cat);
         _isUpdating = false;
         UpdateCategoryDisplay(cat);
+        UpdateCommandPreview();
+    }
+
+    private void OnContainerChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdating || Preset == null) return;
+        UpdateCommandPreview();
+    }
+
+    private void OnModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdating) return;
+        UpdateModeDisplay();
+    }
+
+    private void OnInputExtChanged(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdating || TxtInputExtensions == null) return;
+        TxtInputExtensions.IsEnabled = RadioExtCustom.IsChecked == true;
+    }
+
+    private void OnCustomArgsChanged(object sender, TextChangedEventArgs e)
+    {
+        if (_isUpdating) return;
+        UpdateCommandPreview();
+    }
+
+    private async void BtnValidateCommand_Click(object sender, RoutedEventArgs e)
+    {
+        var args = TxtCustomArgs.Text?.Trim() ?? string.Empty;
+        var cat = (CmbCategory.SelectedItem as ComboItem)?.Id ?? "video";
+
+        BtnValidateCommand.IsEnabled = false;
+        InfoBarValidation.IsOpen = true;
+        InfoBarValidation.Severity = InfoBarSeverity.Informational;
+        InfoBarValidation.Message = I18n.T("PresetValidating");
+
+        try
+        {
+            var res = await CustomPresetValidator.ValidateFfmpegArgumentsAsync(args, cat);
+            InfoBarValidation.Severity = res.IsValid ? InfoBarSeverity.Success : InfoBarSeverity.Error;
+            InfoBarValidation.Message = res.Message;
+        }
+        finally
+        {
+            BtnValidateCommand.IsEnabled = true;
+        }
     }
 
     private void OnVideoCodecChanged(object sender, SelectionChangedEventArgs e)
@@ -243,6 +431,15 @@ public partial class PresetEditorDialog : FluentWindow
         _isUpdating = true;
         PopulateEncoders();
         _isUpdating = false;
+        UpdateVideoRateControlVisibility();
+    }
+
+    private void OnRateControlChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdating || Preset == null) return;
+        var rc = (CmbRateControl.SelectedItem as ComboItem)?.Id ?? "cq";
+        Preset.RateControl = rc;
+        UpdateVideoRateControlVisibility();
     }
 
     private void OnVideoCqChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -251,6 +448,14 @@ public partial class PresetEditorDialog : FluentWindow
         var val = (int)e.NewValue;
         Preset.VideoQualityCq = val;
         TxtVideoCq.Text = $"CQ {val}";
+    }
+
+    private void OnVideoBitrateChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (_isUpdating || Preset == null || TxtVideoBitrate == null) return;
+        var val = (int)e.NewValue;
+        Preset.VideoBitrateKbps = val;
+        TxtVideoBitrate.Text = $"{val} {I18n.T("BitrateUnitKbps")}";
     }
 
     private void OnAudioBitrateChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -280,13 +485,19 @@ public partial class PresetEditorDialog : FluentWindow
         Preset.Name = name;
         Preset.Category = (CmbCategory.SelectedItem as ComboItem)?.Id ?? "video";
         Preset.ContainerFormat = (CmbContainer.SelectedItem as ComboItem)?.Id ?? "mp4";
+        Preset.PresetType = RadioPresetQuick.IsChecked == true ? "quick" : "template";
+        Preset.IsCustomCommand = RadioModeCustom.IsChecked == true;
+        Preset.CustomArguments = TxtCustomArgs.Text?.Trim() ?? string.Empty;
+        Preset.InputExtensions = RadioExtCustom.IsChecked == true ? TxtInputExtensions.Text?.Trim() ?? string.Empty : string.Empty;
         Preset.AppendSuffix = ChkAppendSuffix.IsChecked == true;
 
         if (Preset.Category == "video")
         {
             Preset.VideoCodec = (CmbVideoCodec.SelectedItem as ComboItem)?.Id ?? "h264";
             Preset.Encoder = (CmbEncoder.SelectedItem as ComboItem)?.Id ?? "auto";
+            Preset.RateControl = (CmbRateControl.SelectedItem as ComboItem)?.Id ?? "cq";
             Preset.VideoQualityCq = (int)SliderVideoCq.Value;
+            Preset.VideoBitrateKbps = (int)SliderVideoBitrate.Value;
             if (CmbAudioBitrate.SelectedItem is BitrateItem b)
             {
                 Preset.AudioBitrateKbps = b.Value;

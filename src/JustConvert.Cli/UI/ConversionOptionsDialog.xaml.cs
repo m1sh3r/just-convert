@@ -13,6 +13,7 @@ public partial class ConversionOptionsDialog : FluentWindow
 {
     private readonly string _targetFormat;
     private readonly string _category;
+    private readonly string? _sourceFormat;
     private MediaStreamInfo? _mediaInfo;
     private int _batchCount;
     private long? _totalBatchSizeBytes;
@@ -26,14 +27,35 @@ public partial class ConversionOptionsDialog : FluentWindow
     public FramesSetting SelectedFramesSetting { get; private set; } = new();
     public string SelectedFramesImageFormat => SelectedFramesSetting.ImageFormat;
     public string SelectedFramesTargetFormat => $"frames-{SelectedFramesSetting.ImageFormat}";
+    public string SelectedRateControl => (CmbRateControl?.SelectedItem as RateControlItem)?.Id ?? "cq";
+    public int SelectedVideoBitrate => (int)(SliderVideoBitrate?.Value ?? 15000);
     public bool RememberChoice => ChkRemember?.IsChecked == true;
     public bool AppendQualitySuffix => ChkAppendSuffix?.IsChecked == true;
     public int BatchCount => _batchCount;
     public long? TotalBatchSizeBytes => _totalBatchSizeBytes;
 
+    public int SelectedSvgWidth
+    {
+        get
+        {
+            if (CmbSvgWidth?.SelectedItem is SvgDimensionItem item) return item.Value;
+            var text = CmbSvgWidth?.Text?.Replace("px", "", StringComparison.OrdinalIgnoreCase).Trim();
+            if (int.TryParse(text, out var parsed) && parsed > 0) return parsed;
+            return 0;
+        }
+    }
+
+    public SvgRasterSetting SelectedSvgSetting => new()
+    {
+        Width = SelectedSvgWidth,
+        IsRemembered = RememberChoice
+    };
+
     private record CodecItem(string Id, string DisplayName);
     private record EncoderItem(string Id, string DisplayName);
+    private record RateControlItem(string Id, string DisplayName);
     private record BitrateItem(int Value, string DisplayName);
+    private record SvgDimensionItem(int Value, string DisplayName);
 
     public ConversionOptionsDialog() : this("mp4", "video", new VideoQualitySetting(), null, true, 1, null)
     {
@@ -55,7 +77,8 @@ public partial class ConversionOptionsDialog : FluentWindow
         MediaStreamInfo? mediaInfo,
         bool appendQualitySuffix,
         int batchCount,
-        long? totalBatchSizeBytes)
+        long? totalBatchSizeBytes,
+        string? sourceFormat = null)
     {
         _isUpdating = true;
         _targetFormat = targetFormat.TrimStart('.').ToLowerInvariant();
@@ -63,6 +86,8 @@ public partial class ConversionOptionsDialog : FluentWindow
         _mediaInfo = mediaInfo;
         _batchCount = Math.Max(1, batchCount);
         _totalBatchSizeBytes = totalBatchSizeBytes;
+        _sourceFormat = sourceFormat?.TrimStart('.').ToLowerInvariant()
+            ?? (!string.IsNullOrEmpty(mediaInfo?.FilePath) ? Path.GetExtension(mediaInfo.FilePath).TrimStart('.').ToLowerInvariant() : null);
 
         InitializeComponent();
 
@@ -73,6 +98,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             TxtFormatPrompt.Text = I18n.T("ConversionOptionsTitle");
             TxtSourceInfo.Text = "1920x1080, 30 fps, 45 MB";
             TxtEstimatedSize.Text = string.Format(I18n.T("EstimatedFileSizeLabel"), "14.2 MB");
+            BtnSaveAsPreset.Content = I18n.T("BtnSaveAsPreset");
             BtnCancel.Content = I18n.T("BtnCancel");
             BtnConvert.Content = I18n.T("BtnConvert");
             ChkMatchOriginalBitrate.Content = I18n.T("OptionMatchOriginalBitrateBatch");
@@ -110,7 +136,9 @@ public partial class ConversionOptionsDialog : FluentWindow
             var videoSetting = (initialSetting as VideoQualitySetting) ?? new VideoQualitySetting();
             SelectedVideoQuality.VideoCodec = videoSetting.VideoCodec;
             SelectedVideoQuality.Encoder = videoSetting.Encoder;
+            SelectedVideoQuality.RateControl = videoSetting.RateControl;
             SelectedVideoQuality.VideoQualityCq = videoSetting.VideoQualityCq;
+            SelectedVideoQuality.VideoBitrateKbps = videoSetting.VideoBitrateKbps;
             SelectedVideoQuality.AudioCodec = videoSetting.AudioCodec;
             SelectedVideoQuality.AudioBitrateKbps = videoSetting.AudioBitrateKbps;
 
@@ -121,9 +149,13 @@ public partial class ConversionOptionsDialog : FluentWindow
 
             PopulateVideoCodecs();
             PopulateEncoders();
+            PopulateRateControls();
             PopulateAudioBitrates();
 
             SliderVideoCq.Value = Math.Clamp(SelectedVideoQuality.VideoQualityCq, 15, 35);
+            SliderVideoBitrate.Value = Math.Clamp(SelectedVideoQuality.VideoBitrateKbps, 500, 50000);
+            UpdateBitrateDisplay((int)SliderVideoBitrate.Value);
+            UpdateVideoRateControlVisibility();
 
             if (_batchCount > 1)
             {
@@ -328,7 +360,18 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelRemuxOptions.Visibility = Visibility.Collapsed;
             PanelFramesOptions.Visibility = Visibility.Collapsed;
 
-            var initialQuality = initialSetting is int q ? q : (initialSetting is ImageQualitySetting iq ? iq.Quality : 90);
+            var isSvg = string.Equals(_sourceFormat, "svg", StringComparison.OrdinalIgnoreCase);
+            PanelSvgOptions.Visibility = isSvg ? Visibility.Visible : Visibility.Collapsed;
+            PanelImageQuality.Visibility = (!isSvg || AppSettings.SupportsQuality(_targetFormat)) ? Visibility.Visible : Visibility.Collapsed;
+
+            if (isSvg)
+            {
+                PopulateSvgOptions(initialSetting as SvgRasterSetting);
+            }
+
+            var initialQuality = initialSetting is int q
+                ? q
+                : (initialSetting is ImageQualitySetting iq ? iq.Quality : AppSettings.GetDefaultQuality(_targetFormat));
             SelectedImageQuality = Math.Clamp(initialQuality, 1, 100);
             SliderImageQuality.Value = SelectedImageQuality;
 
@@ -343,6 +386,8 @@ public partial class ConversionOptionsDialog : FluentWindow
                 TxtSourceInfo.Visibility = Visibility.Collapsed;
             }
         }
+
+        BtnSaveAsPreset.Visibility = (_category is "video" or "audio" or "image") ? Visibility.Visible : Visibility.Collapsed;
 
         _isUpdating = false;
         UpdatePreview();
@@ -456,6 +501,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             _isUpdating = true;
             PopulateEncoders();
             _isUpdating = false;
+            UpdateVideoRateControlVisibility();
         }
 
         if (sender == CmbEncoder)
@@ -473,6 +519,96 @@ public partial class ConversionOptionsDialog : FluentWindow
         }
 
         UpdatePreview();
+    }
+
+    private void PopulateRateControls()
+    {
+        var items = new List<RateControlItem>
+        {
+            new("cq", I18n.T("RateControlCq")),
+            new("vbr", I18n.T("RateControlVbr")),
+            new("cbr", I18n.T("RateControlCbr"))
+        };
+
+        CmbRateControl.ItemsSource = items;
+        CmbRateControl.DisplayMemberPath = nameof(RateControlItem.DisplayName);
+        CmbRateControl.SelectedValuePath = nameof(RateControlItem.Id);
+
+        var targetRc = !string.IsNullOrEmpty(SelectedVideoQuality.RateControl)
+            ? SelectedVideoQuality.RateControl.ToLowerInvariant()
+            : "cq";
+
+        var match = items.FirstOrDefault(i => i.Id.Equals(targetRc, StringComparison.OrdinalIgnoreCase)) ?? items[0];
+        CmbRateControl.SelectedItem = match;
+    }
+
+    private void OnRateControlSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        var rc = (CmbRateControl.SelectedItem as RateControlItem)?.Id
+            ?? (CmbRateControl.SelectedValue as string)
+            ?? "cq";
+        SelectedVideoQuality.RateControl = rc;
+
+        UpdateVideoRateControlVisibility();
+        if (!_isUpdating)
+        {
+            UpdatePreview();
+        }
+    }
+
+    private void UpdateVideoRateControlVisibility()
+    {
+        var codec = (CmbVideoCodec.SelectedItem as CodecItem)?.Id?.ToLowerInvariant() ?? "";
+        if (codec is "copy" or "prores422" or "prores4444")
+        {
+            GridRateControl.Visibility = Visibility.Collapsed;
+            PanelVideoCq.Visibility = Visibility.Collapsed;
+            PanelVideoBitrate.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        GridRateControl.Visibility = Visibility.Visible;
+        var rc = SelectedRateControl;
+        if (rc is "vbr" or "cbr")
+        {
+            PanelVideoCq.Visibility = Visibility.Collapsed;
+            PanelVideoBitrate.Visibility = Visibility.Visible;
+            if (SliderVideoBitrate != null)
+            {
+                UpdateBitrateDisplay((int)SliderVideoBitrate.Value);
+            }
+        }
+        else
+        {
+            PanelVideoCq.Visibility = Visibility.Visible;
+            PanelVideoBitrate.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void UpdateBitrateDisplay(int kbps)
+    {
+        if (TxtVideoBitrateValue != null)
+        {
+            TxtVideoBitrateValue.Text = $"{kbps} {I18n.T("BitrateUnitKbps")}";
+        }
+
+        if (TxtVideoBitrateDescription != null)
+        {
+            var mbps = kbps / 1000.0;
+            TxtVideoBitrateDescription.Text = $"{mbps:F1} {I18n.T("BitrateUnitMbps")}";
+        }
+    }
+
+    private void OnVideoBitrateValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        var kbps = (int)e.NewValue;
+        UpdateBitrateDisplay(kbps);
+
+        if (!_isUpdating)
+        {
+            SelectedVideoQuality.VideoBitrateKbps = kbps;
+            UpdatePreview();
+        }
     }
 
     private void OnVideoCqValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -551,6 +687,50 @@ public partial class ConversionOptionsDialog : FluentWindow
         UpdatePreview();
     }
 
+    private void PopulateSvgOptions(SvgRasterSetting? initial)
+    {
+        var settings = AppSettings.Load();
+        var effective = initial ?? settings.GetEffectiveSvgSetting();
+
+        var widthItems = new List<SvgDimensionItem>
+        {
+            new(0, I18n.T("SvgWidthOriginal")),
+            new(512, string.Format(I18n.T("SvgWidthItem"), 512)),
+            new(1024, string.Format(I18n.T("SvgWidthItem"), 1024)),
+            new(2048, string.Format(I18n.T("SvgWidthItem"), 2048)),
+            new(4096, string.Format(I18n.T("SvgWidthItem"), 4096))
+        };
+        CmbSvgWidth.ItemsSource = widthItems;
+        CmbSvgWidth.DisplayMemberPath = nameof(SvgDimensionItem.DisplayName);
+        CmbSvgWidth.SelectedValuePath = nameof(SvgDimensionItem.Value);
+
+        var selectedWidth = widthItems.FirstOrDefault(w => w.Value == effective.Width);
+        if (selectedWidth != null)
+        {
+            CmbSvgWidth.SelectedItem = selectedWidth;
+        }
+        else if (effective.Width > 0)
+        {
+            CmbSvgWidth.Text = string.Format(I18n.T("SvgWidthItem"), effective.Width);
+        }
+        else
+        {
+            CmbSvgWidth.SelectedIndex = 0;
+        }
+    }
+
+    private void OnSvgOptionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_isUpdating) return;
+        UpdatePreview();
+    }
+
+    private void OnSvgWidthLostFocus(object sender, RoutedEventArgs e)
+    {
+        if (_isUpdating) return;
+        UpdatePreview();
+    }
+
     private void PopulateRemuxContainers()
     {
         var containers = new List<CodecItem>
@@ -609,7 +789,10 @@ public partial class ConversionOptionsDialog : FluentWindow
                 SelectedVideoQuality.VideoCodec,
                 cq,
                 effectiveAudioBitrate,
-                _mediaInfo
+                _mediaInfo,
+                SelectedVideoQuality.Encoder,
+                SelectedRateControl,
+                SelectedVideoBitrate
             );
 
             UpdateEstimatedSizeText(estimatedBytes);
@@ -715,6 +898,18 @@ public partial class ConversionOptionsDialog : FluentWindow
         }
         else
         {
+            var isSvg = string.Equals(_sourceFormat, "svg", StringComparison.OrdinalIgnoreCase);
+            if (isSvg && !AppSettings.SupportsQuality(_targetFormat))
+            {
+                var key = _batchCount > 1 ? "EstimatedBatchSizeLabel" : "EstimatedFileSizeLabel";
+                var w = SelectedSvgWidth > 0 ? SelectedSvgWidth : 1024;
+                var estimatedSvgBytes = (long)(w * w * 0.4);
+                if (_batchCount > 1) estimatedSvgBytes *= _batchCount;
+                var formatted = QualityEstimator.FormatFileSize(estimatedSvgBytes);
+                TxtEstimatedSize.Text = string.Format(I18n.T(key), $"~{formatted}");
+                return;
+            }
+
             if (TxtImageQualityValue == null || TxtImageQualityDescription == null) return;
 
             var quality = SelectedImageQuality;
@@ -845,7 +1040,25 @@ public partial class ConversionOptionsDialog : FluentWindow
 
     private void BtnConvert_Click(object sender, RoutedEventArgs e)
     {
-        if (_category == "remux")
+        if (_category == "video")
+        {
+            if (CmbVideoCodec.SelectedItem is CodecItem codecItem)
+            {
+                SelectedVideoQuality.VideoCodec = codecItem.Id;
+            }
+            if (CmbEncoder.SelectedItem is EncoderItem encItem)
+            {
+                SelectedVideoQuality.Encoder = encItem.Id;
+            }
+            SelectedVideoQuality.RateControl = SelectedRateControl;
+            SelectedVideoQuality.VideoQualityCq = (int)SliderVideoCq.Value;
+            SelectedVideoQuality.VideoBitrateKbps = (int)SliderVideoBitrate.Value;
+            if (CmbAudioBitrate.SelectedItem is BitrateItem abItem)
+            {
+                SelectedVideoQuality.AudioBitrateKbps = abItem.Value;
+            }
+        }
+        else if (_category == "remux")
         {
             SelectedRemuxSetting.IsRemembered = RememberChoice;
         }
@@ -855,6 +1068,39 @@ public partial class ConversionOptionsDialog : FluentWindow
         }
         try { DialogResult = true; } catch (InvalidOperationException) { }
         Close();
+    }
+
+    private void BtnSaveAsPreset_Click(object sender, RoutedEventArgs e)
+    {
+        var settings = AppSettings.Load();
+        var preset = CustomPreset.CreateFromCurrentSettings(settings, _category, _targetFormat);
+
+        if (_category == "video")
+        {
+            preset.VideoCodec = (CmbVideoCodec.SelectedItem as CodecItem)?.Id ?? SelectedVideoQuality.VideoCodec;
+            preset.Encoder = (CmbEncoder.SelectedItem as EncoderItem)?.Id ?? SelectedVideoQuality.Encoder;
+            preset.RateControl = SelectedRateControl;
+            preset.VideoQualityCq = (int)SliderVideoCq.Value;
+            preset.VideoBitrateKbps = (int)SliderVideoBitrate.Value;
+            preset.AudioBitrateKbps = (CmbAudioBitrate.SelectedItem as BitrateItem)?.Value ?? SelectedVideoQuality.AudioBitrateKbps;
+        }
+        else if (_category == "audio")
+        {
+            preset.AudioBitrateKbps = SelectedAudioBitrate;
+        }
+        else if (_category == "image")
+        {
+            preset.ImageQuality = SelectedImageQuality;
+            preset.SvgWidth = SelectedSvgWidth;
+        }
+        preset.AppendSuffix = AppendQualitySuffix;
+
+        var dlg = new PresetEditorDialog(preset, isNew: true) { Owner = this };
+        if (dlg.ShowDialog() == true)
+        {
+            settings.AddPreset(dlg.Preset);
+            settings.Save();
+        }
     }
 
     private void BtnCancel_Click(object sender, RoutedEventArgs e)

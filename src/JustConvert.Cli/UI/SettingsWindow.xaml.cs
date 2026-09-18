@@ -419,9 +419,12 @@ public partial class SettingsWindow : FluentWindow
 
     private void UpdatePresetButtonStates()
     {
-        var hasSelection = ListPresets.SelectedItem is CustomPreset;
+        var index = ListPresets.SelectedIndex;
+        var hasSelection = index >= 0 && ListPresets.SelectedItem is CustomPreset;
         BtnEditPreset.IsEnabled = hasSelection;
         BtnDeletePreset.IsEnabled = hasSelection;
+        BtnMoveUpPreset.IsEnabled = hasSelection && index > 0;
+        BtnMoveDownPreset.IsEnabled = hasSelection && index < _settings.CustomPresets.Count - 1;
     }
 
     private void OnPresetSelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -435,6 +438,46 @@ public partial class SettingsWindow : FluentWindow
         {
             OnEditPresetClick(sender, e);
         }
+    }
+
+    private void OnMoveUpPresetClick(object sender, RoutedEventArgs e)
+    {
+        var index = ListPresets.SelectedIndex;
+        if (index <= 0 || index >= _settings.CustomPresets.Count) return;
+
+        var item = _settings.CustomPresets[index];
+        _settings.CustomPresets.RemoveAt(index);
+        _settings.CustomPresets.Insert(index - 1, item);
+
+        for (int i = 0; i < _settings.CustomPresets.Count; i++)
+        {
+            _settings.CustomPresets[i].Order = i;
+        }
+
+        _settings.Save();
+        RefreshPresetsList();
+        ListPresets.SelectedIndex = index - 1;
+        ListPresets.ScrollIntoView(item);
+    }
+
+    private void OnMoveDownPresetClick(object sender, RoutedEventArgs e)
+    {
+        var index = ListPresets.SelectedIndex;
+        if (index < 0 || index >= _settings.CustomPresets.Count - 1) return;
+
+        var item = _settings.CustomPresets[index];
+        _settings.CustomPresets.RemoveAt(index);
+        _settings.CustomPresets.Insert(index + 1, item);
+
+        for (int i = 0; i < _settings.CustomPresets.Count; i++)
+        {
+            _settings.CustomPresets[i].Order = i;
+        }
+
+        _settings.Save();
+        RefreshPresetsList();
+        ListPresets.SelectedIndex = index + 1;
+        ListPresets.ScrollIntoView(item);
     }
 
     private void OnCreatePresetClick(object sender, RoutedEventArgs e)

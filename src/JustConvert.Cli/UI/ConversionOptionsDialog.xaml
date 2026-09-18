@@ -8,10 +8,10 @@
                   mc:Ignorable="d"
                   Title="{core:Loc ConversionOptionsTitle}"
                   d:Title="Параметры конвертации"
-                  Height="480"
+                  Height="520"
                   Width="500"
-                  MinHeight="480"
-                  MaxHeight="480"
+                  MinHeight="520"
+                  MaxHeight="520"
                   MinWidth="500"
                   MaxWidth="500"
                   WindowStartupLocation="CenterScreen"
@@ -76,7 +76,6 @@
                     </StackPanel>
                 </Grid>
 
-                <!-- VIDEO OPTIONS -->
                 <StackPanel x:Name="PanelVideoOptions" Visibility="Collapsed" d:Visibility="Visible">
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
@@ -108,37 +107,88 @@
                                   SelectionChanged="OnVideoOptionChanged"/>
                     </Grid>
 
-                    <Grid Margin="0,0,0,4">
+                    <Grid x:Name="GridRateControl" Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="130"/>
                             <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="65"/>
                         </Grid.ColumnDefinitions>
-                        <TextBlock Text="{core:Loc LabelQuality}"
-                                   d:Text="Качество (CQ):"
+                        <TextBlock Text="{core:Loc LabelRateControl}"
+                                   d:Text="Режим битрейта:"
+                                   VerticalAlignment="Center"
                                    FontSize="13"/>
-                        <TextBlock x:Name="TxtVideoCqValue"
-                                   Grid.Column="1"
-                                   FontSize="13"
-                                   FontWeight="SemiBold"
-                                   TextAlignment="Right"
-                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                   d:Text="CQ 23"/>
+                        <ComboBox x:Name="CmbRateControl"
+                                  Grid.Column="1"
+                                  Height="32"
+                                  SelectionChanged="OnRateControlSelectionChanged"/>
                     </Grid>
-                    <Slider x:Name="SliderVideoCq"
-                            Minimum="15"
-                            Maximum="35"
-                            Value="23"
-                            SmallChange="1"
-                            LargeChange="2"
-                            TickFrequency="1"
-                            IsSnapToTickEnabled="True"
-                            ValueChanged="OnVideoCqValueChanged"
-                            Margin="0,0,0,2"/>
-                    <TextBlock x:Name="TxtVideoQualityDescription"
-                               FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,0,0,10"
-                               d:Text="Сбалансированное качество"/>
+
+                    <StackPanel x:Name="PanelVideoCq">
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="65"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{core:Loc LabelQuality}"
+                                       d:Text="Качество (CQ):"
+                                       FontSize="13"/>
+                            <TextBlock x:Name="TxtVideoCqValue"
+                                       Grid.Column="1"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       TextAlignment="Right"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                       d:Text="CQ 23"/>
+                        </Grid>
+                        <Slider x:Name="SliderVideoCq"
+                                Minimum="15"
+                                Maximum="35"
+                                Value="23"
+                                SmallChange="1"
+                                LargeChange="2"
+                                TickFrequency="1"
+                                IsSnapToTickEnabled="True"
+                                ValueChanged="OnVideoCqValueChanged"
+                                Margin="0,0,0,2"/>
+                        <TextBlock x:Name="TxtVideoQualityDescription"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,10"
+                                   d:Text="Сбалансированное качество"/>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PanelVideoBitrate" Visibility="Collapsed">
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="100"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{core:Loc LabelVideoBitrate}"
+                                       d:Text="Битрейт видео:"
+                                       FontSize="13"/>
+                            <TextBlock x:Name="TxtVideoBitrateValue"
+                                       Grid.Column="1"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       TextAlignment="Right"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                       d:Text="15000 кбит/с"/>
+                        </Grid>
+                        <Slider x:Name="SliderVideoBitrate"
+                                Minimum="500"
+                                Maximum="50000"
+                                Value="15000"
+                                SmallChange="250"
+                                LargeChange="1000"
+                                TickFrequency="250"
+                                IsSnapToTickEnabled="True"
+                                ValueChanged="OnVideoBitrateValueChanged"
+                                Margin="0,0,0,2"/>
+                        <TextBlock x:Name="TxtVideoBitrateDescription"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,10"
+                                   d:Text="15.0 Мбит/с"/>
+                    </StackPanel>
 
                     <Grid Margin="0,0,0,8">
                         <Grid.ColumnDefinitions>
@@ -156,7 +206,6 @@
                     </Grid>
                 </StackPanel>
 
-                <!-- AUDIO OPTIONS -->
                 <StackPanel x:Name="PanelAudioOptions" Visibility="Collapsed">
                     <CheckBox x:Name="ChkMatchOriginalBitrate"
                               Content="{core:Loc OptionMatchOriginalBitrateBatch}"
@@ -197,42 +246,61 @@
                                d:Text="Высокое качество (рекомендуется)"/>
                 </StackPanel>
 
-                <!-- IMAGE OPTIONS -->
                 <StackPanel x:Name="PanelImageOptions" Visibility="Collapsed">
-                    <Grid Margin="0,0,0,4">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="54"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{core:Loc LabelQuality}"
-                                   d:Text="Качество:"
-                                   FontSize="13"/>
-                        <TextBlock x:Name="TxtImageQualityValue"
-                                   Grid.Column="1"
-                                   FontSize="13"
-                                   FontWeight="SemiBold"
-                                   TextAlignment="Right"
-                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                                   d:Text="90%"/>
-                    </Grid>
-                    <Slider x:Name="SliderImageQuality"
-                            Minimum="1"
-                            Maximum="100"
-                            Value="90"
-                            SmallChange="1"
-                            LargeChange="5"
-                            TickFrequency="5"
-                            IsSnapToTickEnabled="False"
-                            ValueChanged="OnImageQualityValueChanged"
-                            Margin="0,0,0,2"/>
-                    <TextBlock x:Name="TxtImageQualityDescription"
-                               FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,0,0,8"
-                               d:Text="Высокое качество (рекомендуется)"/>
+                    <StackPanel x:Name="PanelSvgOptions" Visibility="Collapsed">
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{core:Loc LabelSvgWidth}"
+                                       d:Text="Ширина:"
+                                       VerticalAlignment="Center"
+                                       FontSize="13"/>
+                            <ComboBox x:Name="CmbSvgWidth"
+                                      Grid.Column="1"
+                                      Height="32"
+                                      IsEditable="True"
+                                      SelectionChanged="OnSvgOptionChanged"
+                                      LostFocus="OnSvgWidthLostFocus"/>
+                        </Grid>
+                    </StackPanel>
+
+                    <StackPanel x:Name="PanelImageQuality">
+                        <Grid Margin="0,0,0,4">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="54"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{core:Loc LabelQuality}"
+                                       d:Text="Качество:"
+                                       FontSize="13"/>
+                            <TextBlock x:Name="TxtImageQualityValue"
+                                       Grid.Column="1"
+                                       FontSize="13"
+                                       FontWeight="SemiBold"
+                                       TextAlignment="Right"
+                                       Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                       d:Text="90%"/>
+                        </Grid>
+                        <Slider x:Name="SliderImageQuality"
+                                Minimum="1"
+                                Maximum="100"
+                                Value="90"
+                                SmallChange="1"
+                                LargeChange="5"
+                                TickFrequency="5"
+                                IsSnapToTickEnabled="False"
+                                ValueChanged="OnImageQualityValueChanged"
+                                Margin="0,0,0,2"/>
+                        <TextBlock x:Name="TxtImageQualityDescription"
+                                   FontSize="12"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Margin="0,0,0,8"
+                                   d:Text="Высокое качество (рекомендуется)"/>
+                    </StackPanel>
                 </StackPanel>
 
-                <!-- REMUX OPTIONS -->
                 <StackPanel x:Name="PanelRemuxOptions" Visibility="Collapsed" d:Visibility="Collapsed">
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
@@ -288,7 +356,6 @@
                               Margin="0,0,0,6"/>
                 </StackPanel>
 
-                <!-- FRAMES OPTIONS -->
                 <StackPanel x:Name="PanelFramesOptions" Visibility="Collapsed">
                     <Grid Margin="0,0,0,10">
                         <Grid.ColumnDefinitions>
@@ -312,7 +379,6 @@
                                Margin="0,0,0,10"/>
                 </StackPanel>
 
-                <!-- ESTIMATED FILE SIZE CARD -->
                 <Border Margin="0,8,0,10"
                         Padding="12,10"
                         CornerRadius="6"
@@ -357,24 +423,37 @@
                 Padding="24,12"
                 BorderThickness="0,1,0,0"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                Background="{DynamicResource ApplicationBackgroundBrush}">
-            <StackPanel Orientation="Horizontal"
-                        HorizontalAlignment="Right">
-                <ui:Button x:Name="BtnCancel"
-                           Content="{core:Loc BtnCancel}"
-                           d:Content="Отмена"
-                           Width="100"
+                Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <ui:Button x:Name="BtnSaveAsPreset"
+                           Icon="{ui:SymbolIcon Star24}"
+                           Content="{core:Loc BtnSaveAsPreset}"
+                           d:Content="Сохранить как пресет..."
                            Height="34"
-                           Margin="0,0,10,0"
-                           Click="BtnCancel_Click"/>
-                <ui:Button x:Name="BtnConvert"
-                           Appearance="Primary"
-                           Content="{core:Loc BtnConvert}"
-                           d:Content="Конвертировать"
-                           Width="130"
-                           Height="34"
-                           Click="BtnConvert_Click"/>
-            </StackPanel>
+                           Click="BtnSaveAsPreset_Click"/>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right">
+                    <ui:Button x:Name="BtnCancel"
+                               Content="{core:Loc BtnCancel}"
+                               d:Content="Отмена"
+                               Width="100"
+                               Height="34"
+                               Margin="0,0,10,0"
+                               Click="BtnCancel_Click"/>
+                    <ui:Button x:Name="BtnConvert"
+                               Appearance="Primary"
+                               Content="{core:Loc BtnConvert}"
+                               d:Content="Конвертировать"
+                               Width="130"
+                               Height="34"
+                               Click="BtnConvert_Click"/>
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </ui:FluentWindow>

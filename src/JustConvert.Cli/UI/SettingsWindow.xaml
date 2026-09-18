@@ -1,4 +1,4 @@
-﻿<ui:FluentWindow x:Class="JustConvert.Cli.UI.SettingsWindow"
+<ui:FluentWindow x:Class="JustConvert.Cli.UI.SettingsWindow"
                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -522,6 +522,20 @@
                                    d:Content="Удалить"
                                    Icon="{ui:SymbolIcon Delete24}"
                                    Click="OnDeletePresetClick"
+                                   IsEnabled="False"
+                                   Margin="0,0,8,0"/>
+                        <ui:Button x:Name="BtnMoveUpPreset"
+                                   Content="{core:Loc BtnMoveUp}"
+                                   d:Content="Вверх"
+                                   Icon="{ui:SymbolIcon ArrowUpload24}"
+                                   Click="OnMoveUpPresetClick"
+                                   IsEnabled="False"
+                                   Margin="0,0,8,0"/>
+                        <ui:Button x:Name="BtnMoveDownPreset"
+                                   Content="{core:Loc BtnMoveDown}"
+                                   d:Content="Вниз"
+                                   Icon="{ui:SymbolIcon ArrowDownload24}"
+                                   Click="OnMoveDownPresetClick"
                                    IsEnabled="False"/>
                     </StackPanel>
 
@@ -535,6 +549,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="Auto"/>
                                         <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <ui:SymbolIcon Symbol="Bookmark24"
                                                    FontSize="20"
@@ -557,6 +572,18 @@
                                             </TextBlock.Text>
                                         </TextBlock>
                                     </StackPanel>
+                                    <Border Grid.Column="2"
+                                            VerticalAlignment="Center"
+                                            Margin="8,0,4,0"
+                                            Padding="6,2"
+                                            CornerRadius="4"
+                                            Background="{DynamicResource ControlFillColorSecondaryBrush}"
+                                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                            BorderThickness="1">
+                                        <TextBlock Text="{Binding PresetBadgeText}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                    </Border>
                                 </Grid>
                             </DataTemplate>
                         </ListView.ItemTemplate>

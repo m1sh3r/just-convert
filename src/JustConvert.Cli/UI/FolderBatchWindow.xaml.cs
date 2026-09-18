@@ -239,7 +239,37 @@ public partial class FolderBatchWindow : FluentWindow
         if (ChkImages.IsChecked == true && _scanResult.Images != null)
         {
             var target = (CmbImageFormats.SelectedItem as FormatChoice)?.Format ?? "png";
-            if (AppSettings.SupportsQuality(target))
+            var hasSvg = _scanResult.Images.UniqueExtensions.Contains("svg", StringComparer.OrdinalIgnoreCase);
+            if (hasSvg && !settings.SvgSetting.IsRemembered)
+            {
+                var dialog = new ConversionOptionsDialog(
+                    target,
+                    "image",
+                    settings.GetEffectiveSvgSetting(),
+                    null,
+                    settings.AppendQualitySuffix,
+                    _scanResult.Images.Files.Count,
+                    CalculateCategoryTotalSizeBytes(_scanResult.Images),
+                    sourceFormat: "svg")
+                {
+                    Owner = this
+                };
+                if (dialog.ShowDialog() != true)
+                {
+                    return;
+                }
+
+                var svgSet = dialog.SelectedSvgSetting;
+                svgSet.IsRemembered = dialog.RememberChoice;
+                settings.SvgSetting = svgSet;
+                if (AppSettings.SupportsQuality(target))
+                {
+                    settings.SetQuality(target, dialog.SelectedImageQuality, dialog.RememberChoice);
+                }
+                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                settings.Save();
+            }
+            else if (AppSettings.SupportsQuality(target))
             {
                 if (!settings.TryGetSavedQuality(target, out _))
                 {
