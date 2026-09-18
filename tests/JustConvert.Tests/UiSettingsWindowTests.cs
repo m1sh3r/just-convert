@@ -27,6 +27,19 @@ public class UiSettingsWindowTests
     }
 
     [Fact]
+    public void Construct_AndMeasure_RendersWithoutTemplateErrors()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var settings = new AppSettings();
+            var window = new SettingsWindow(settings);
+            window.Measure(new Size(800, 600));
+            window.Arrange(new Rect(0, 0, 800, 600));
+            Assert.NotNull(window);
+        });
+    }
+
+    [Fact]
     public void Construct_WithCustomProfile_EnablesRenameAndDeleteButtons()
     {
         StaTestRunner.Run(() =>

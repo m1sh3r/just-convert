@@ -279,4 +279,120 @@ public class UiConversionOptionsDialogTests
             Assert.DoesNotContain(singlePrefix, batchDialog.TxtEstimatedSize.Text);
         });
     }
+
+    [Fact]
+    public void Construct_VideoCategory_DefaultsToCqRateControl()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("mp4", "video", null, null, true);
+
+            Assert.Equal("cq", dialog.SelectedVideoQuality.RateControl);
+            Assert.Equal(Visibility.Visible, dialog.PanelVideoCq.Visibility);
+            Assert.Equal(Visibility.Collapsed, dialog.PanelVideoBitrate.Visibility);
+        });
+    }
+
+    [Fact]
+    public void Change_RateControl_SwitchesBetweenCqAndBitratePanels()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("mp4", "video", null, null, true);
+
+            dialog.CmbRateControl.SelectedValue = "vbr";
+            Assert.Equal("vbr", dialog.SelectedVideoQuality.RateControl);
+            Assert.Equal(Visibility.Collapsed, dialog.PanelVideoCq.Visibility);
+            Assert.Equal(Visibility.Visible, dialog.PanelVideoBitrate.Visibility);
+            Assert.Contains("15000", dialog.TxtVideoBitrateValue.Text);
+            Assert.Contains("15", dialog.TxtVideoBitrateDescription.Text);
+
+            dialog.CmbRateControl.SelectedValue = "cbr";
+            Assert.Equal("cbr", dialog.SelectedVideoQuality.RateControl);
+            Assert.Equal(Visibility.Collapsed, dialog.PanelVideoCq.Visibility);
+            Assert.Equal(Visibility.Visible, dialog.PanelVideoBitrate.Visibility);
+            Assert.Contains("15000", dialog.TxtVideoBitrateValue.Text);
+            Assert.Contains("15", dialog.TxtVideoBitrateDescription.Text);
+
+            dialog.CmbRateControl.SelectedValue = "cq";
+            Assert.Equal("cq", dialog.SelectedVideoQuality.RateControl);
+            Assert.Equal(Visibility.Visible, dialog.PanelVideoCq.Visibility);
+            Assert.Equal(Visibility.Collapsed, dialog.PanelVideoBitrate.Visibility);
+        });
+    }
+
+    [Fact]
+    public void Change_VideoBitrateSlider_UpdatesBitrateAndEstimate()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("mp4", "video", new VideoQualitySetting { RateControl = "vbr", VideoBitrateKbps = 5000 }, null, true);
+
+            Assert.Equal(Visibility.Visible, dialog.PanelVideoBitrate.Visibility);
+            Assert.Equal(5000, dialog.SelectedVideoQuality.VideoBitrateKbps);
+
+            dialog.SliderVideoBitrate.Value = 8000;
+            Assert.Equal(8000, dialog.SelectedVideoQuality.VideoBitrateKbps);
+            Assert.Contains("8000", dialog.TxtVideoBitrateValue.Text);
+            Assert.Contains("8", dialog.TxtVideoBitrateDescription.Text);
+        });
+    }
+
+    [Fact]
+    public void Construct_SvgSource_DisplaysSvgOptionsAndHidesQualityForPng()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("png", "image", null, null, true, 1, null, sourceFormat: "svg");
+
+            Assert.Equal(Visibility.Visible, dialog.PanelImageOptions.Visibility);
+            Assert.Equal(Visibility.Visible, dialog.PanelSvgOptions.Visibility);
+            Assert.Equal(Visibility.Collapsed, dialog.PanelImageQuality.Visibility);
+            Assert.True(dialog.CmbSvgWidth.Items.Count >= 5);
+            Assert.Equal(0, dialog.SelectedSvgWidth);
+        });
+    }
+
+    [Fact]
+    public void Construct_SvgSource_ShowsQualityForJpg()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("jpg", "image", null, null, true, 1, null, sourceFormat: "svg");
+
+            Assert.Equal(Visibility.Visible, dialog.PanelImageOptions.Visibility);
+            Assert.Equal(Visibility.Visible, dialog.PanelSvgOptions.Visibility);
+            Assert.Equal(Visibility.Visible, dialog.PanelImageQuality.Visibility);
+        });
+    }
+
+    [Fact]
+    public void Change_SvgOptions_UpdatesSelectedSvgSetting()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("png", "image", null, null, true, 1, null, sourceFormat: "svg");
+
+            dialog.CmbSvgWidth.SelectedValue = 1024;
+
+            Assert.Equal(1024, dialog.SelectedSvgWidth);
+            Assert.Equal(1024, dialog.SelectedSvgSetting.Width);
+
+            dialog.CmbSvgWidth.Text = "1280";
+            Assert.Equal(1280, dialog.SelectedSvgWidth);
+        });
+    }
+
+    [Fact]
+    public void Construct_NonSvgImageSource_HidesSvgOptions()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("jpg", "image", null, null, true, 1, null, sourceFormat: "png");
+
+            Assert.Equal(Visibility.Visible, dialog.PanelImageOptions.Visibility);
+            Assert.Equal(Visibility.Collapsed, dialog.PanelSvgOptions.Visibility);
+            Assert.Equal(Visibility.Visible, dialog.PanelImageQuality.Visibility);
+        });
+    }
 }
