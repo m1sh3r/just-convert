@@ -7,7 +7,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using JustConvert.Core;
+using JustConvert.Core.Collections;
 using JustConvert.Core.Logging;
 using JustConvert.Core.Scanning;
 using JustConvert.Core.Windows;
@@ -25,11 +27,21 @@ public partial class ConversionProgressWindow : FluentWindow
     private readonly object _queueLock = new();
     private CancellationTokenSource? _autoCloseCts;
 
-    public ObservableCollection<ConversionQueueItem> Items { get; } = [];
+    private int _convertingCount;
+    private int _pausedCount;
+    private int _errorCount;
+    private int _doneCount;
+    private int _cancelledCount;
+    private int _nextQueuedIndex;
+    private bool _updateStateRequested;
+    private readonly Action<ConversionQueueItem, QueueItemStatus, QueueItemStatus> _itemStatusChangedHandler;
+
+    public BulkObservableCollection<ConversionQueueItem> Items { get; } = [];
     public int ExitCode { get; private set; }
 
     public ConversionProgressWindow()
     {
+        _itemStatusChangedHandler = OnItemStatusChanged;
         InitializeComponent();
         if (DesignerProperties.GetIsInDesignMode(this))
         {
@@ -49,6 +61,7 @@ public partial class ConversionProgressWindow : FluentWindow
 
     public ConversionProgressWindow(IReadOnlyList<string> initialFiles, string targetFormat, string? outputPath = null, bool isBatch = false)
     {
+        _itemStatusChangedHandler = OnItemStatusChanged;
         InitializeComponent();
         _isBatch = isBatch;
 
@@ -81,6 +94,7 @@ public partial class ConversionProgressWindow : FluentWindow
 
     public ConversionProgressWindow(IReadOnlyList<BatchConversionItem> batchItems)
     {
+        _itemStatusChangedHandler = OnItemStatusChanged;
         InitializeComponent();
         _isBatch = true;
 
@@ -124,15 +138,20 @@ public partial class ConversionProgressWindow : FluentWindow
         _autoCloseCts?.Cancel();
         _autoCloseCts = null;
 
-        foreach (var file in files)
+        var list = new List<ConversionQueueItem>(files.Count);
+        for (int i = 0; i < files.Count; i++)
         {
+            var file = files[i];
             if (string.IsNullOrWhiteSpace(file)) continue;
 
-            var item = new ConversionQueueItem(file, targetFormat, outputPath);
-            item.OnItemStateChanged += () => Dispatcher.Invoke(UpdateOverallState);
-            Items.Add(item);
+            var item = new ConversionQueueItem(file, targetFormat, outputPath)
+            {
+                OnStatusChanged = _itemStatusChangedHandler
+            };
+            list.Add(item);
         }
 
+        Items.AddRange(list);
         UpdateOverallState();
         ProcessQueue();
     }
@@ -148,15 +167,20 @@ public partial class ConversionProgressWindow : FluentWindow
         _autoCloseCts?.Cancel();
         _autoCloseCts = null;
 
-        foreach (var bi in batchItems)
+        var list = new List<ConversionQueueItem>(batchItems.Count);
+        for (int i = 0; i < batchItems.Count; i++)
         {
+            var bi = batchItems[i];
             if (string.IsNullOrWhiteSpace(bi.SourceFilePath)) continue;
 
-            var item = new ConversionQueueItem(bi.SourceFilePath, bi.TargetFormat, bi.DestinationFilePath);
-            item.OnItemStateChanged += () => Dispatcher.Invoke(UpdateOverallState);
-            Items.Add(item);
+            var item = new ConversionQueueItem(bi.SourceFilePath, bi.TargetFormat, bi.DestinationFilePath)
+            {
+                OnStatusChanged = _itemStatusChangedHandler
+            };
+            list.Add(item);
         }
 
+        Items.AddRange(list);
         UpdateOverallState();
         ProcessQueue();
     }
@@ -182,12 +206,24 @@ public partial class ConversionProgressWindow : FluentWindow
     {
         lock (_queueLock)
         {
-            int runningCount = Items.Count(i => i.Status == QueueItemStatus.Converting);
-            int availableSlots = _maxParallel - runningCount;
+            int availableSlots = _maxParallel - _convertingCount;
 
             while (availableSlots > 0)
             {
-                var autoPaused = Items.FirstOrDefault(i => i.Status == QueueItemStatus.Paused && i.AutoPaused);
+                ConversionQueueItem? autoPaused = null;
+                if (_pausedCount > 0)
+                {
+                    for (int i = 0; i < Items.Count; i++)
+                    {
+                        var item = Items[i];
+                        if (item.Status == QueueItemStatus.Paused && item.AutoPaused)
+                        {
+                            autoPaused = item;
+                            break;
+                        }
+                    }
+                }
+
                 if (autoPaused != null)
                 {
                     autoPaused.Resume();
@@ -195,21 +231,31 @@ public partial class ConversionProgressWindow : FluentWindow
                     continue;
                 }
 
-                var next = Items.FirstOrDefault(i => i.Status == QueueItemStatus.Queued);
+                ConversionQueueItem? next = null;
+                while (_nextQueuedIndex < Items.Count)
+                {
+                    var candidate = Items[_nextQueuedIndex];
+                    if (candidate.Status == QueueItemStatus.Queued)
+                    {
+                        next = candidate;
+                        _nextQueuedIndex++;
+                        break;
+                    }
+                    _nextQueuedIndex++;
+                }
+
                 if (next == null) break;
 
-                StartItemConversion(next);
-                availableSlots--;
+                if (TryStartItemConversion(next))
+                {
+                    availableSlots--;
+                }
             }
         }
     }
 
-    private void StartItemConversion(ConversionQueueItem item)
+    private bool TryStartItemConversion(ConversionQueueItem item)
     {
-        item.Status = QueueItemStatus.Converting;
-        item.StatusText = I18n.T("StatusPreparing");
-        item.Cts = new CancellationTokenSource();
-
         var sourceExt = Path.GetExtension(item.InputPath).TrimStart('.').ToLowerInvariant();
         var targetExt = item.TargetFormat.TrimStart('.').ToLowerInvariant();
 
@@ -219,12 +265,7 @@ public partial class ConversionProgressWindow : FluentWindow
             item.StatusText = I18n.T("StatusSkippedAlreadyTarget");
             item.ProgressPercentage = 100;
             item.IsIndeterminate = false;
-            Dispatcher.InvokeAsync(() =>
-            {
-                ProcessQueue();
-                UpdateOverallState();
-            });
-            return;
+            return false;
         }
 
         if (_registry.FindConverter(sourceExt, targetExt) == null)
@@ -233,13 +274,12 @@ public partial class ConversionProgressWindow : FluentWindow
             item.StatusText = I18n.T("StatusSkippedUnsupported");
             item.ProgressPercentage = 100;
             item.IsIndeterminate = false;
-            Dispatcher.InvokeAsync(() =>
-            {
-                ProcessQueue();
-                UpdateOverallState();
-            });
-            return;
+            return false;
         }
+
+        item.Status = QueueItemStatus.Converting;
+        item.StatusText = I18n.T("StatusPreparing");
+        item.Cts = new CancellationTokenSource();
 
         var progress = new Progress<ConversionProgress>(p =>
         {
@@ -342,6 +382,45 @@ public partial class ConversionProgressWindow : FluentWindow
                 });
             }
         });
+
+        return true;
+    }
+
+    private void OnItemStatusChanged(ConversionQueueItem item, QueueItemStatus oldStatus, QueueItemStatus newStatus)
+    {
+        if (oldStatus == newStatus) return;
+
+        switch (oldStatus)
+        {
+            case QueueItemStatus.Converting: _convertingCount--; break;
+            case QueueItemStatus.Paused: _pausedCount--; break;
+            case QueueItemStatus.Error: _errorCount--; break;
+            case QueueItemStatus.Done: _doneCount--; break;
+            case QueueItemStatus.Cancelled: _cancelledCount--; break;
+        }
+
+        switch (newStatus)
+        {
+            case QueueItemStatus.Converting: _convertingCount++; break;
+            case QueueItemStatus.Paused: _pausedCount++; break;
+            case QueueItemStatus.Error: _errorCount++; break;
+            case QueueItemStatus.Done: _doneCount++; break;
+            case QueueItemStatus.Cancelled: _cancelledCount++; break;
+        }
+
+        RequestOverallStateUpdate();
+    }
+
+    private void RequestOverallStateUpdate()
+    {
+        if (_updateStateRequested) return;
+        _updateStateRequested = true;
+
+        Dispatcher.InvokeAsync(() =>
+        {
+            _updateStateRequested = false;
+            UpdateOverallState();
+        }, DispatcherPriority.Background);
     }
 
     private void BtnParallelDec_Click(object sender, RoutedEventArgs e)
@@ -394,10 +473,10 @@ public partial class ConversionProgressWindow : FluentWindow
     private void UpdateOverallState()
     {
         int total = Items.Count;
-        int completed = Items.Count(i => i.Status is QueueItemStatus.Done or QueueItemStatus.Error or QueueItemStatus.Cancelled);
-        int converting = Items.Count(i => i.Status == QueueItemStatus.Converting);
-        int paused = Items.Count(i => i.Status == QueueItemStatus.Paused);
-        int errors = Items.Count(i => i.Status == QueueItemStatus.Error);
+        int completed = _doneCount + _errorCount + _cancelledCount;
+        int converting = _convertingCount;
+        int paused = _pausedCount;
+        int errors = _errorCount;
 
         var baseTitle = I18n.T("QueueTitle");
         Title = total > 0 && completed < total
@@ -430,7 +509,7 @@ public partial class ConversionProgressWindow : FluentWindow
         else if (total > 0 && completed == total)
         {
             StopIconRotation();
-            bool allSuccessful = errors == 0 && Items.All(i => i.Status == QueueItemStatus.Done);
+            bool allSuccessful = errors == 0 && _cancelledCount == 0 && _doneCount == total;
             if (allSuccessful)
             {
                 TxtOverallStatus.Text = I18n.T("StatusAllDone");
@@ -492,20 +571,26 @@ public partial class ConversionProgressWindow : FluentWindow
 
     private void BtnPauseAll_Click(object sender, RoutedEventArgs e)
     {
-        int converting = Items.Count(i => i.Status == QueueItemStatus.Converting);
-        if (converting > 0)
+        if (_convertingCount > 0)
         {
-            foreach (var item in Items.Where(i => i.Status == QueueItemStatus.Converting))
+            for (int i = 0; i < Items.Count; i++)
             {
-                item.Pause(isAuto: false);
+                var item = Items[i];
+                if (item.Status == QueueItemStatus.Converting)
+                {
+                    item.Pause(isAuto: false);
+                }
             }
         }
         else
         {
-            var paused = Items.Where(i => i.Status == QueueItemStatus.Paused).ToList();
-            foreach (var item in paused)
+            for (int i = 0; i < Items.Count; i++)
             {
-                item.Resume();
+                var item = Items[i];
+                if (item.Status == QueueItemStatus.Paused)
+                {
+                    item.Resume();
+                }
             }
             ProcessQueue();
         }
@@ -514,16 +599,20 @@ public partial class ConversionProgressWindow : FluentWindow
 
     private void BtnCancelAll_Click(object sender, RoutedEventArgs e)
     {
-        int completed = Items.Count(i => i.Status is QueueItemStatus.Done or QueueItemStatus.Error or QueueItemStatus.Cancelled);
+        int completed = _doneCount + _errorCount + _cancelledCount;
         if (Items.Count > 0 && completed == Items.Count)
         {
             Close();
             return;
         }
 
-        foreach (var item in Items.Where(i => i.Status is QueueItemStatus.Converting or QueueItemStatus.Paused or QueueItemStatus.Queued))
+        for (int i = 0; i < Items.Count; i++)
         {
-            item.Cancel();
+            var item = Items[i];
+            if (item.Status is QueueItemStatus.Converting or QueueItemStatus.Paused or QueueItemStatus.Queued)
+            {
+                item.Cancel();
+            }
         }
         UpdateOverallState();
     }
@@ -545,12 +634,12 @@ public partial class ConversionProgressWindow : FluentWindow
                 }
                 else
                 {
-                    StartItemConversion(item);
+                    TryStartItemConversion(item);
                 }
             }
             else if (item.Status == QueueItemStatus.Queued)
             {
-                StartItemConversion(item);
+                TryStartItemConversion(item);
             }
             UpdateOverallState();
         }

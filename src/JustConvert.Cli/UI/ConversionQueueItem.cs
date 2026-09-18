@@ -42,7 +42,7 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
     public string? ErrorMessage { get; set; }
     public string? ErrorLog { get; set; }
 
-    public event Action? OnItemStateChanged;
+    public Action<ConversionQueueItem, QueueItemStatus, QueueItemStatus>? OnStatusChanged;
 
     public ConversionQueueItem(string inputPath, string targetFormat, string? outputPath = null)
     {
@@ -75,6 +75,7 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
         {
             if (_status != value)
             {
+                var oldStatus = _status;
                 _status = value;
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(StatusSymbol));
@@ -88,7 +89,7 @@ public class ConversionQueueItem : INotifyPropertyChanged, IConversionController
                 OnPropertyChanged(nameof(CancelVisibility));
                 OnPropertyChanged(nameof(ErrorButtonVisibility));
                 OnPropertyChanged(nameof(DisplayStatus));
-                OnItemStateChanged?.Invoke();
+                OnStatusChanged?.Invoke(this, oldStatus, value);
             }
         }
     }

@@ -103,144 +103,168 @@
                     IsClosable="True"
                     Margin="24,0,24,10"/>
 
-        <ScrollViewer Grid.Row="3"
-                      Margin="24,0,24,10"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      PanningMode="VerticalOnly"
-                      CanContentScroll="False">
-            <ItemsControl x:Name="QueueItemsList"
-                          d:ItemsSource="{x:Static local:DesignData.SampleItems}">
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Margin="0,0,0,6"
-                                Padding="10,6"
-                                CornerRadius="6"
-                                BorderThickness="1"
-                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                                Background="{DynamicResource ControlFillColorDefaultBrush}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
+        <ListView Grid.Row="3"
+                  x:Name="QueueItemsList"
+                  Margin="24,0,24,10"
+                  Background="Transparent"
+                  BorderThickness="0"
+                  Padding="0"
+                  Focusable="False"
+                  SelectionMode="Single"
+                  ScrollViewer.CanContentScroll="True"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                  ScrollViewer.PanningMode="VerticalOnly"
+                  VirtualizingPanel.IsVirtualizing="True"
+                  VirtualizingPanel.VirtualizationMode="Recycling"
+                  VirtualizingPanel.ScrollUnit="Pixel"
+                  d:ItemsSource="{x:Static local:DesignData.SampleItems}">
+            <ListView.ItemContainerStyle>
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Focusable" Value="False"/>
+                    <Setter Property="Padding" Value="0"/>
+                    <Setter Property="Margin" Value="0,0,0,6"/>
+                    <Setter Property="Background" Value="Transparent"/>
+                    <Setter Property="BorderThickness" Value="0"/>
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ListViewItem">
+                                <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="0"
+                            Padding="10,6"
+                            CornerRadius="6"
+                            BorderThickness="1"
+                            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                            Background="{DynamicResource ControlFillColorDefaultBrush}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                                <ui:SymbolIcon Grid.Column="0"
-                                               Symbol="{Binding StatusSymbol}"
-                                               FontSize="18"
-                                               Margin="0,0,10,0"
-                                               VerticalAlignment="Center"
-                                               Foreground="{Binding StatusBrush}"/>
+                            <ui:SymbolIcon Grid.Column="0"
+                                           Symbol="{Binding StatusSymbol}"
+                                           FontSize="18"
+                                           Margin="0,0,10,0"
+                                           VerticalAlignment="Center"
+                                           Foreground="{Binding StatusBrush}"/>
 
-                                <Grid Grid.Column="1"
-                                      VerticalAlignment="Center"
-                                      Margin="0,0,8,0">
+                            <Grid Grid.Column="1"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,8,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding FileName}"
+                                               FontWeight="Medium"
+                                               FontSize="12"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                                    <TextBlock Grid.Column="1"
+                                               Text="{Binding TargetFormatDisplay}"
+                                               FontSize="11"
+                                               Margin="6,0,0,0"
+                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                                </Grid>
+
+                                <Grid Grid.Row="1"
+                                      Margin="0,4,0,0">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
 
-                                    <Grid Grid.Row="0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Text="{Binding FileName}"
-                                                   FontWeight="Medium"
-                                                   FontSize="12"
-                                                   TextTrimming="CharacterEllipsis"
-                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding TargetFormatDisplay}"
-                                                   FontSize="11"
-                                                   Margin="6,0,0,0"
-                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
-                                    </Grid>
+                                    <ProgressBar Grid.Row="0"
+                                                 Height="4"
+                                                 Minimum="0"
+                                                 Maximum="100"
+                                                 Value="{Binding ProgressPercentage}"
+                                                 IsIndeterminate="{Binding IsIndeterminate}"
+                                                 Foreground="{Binding ProgressBarBrush}"
+                                                 Visibility="Visible"
+                                                 Margin="0,4,0,3"/>
 
                                     <Grid Grid.Row="1"
-                                          Margin="0,4,0,0">
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-
-                                        <ProgressBar Grid.Row="0"
-                                                     Height="4"
-                                                     Minimum="0"
-                                                     Maximum="100"
-                                                     Value="{Binding ProgressPercentage}"
-                                                     IsIndeterminate="{Binding IsIndeterminate}"
-                                                     Foreground="{Binding ProgressBarBrush}"
-                                                     Visibility="Visible"
-                                                     Margin="0,4,0,3"/>
-
-                                        <Grid Grid.Row="1"
-                                              Margin="0,2,0,0">
-                                            <TextBlock Text="{Binding DisplayStatus}"
-                                                       FontSize="11"
-                                                       Foreground="{Binding StatusTextBrush}"
-                                                       HorizontalAlignment="Left"/>
-                                            <TextBlock Text="{Binding Detail}"
-                                                       FontSize="11"
-                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                       HorizontalAlignment="Right"/>
-                                        </Grid>
+                                          Margin="0,2,0,0">
+                                        <TextBlock Text="{Binding DisplayStatus}"
+                                                   FontSize="11"
+                                                   Foreground="{Binding StatusTextBrush}"
+                                                   HorizontalAlignment="Left"/>
+                                        <TextBlock Text="{Binding Detail}"
+                                                   FontSize="11"
+                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                   HorizontalAlignment="Right"/>
                                     </Grid>
                                 </Grid>
-
-                                <StackPanel Grid.Column="2"
-                                            Orientation="Horizontal"
-                                            VerticalAlignment="Center">
-                                    <ui:Button Appearance="Transparent"
-                                               Padding="6,4"
-                                               Margin="0,0,4,0"
-                                               ToolTip="{Binding PauseResumeTooltip}"
-                                               Visibility="{Binding PauseResumeVisibility}"
-                                               Click="BtnItemPauseResume_Click"
-                                               Tag="{Binding}">
-                                        <ui:SymbolIcon Symbol="{Binding PauseResumeSymbol}"
-                                                       FontSize="14"/>
-                                    </ui:Button>
-
-                                    <ui:Button Appearance="Transparent"
-                                               Padding="6,4"
-                                               ToolTip="{core:Loc TooltipCancel}"
-                                               Visibility="{Binding CancelVisibility}"
-                                               Click="BtnItemCancel_Click"
-                                               Tag="{Binding}">
-                                        <ui:SymbolIcon Symbol="Dismiss16"
-                                                       FontSize="14"/>
-                                    </ui:Button>
-
-                                    <ui:Button Appearance="Transparent"
-                                               Padding="6,4"
-                                               Margin="0,0,4,0"
-                                               ToolTip="{core:Loc TooltipCopyError}"
-                                               Visibility="{Binding ErrorButtonVisibility}"
-                                               Click="BtnItemCopyError_Click"
-                                               Tag="{Binding}">
-                                        <ui:SymbolIcon Symbol="Copy16"
-                                                       FontSize="14"/>
-                                    </ui:Button>
-
-                                    <ui:Button Appearance="Transparent"
-                                               Padding="6,4"
-                                               ToolTip="{core:Loc TooltipError}"
-                                               Visibility="{Binding ErrorButtonVisibility}"
-                                               Click="BtnItemError_Click"
-                                               Tag="{Binding}">
-                                        <ui:SymbolIcon Symbol="Info16"
-                                                       FontSize="14"
-                                                       Foreground="{DynamicResource SystemFillColorCriticalBrush}"/>
-                                    </ui:Button>
-                                </StackPanel>
                             </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+
+                            <StackPanel Grid.Column="2"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <ui:Button Appearance="Transparent"
+                                           Padding="6,4"
+                                           Margin="0,0,4,0"
+                                           ToolTip="{Binding PauseResumeTooltip}"
+                                           Visibility="{Binding PauseResumeVisibility}"
+                                           Click="BtnItemPauseResume_Click"
+                                           Tag="{Binding}">
+                                    <ui:SymbolIcon Symbol="{Binding PauseResumeSymbol}"
+                                                   FontSize="14"/>
+                                </ui:Button>
+
+                                <ui:Button Appearance="Transparent"
+                                           Padding="6,4"
+                                           ToolTip="{core:Loc TooltipCancel}"
+                                           Visibility="{Binding CancelVisibility}"
+                                           Click="BtnItemCancel_Click"
+                                           Tag="{Binding}">
+                                    <ui:SymbolIcon Symbol="Dismiss16"
+                                                   FontSize="14"/>
+                                </ui:Button>
+
+                                <ui:Button Appearance="Transparent"
+                                           Padding="6,4"
+                                           Margin="0,0,4,0"
+                                           ToolTip="{core:Loc TooltipCopyError}"
+                                           Visibility="{Binding ErrorButtonVisibility}"
+                                           Click="BtnItemCopyError_Click"
+                                           Tag="{Binding}">
+                                    <ui:SymbolIcon Symbol="Copy16"
+                                                   FontSize="14"/>
+                                </ui:Button>
+
+                                <ui:Button Appearance="Transparent"
+                                           Padding="6,4"
+                                           ToolTip="{core:Loc TooltipError}"
+                                           Visibility="{Binding ErrorButtonVisibility}"
+                                           Click="BtnItemError_Click"
+                                           Tag="{Binding}">
+                                    <ui:SymbolIcon Symbol="Info16"
+                                                   FontSize="14"
+                                                   Foreground="{DynamicResource SystemFillColorCriticalBrush}"/>
+                                </ui:Button>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
 
         <Border Grid.Row="4"
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
