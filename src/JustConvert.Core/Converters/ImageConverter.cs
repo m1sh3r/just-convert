@@ -37,7 +37,12 @@ public class ImageConverter : IFormatConverter
             return SupportedFormats.Contains(src) && src is not "heic" and not "svg" and not "psd" && !RawFormats.Contains(src);
         }
 
-        if (src is "heic" && tgt is "heic") return false;
+        if (tgt.StartsWith("preset:"))
+        {
+            if (!SupportedFormats.Contains(src)) return false;
+            var preset = AppSettings.Load().FindPreset(tgt[7..]);
+            return preset == null || preset.Category == "image";
+        }
 
         return SupportedFormats.Contains(src) && FormatsOrder.Contains(tgt, StringComparer.OrdinalIgnoreCase) && !src.Equals(tgt, StringComparison.OrdinalIgnoreCase);
     }
@@ -91,6 +96,18 @@ public class ImageConverter : IFormatConverter
         var isReencode = targetExtension.TrimStart('.').Equals("reencode", StringComparison.OrdinalIgnoreCase);
         var targetExt = isReencode ? sourceExt : targetExtension.TrimStart('.').ToLowerInvariant();
 
+        var settings = AppSettings.Load();
+        CustomPreset? preset = null;
+        if (targetExtension.TrimStart('.').StartsWith("preset:"))
+        {
+            var presetId = targetExtension.TrimStart('.')[7..];
+            preset = settings.FindPreset(presetId);
+            if (preset != null)
+            {
+                targetExt = preset.ContainerFormat.TrimStart('.').ToLowerInvariant();
+            }
+        }
+
         var outputExt = targetExt switch
         {
             "jpeg" => "jpg",
@@ -99,15 +116,15 @@ public class ImageConverter : IFormatConverter
             _ => targetExt
         };
 
-        var settings = AppSettings.Load();
-        var effectiveQuality = settings.GetEffectiveQuality(targetExt);
-        var appendQualitySuffix = settings.AppendQualitySuffix;
+        var effectiveQuality = preset != null ? preset.ImageQuality : settings.GetEffectiveQuality(targetExt);
+        var effectiveSvgWidth = preset != null && preset.SvgWidth > 0 ? preset.SvgWidth : settings.GetEffectiveSvgSetting().Width;
+        var appendQualitySuffix = preset != null ? preset.AppendSuffix : settings.AppendQualitySuffix;
 
         if (string.IsNullOrWhiteSpace(outputPath))
         {
             var dir = Path.GetDirectoryName(inputPath) ?? "";
             var fileNameWithoutExt = Path.GetFileNameWithoutExtension(inputPath);
-            var suffix = OutputFileNameHelper.BuildImageSuffix(targetExt, effectiveQuality, appendQualitySuffix);
+            var suffix = OutputFileNameHelper.BuildImageSuffix(targetExt, effectiveQuality, appendQualitySuffix, sourceExt, effectiveSvgWidth);
             outputPath = OutputFileNameHelper.GetUniquePath(dir, fileNameWithoutExt, suffix, $".{outputExt}");
         }
         else
@@ -128,7 +145,7 @@ public class ImageConverter : IFormatConverter
         {
             progress?.Report(new ConversionProgress(20, I18n.T("ImageLoading")));
 
-            var arguments = BuildArguments(inputPath, outputPath, targetExt, sourceExt, isReencode, effectiveQuality);
+            var arguments = BuildArguments(inputPath, outputPath, targetExt, sourceExt, isReencode, effectiveQuality, effectiveSvgWidth);
             AppLogger.Info($"[ImageConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
             AppLogger.Info($"[ImageConverter] Command: magick {arguments}");
 
@@ -218,14 +235,26 @@ public class ImageConverter : IFormatConverter
         }
     }
 
-    private static string BuildArguments(string input, string output, string targetExt, string sourceExt, bool isReencode = false, int quality = 90)
+    private static string BuildArguments(
+        string input,
+        string output,
+        string targetExt,
+        string sourceExt,
+        bool isReencode = false,
+        int quality = 90,
+        int svgWidth = 0)
     {
+        var density = svgWidth > 0
+            ? Math.Clamp((int)Math.Ceiling(svgWidth * 96.0 / 128.0), 300, 4800)
+            : 96;
+        var densityOpt = sourceExt == "svg" ? $"-density {density} " : "";
         var inputSpecifier = sourceExt switch
         {
             "psd" => $"\"{input}[0]\"",
             _ when RawFormats.Contains(sourceExt) => $"\"{input}[0]\"",
             _ => $"\"{input}\""
         };
+        var resizeOpt = sourceExt == "svg" && svgWidth > 0 ? $"-resize {svgWidth}x " : "";
 
         if (isReencode)
         {
@@ -243,14 +272,14 @@ public class ImageConverter : IFormatConverter
 
         return targetExt switch
         {
-            "png" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality 95 \"{output}\"",
-            "jpg" or "jpeg" => $"{inputSpecifier} -auto-orient -background white -flatten -colorspace sRGB -quality {quality} \"{output}\"",
-            "webp" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
-            "avif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
-            "ico" => $"{inputSpecifier} -auto-orient -background transparent -define icon:auto-resize=256,128,64,48,32,16 \"{output}\"",
-            "jp2" or "jpeg2000" => $"{inputSpecifier} -auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
-            "tiff" or "tif" => $"{inputSpecifier} -auto-orient -colorspace sRGB -compress lzw \"{output}\"",
-            _ => $"{inputSpecifier} -auto-orient -colorspace sRGB \"{output}\""
+            "png" => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -colorspace sRGB -quality 95 \"{output}\"",
+            "jpg" or "jpeg" => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -background white -flatten -colorspace sRGB -quality {quality} \"{output}\"",
+            "webp" => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
+            "avif" => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
+            "ico" => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -background transparent -define icon:auto-resize=256,128,64,48,32,16 \"{output}\"",
+            "jp2" or "jpeg2000" => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -colorspace sRGB -quality {quality} \"{output}\"",
+            "tiff" or "tif" => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -colorspace sRGB -compress lzw \"{output}\"",
+            _ => $"{densityOpt}{inputSpecifier} {resizeOpt}-auto-orient -colorspace sRGB \"{output}\""
         };
     }
 
