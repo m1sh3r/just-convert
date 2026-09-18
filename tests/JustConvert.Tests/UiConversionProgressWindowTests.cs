@@ -122,4 +122,19 @@ public class UiConversionProgressWindowTests
         Assert.NotNull(item.StatusBrush);
         Assert.NotNull(item.StatusTextBrush);
     }
+
+    [Fact]
+    public void EnqueueFiles_LargeBatch_PerformsRapidly()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var files = Enumerable.Range(0, 2000).Select(i => $"file_{i}.mp4").ToList();
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            var window = new ConversionProgressWindow(files, "mp3");
+            sw.Stop();
+
+            Assert.Equal(2000, window.Items.Count);
+            Assert.True(sw.ElapsedMilliseconds < 2000);
+        });
+    }
 }
