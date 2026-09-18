@@ -6,15 +6,9 @@ public class I18nLocalizationTests
 {
     private static readonly string[] AllFormatIdentifiers =
     [
-        "mp4-h264", "mp4-h265", "webm-vp9", "webm-av1",
-        "mp4-h264-nvenc", "mp4-h265-nvenc", "webm-av1-nvenc",
-        "mp4-h264-qsv", "mp4-h265-qsv", "webm-vp9-qsv", "webm-av1-qsv",
-        "mp4-h264-amf", "mp4-h265-amf", "webm-av1-amf",
-        "mov-prores422", "mov-prores4444",
-        "remux-mp4", "remux-mkv",
-        "frames", "reencode",
-        "mp3", "aac", "m4a", "wav", "flac", "ogg",
-        "png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif"
+        "mp4", "webm", "mkv", "mov", "gif", "frames", "remux", "reencode",
+        "mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff",
+        "png", "jpg", "webp", "ico", "bmp", "jp2", "tiff", "tga", "pcx", "ppm", "avif"
     ];
 
     [Theory]
