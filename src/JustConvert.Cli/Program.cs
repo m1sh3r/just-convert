@@ -382,8 +382,11 @@ public class Program
     {
         chosenTargetFormat = null;
         var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
-        if (fmt.StartsWith("preset:")) return true;
-        if (fmt is "reencode" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" or "remux-mp4" or "remux-mkv" or "gif") return true;
+        var sourceExt = !string.IsNullOrEmpty(firstInputFilePath)
+            ? Path.GetExtension(firstInputFilePath).TrimStart('.').ToLowerInvariant()
+            : null;
+
+        if (fmt is "reencode" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" or "remux-mp4" or "remux-mkv" || (fmt == "gif" && sourceExt != "svg")) return true;
 
         var settings = AppSettings.Load();
         var ffmpeg = ToolLocator.FindFfmpegPath();
@@ -396,6 +399,7 @@ public class Program
             app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ThemesDictionary { Theme = Wpf.Ui.Appearance.ApplicationTheme.Light });
             app.Resources.MergedDictionaries.Add(new Wpf.Ui.Markup.ControlsDictionary());
         }
+        Wpf.Ui.Appearance.ApplicationThemeManager.ApplySystemTheme();
 
         void StartBackgroundProbe(ConversionOptionsDialog dialog)
         {
@@ -414,6 +418,73 @@ public class Program
                     catch { }
                 });
             }
+        }
+
+        if (fmt.StartsWith("preset:"))
+        {
+            var preset = settings.FindPreset(fmt[7..]);
+            if (preset == null || string.Equals(preset.PresetType, "quick", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            ConversionOptionsDialog dialog;
+            if (preset.Category == "video")
+            {
+                var vq = new VideoQualitySetting
+                {
+                    VideoCodec = preset.VideoCodec,
+                    Encoder = preset.Encoder,
+                    RateControl = preset.RateControl,
+                    VideoQualityCq = preset.VideoQualityCq,
+                    VideoBitrateKbps = preset.VideoBitrateKbps,
+                    AudioCodec = preset.AudioCodec,
+                    AudioBitrateKbps = preset.AudioBitrateKbps
+                };
+                dialog = new ConversionOptionsDialog(preset.ContainerFormat, "video", vq, null, preset.AppendSuffix, batchCount, totalBatchSizeBytes);
+            }
+            else if (preset.Category == "audio")
+            {
+                var aq = new AudioQualitySetting
+                {
+                    AudioBitrateKbps = preset.AudioBitrateKbps
+                };
+                dialog = new ConversionOptionsDialog(preset.ContainerFormat, "audio", aq, null, preset.AppendSuffix, batchCount, totalBatchSizeBytes);
+            }
+            else
+            {
+                dialog = new ConversionOptionsDialog(preset.ContainerFormat, "image", preset.ImageQuality, null, preset.AppendSuffix, batchCount, totalBatchSizeBytes);
+            }
+
+            onDialogCreated?.Invoke(dialog);
+            StartBackgroundProbe(dialog);
+
+            var res = dialog.ShowDialog();
+            if (res != true) return false;
+
+            if (preset.Category == "video")
+            {
+                var selected = dialog.SelectedVideoQuality;
+                selected.IsRemembered = dialog.RememberChoice;
+                settings.SetVideoQuality(dialog.SelectedTargetFormat, selected);
+                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                settings.Save();
+            }
+            else if (preset.Category == "audio")
+            {
+                settings.SetAudioQuality(dialog.SelectedTargetFormat, dialog.SelectedAudioBitrate, dialog.RememberChoice);
+                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                settings.Save();
+            }
+            else if (preset.Category == "image")
+            {
+                settings.SetQuality(dialog.SelectedTargetFormat, dialog.SelectedImageQuality, dialog.RememberChoice);
+                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                settings.Save();
+            }
+
+            chosenTargetFormat = dialog.SelectedTargetFormat;
+            return true;
         }
 
         if (fmt is "mp4" or "webm" or "mkv" or "mov")
@@ -527,6 +598,41 @@ public class Program
             return true;
         }
 
+        if (sourceExt == "svg" && (AppSettings.SupportsQuality(fmt) || fmt is "png" or "bmp" or "tiff" or "tif" or "ico" or "gif"))
+        {
+            if (settings.SvgSetting.IsRemembered && (!AppSettings.SupportsQuality(fmt) || settings.TryGetSavedQuality(fmt, out _)) && batchCount <= 1)
+            {
+                return true;
+            }
+
+            var dialog = new ConversionOptionsDialog(
+                fmt,
+                "image",
+                settings.GetEffectiveSvgSetting(),
+                null,
+                settings.AppendQualitySuffix,
+                batchCount,
+                totalBatchSizeBytes,
+                sourceFormat: "svg"
+            );
+            onDialogCreated?.Invoke(dialog);
+            StartBackgroundProbe(dialog);
+
+            var res = dialog.ShowDialog();
+            if (res != true) return false;
+
+            var svgSet = dialog.SelectedSvgSetting;
+            svgSet.IsRemembered = dialog.RememberChoice;
+            settings.SvgSetting = svgSet;
+            if (AppSettings.SupportsQuality(fmt))
+            {
+                settings.SetQuality(fmt, dialog.SelectedImageQuality, dialog.RememberChoice);
+            }
+            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.Save();
+            return true;
+        }
+
         if (AppSettings.SupportsQuality(fmt))
         {
             if (settings.TryGetSavedQuality(fmt, out _) && batchCount <= 1) return true;
@@ -571,6 +677,7 @@ public class Program
         }
 
         app.ShutdownMode = ShutdownMode.OnLastWindowClose;
+        Wpf.Ui.Appearance.ApplicationThemeManager.ApplySystemTheme();
         var window = windowFactory();
         app.MainWindow = window;
         window.Show();
