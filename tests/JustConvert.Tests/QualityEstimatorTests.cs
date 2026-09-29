@@ -44,10 +44,10 @@ public class QualityEstimatorTests
     }
 
     [Fact]
-    public void EstimateVideoFileSize_Remux_MatchesSourceSizeWithOverhead()
+    public void EstimateVideoFileSize_Copy_MatchesSourceSizeWithOverhead()
     {
         var size = QualityEstimator.EstimateVideoFileSize(
-            1920, 1080, 30.0, 60.0, 23, "remux",
+            1920, 1080, 30.0, 60.0, 23, "copy",
             sourceFileSizeBytes: 100_000_000L);
         Assert.Equal(101_000_000L, size);
     }

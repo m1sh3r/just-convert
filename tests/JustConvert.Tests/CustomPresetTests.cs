@@ -171,8 +171,8 @@ public class CustomPresetTests
             var audioDialog = new ConversionOptionsDialog("mp3", "audio", null, null, true);
             Assert.Equal(Visibility.Visible, audioDialog.BtnSaveAsPreset.Visibility);
 
-            var remuxDialog = new ConversionOptionsDialog("remux", "remux", null, null, true);
-            Assert.Equal(Visibility.Collapsed, remuxDialog.BtnSaveAsPreset.Visibility);
+            var framesDialog = new ConversionOptionsDialog("frames", "frames", null, null, true);
+            Assert.Equal(Visibility.Collapsed, framesDialog.BtnSaveAsPreset.Visibility);
         });
     }
 }

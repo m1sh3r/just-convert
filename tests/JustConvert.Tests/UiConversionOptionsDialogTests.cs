@@ -18,8 +18,6 @@ public class UiConversionOptionsDialogTests
             Assert.Equal(Visibility.Visible, dialog.PanelVideoOptions.Visibility);
             Assert.Equal(Visibility.Collapsed, dialog.PanelAudioOptions.Visibility);
             Assert.Equal(Visibility.Collapsed, dialog.PanelImageOptions.Visibility);
-            Assert.Equal(Visibility.Collapsed, dialog.PanelRemuxOptions.Visibility);
-
             Assert.Equal(22, dialog.SliderVideoCq.Value);
             Assert.Equal("CQ 22", dialog.TxtVideoCqValue.Text);
             Assert.False(string.IsNullOrWhiteSpace(dialog.TxtVideoQualityDescription.Text));
@@ -61,49 +59,6 @@ public class UiConversionOptionsDialogTests
             dialog.SliderVideoCq.Value = 30;
             Assert.Equal("CQ 30", dialog.TxtVideoCqValue.Text);
             Assert.Equal(30, dialog.SelectedVideoQuality.VideoQualityCq);
-        });
-    }
-
-    [Fact]
-    public void Construct_RemuxCategory_InitializesControlsAndContainers()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var remuxSetting = new RemuxSetting
-            {
-                TargetContainer = "mkv",
-                CopyVideo = true,
-                CopyAudio = true,
-                CopySubtitles = false,
-                FastStart = true
-            };
-
-            var dialog = new ConversionOptionsDialog("remux", "remux", remuxSetting, null, true);
-
-            Assert.Equal(Visibility.Visible, dialog.PanelRemuxOptions.Visibility);
-            Assert.Equal(Visibility.Collapsed, dialog.PanelVideoOptions.Visibility);
-            Assert.True(dialog.CmbRemuxContainer.Items.Count >= 4);
-            Assert.True(dialog.ChkRemuxVideo.IsChecked == true);
-            Assert.True(dialog.ChkRemuxAudio.IsChecked == true);
-            Assert.False(dialog.ChkRemuxSubtitles.IsChecked == true);
-            Assert.True(dialog.ChkRemuxFastStart.IsChecked == true);
-        });
-    }
-
-    [Fact]
-    public void Change_RemuxOptions_UpdatesSelectedRemuxSetting()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var dialog = new ConversionOptionsDialog("remux", "remux", null, null, true);
-
-            dialog.ChkRemuxSubtitles.IsChecked = true;
-            dialog.ChkRemuxFastStart.IsChecked = false;
-            dialog.ChkRemember.IsChecked = true;
-
-            Assert.True(dialog.SelectedRemuxSetting.CopySubtitles);
-            Assert.False(dialog.SelectedRemuxSetting.FastStart);
-            Assert.True(dialog.RememberChoice);
         });
     }
 

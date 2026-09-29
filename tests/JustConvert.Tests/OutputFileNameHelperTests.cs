@@ -34,7 +34,6 @@ public class OutputFileNameHelperTests : IDisposable
     [InlineData("webm-av1-amf", "AV1 AMF - CQ 23")]
     [InlineData("mov-prores422", "ProRes 422")]
     [InlineData("mov-prores4444", "ProRes 4444")]
-    [InlineData("remux", "Remux")]
     [InlineData("frames", "Frames")]
     [InlineData("frames-jpg", "Frames")]
     [InlineData("gif", null)]
@@ -225,5 +224,25 @@ public class OutputFileNameHelperTests : IDisposable
         var path1 = OutputFileNameHelper.GetUniquePath(_tempDir, "video", "Frames", "", isDirectory: true);
         var expected1 = Path.Combine(_tempDir, "video [Frames] (1)");
         Assert.Equal(expected1, path1);
+    }
+
+    [Theory]
+    [InlineData("Fast/HD", "Fast-HD")]
+    [InlineData("Preset:1080p", "Preset-1080p")]
+    [InlineData("Quality*Best?", "Quality-Best-")]
+    [InlineData("ValidName", "ValidName")]
+    [InlineData("Special !@#$^&()_+~=;, ' 🎵 音楽 тест [2026]", "Special !@#$^&()_+~=;, ' 🎵 音楽 тест [2026]")]
+    public void SanitizeFileName_ReplacesInvalidCharacters_PreservesValidSpecialCharacters(string input, string expected)
+    {
+        var result = OutputFileNameHelper.SanitizeFileName(input);
+        Assert.Equal(expected, result);
+    }
+
+    [Fact]
+    public void GetUniquePath_WithInvalidCharactersInSuffix_SanitizesAndCreatesValidPath()
+    {
+        var path = OutputFileNameHelper.GetUniquePath(_tempDir, "movie", "Custom/1080p:HQ", ".mp4");
+        var expected = Path.Combine(_tempDir, "movie [Custom-1080p-HQ].mp4");
+        Assert.Equal(expected, path);
     }
 }

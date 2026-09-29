@@ -27,7 +27,7 @@ public class FormatRegistryTests
         "mp4", "mkv", "mov", "webm", "gif",
         "frames",
         "mp3", "m4a", "aac", "wav", "flac", "opus",
-        "remux", "reencode"
+        "reencode"
     ];
 
     private static readonly string[] ExpectedAudioTargets =
@@ -188,8 +188,6 @@ public class FormatRegistryTests
     [InlineData("wav", "wav", true)]
     [InlineData("aif", "aiff", true)]
     [InlineData("tiff", "tif", true)]
-    [InlineData("mp4", "remux", false)]
-    [InlineData("mkv", "remux", false)]
     [InlineData("jpg", "reencode", false)]
     [InlineData("mp4", "frames", false)]
     public void IsSameFormat_CorrectlyIdentifiesDuplicates(string sourceExt, string targetFormat, bool expectedDuplicate)

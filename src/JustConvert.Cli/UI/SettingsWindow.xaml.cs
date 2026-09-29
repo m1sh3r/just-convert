@@ -19,7 +19,6 @@ public partial class SettingsWindow : FluentWindow
     private static readonly string[] AllVideoFormats =
     [
         "mp4", "webm", "mkv", "mov",
-        "remux-mp4", "remux-mkv",
         "frames", "gif",
         "mp3", "wav", "flac", "aac", "m4a", "opus",
         "reencode"
@@ -269,59 +268,11 @@ public partial class SettingsWindow : FluentWindow
             UpdateQualityRow("webp", SliderQualityWebp, TxtQualityStatusWebp);
             UpdateQualityRow("avif", SliderQualityAvif, TxtQualityStatusAvif);
             UpdateQualityRow("jp2", SliderQualityJp2, TxtQualityStatusJp2);
-            RefreshRemuxControls();
         }
         finally
         {
             _suppressQualityEvents = false;
         }
-    }
-
-    private void RefreshRemuxControls()
-    {
-        var remux = _settings.GetEffectiveRemuxSetting();
-        if (CmbSettingsRemuxContainer.Items.Count == 0)
-        {
-            CmbSettingsRemuxContainer.Items.Add("mp4");
-            CmbSettingsRemuxContainer.Items.Add("mkv");
-            CmbSettingsRemuxContainer.Items.Add("mov");
-            CmbSettingsRemuxContainer.Items.Add("webm");
-        }
-
-        CmbSettingsRemuxContainer.SelectedItem = remux.TargetContainer;
-        ChkSettingsRemuxFastStart.IsChecked = remux.FastStart;
-        ChkSettingsRemuxSubtitles.IsChecked = remux.CopySubtitles;
-
-        TxtRemuxStatus.Text = remux.IsRemembered
-            ? string.Format(I18n.T("RemuxStatusRemembered"), remux.TargetContainer.ToUpperInvariant())
-            : I18n.T("QualityStatusAsk");
-    }
-
-    private void OnResetRemuxClick(object sender, RoutedEventArgs e)
-    {
-        _settings.ResetRemuxSetting();
-        _suppressQualityEvents = true;
-        try
-        {
-            RefreshRemuxControls();
-        }
-        finally
-        {
-            _suppressQualityEvents = false;
-        }
-    }
-
-    private void OnSettingsRemuxOptionChanged(object sender, RoutedEventArgs e)
-    {
-        if (_suppressQualityEvents) return;
-        var remux = _settings.GetEffectiveRemuxSetting();
-        if (CmbSettingsRemuxContainer.SelectedItem is string c)
-        {
-            remux.TargetContainer = c;
-        }
-        remux.FastStart = ChkSettingsRemuxFastStart.IsChecked == true;
-        remux.CopySubtitles = ChkSettingsRemuxSubtitles.IsChecked == true;
-        _settings.SetRemuxSetting(remux);
     }
 
     private void UpdateQualityRow(string format, Slider slider, System.Windows.Controls.TextBlock statusBlock)

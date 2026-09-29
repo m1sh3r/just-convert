@@ -17,7 +17,6 @@ public class AppSettingsAndProfilesTests
         Assert.NotEmpty(profile.ImageFormats);
 
         Assert.Contains("mp4", profile.VideoFormats);
-        Assert.Contains("remux", profile.VideoFormats);
         Assert.Contains("mp3", profile.AudioFormats);
         Assert.Contains("png", profile.ImageFormats);
     }

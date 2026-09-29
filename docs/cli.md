@@ -12,10 +12,9 @@
 just-convert.exe convert "video.mov" --to mp4-h264
 ```
 
-Для быстрого ремуксирования без пережатия или повторного перекодирования в тот же контейнер используются специальные целевые модификаторы:
+Для повторного перекодирования в тот же контейнер используется специальный целевой модификатор:
 
 ```powershell
-just-convert.exe convert "video.mkv" --to remux
 just-convert.exe convert "video.mp4" --to reencode
 ```
 

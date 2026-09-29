@@ -57,16 +57,6 @@ public class AudioQualitySetting
     public bool IsRemembered { get; set; }
 }
 
-public class RemuxSetting
-{
-    public string TargetContainer { get; set; } = "mp4";
-    public bool CopyVideo { get; set; } = true;
-    public bool CopyAudio { get; set; } = true;
-    public bool CopySubtitles { get; set; } = true;
-    public bool FastStart { get; set; } = true;
-    public bool IsRemembered { get; set; }
-}
-
 public class FramesSetting
 {
     public string ImageFormat { get; set; } = "png";
@@ -167,7 +157,6 @@ public class AppSettings
     public Dictionary<string, VideoQualitySetting> VideoQualitySettings { get; set; } = [];
     public Dictionary<string, AudioQualitySetting> AudioQualitySettings { get; set; } = [];
     public Dictionary<string, ImageQualitySetting> ImageQualitySettings { get; set; } = [];
-    public RemuxSetting RemuxSetting { get; set; } = new();
     public FramesSetting FramesSetting { get; set; } = new();
     public SvgRasterSetting SvgSetting { get; set; } = new();
     public string LastVideoCodec { get; set; } = "h264";
@@ -364,29 +353,6 @@ public class AppSettings
         AudioQualitySettings.Remove(fmt);
     }
 
-    public RemuxSetting GetEffectiveRemuxSetting()
-    {
-        return new RemuxSetting
-        {
-            TargetContainer = string.IsNullOrWhiteSpace(RemuxSetting.TargetContainer) ? "mp4" : RemuxSetting.TargetContainer.TrimStart('.').ToLowerInvariant(),
-            CopyVideo = RemuxSetting.CopyVideo,
-            CopyAudio = RemuxSetting.CopyAudio,
-            CopySubtitles = RemuxSetting.CopySubtitles,
-            FastStart = RemuxSetting.FastStart,
-            IsRemembered = RemuxSetting.IsRemembered
-        };
-    }
-
-    public void SetRemuxSetting(RemuxSetting setting)
-    {
-        RemuxSetting = setting;
-    }
-
-    public void ResetRemuxSetting()
-    {
-        RemuxSetting = new RemuxSetting();
-    }
-
     public FramesSetting GetEffectiveFramesSetting()
     {
         return new FramesSetting
@@ -527,6 +493,12 @@ public class AppSettings
             defaultProfile.ImageFormats = factoryDefault.ImageFormats;
         }
 
+        foreach (var profile in Profiles)
+        {
+            profile.VideoFormats.RemoveAll(f => f.Equals("remux", StringComparison.OrdinalIgnoreCase));
+        }
+        CustomPresets.RemoveAll(p => string.Equals(p.ContainerFormat, "remux", StringComparison.OrdinalIgnoreCase));
+
         if (string.IsNullOrEmpty(ActiveProfileId) || !Profiles.Any(p => p.Id == ActiveProfileId))
         {
             ActiveProfileId = "default";
@@ -540,7 +512,7 @@ public class AppSettings
             Id = "default",
             Name = I18n.T("ProfileDefaultName"),
             IsReadOnly = true,
-            VideoFormats = ["mp4", "webm", "mkv", "mov", "gif", "frames", "remux", "mp3", "wav", "flac", "aac", "m4a", "opus", "reencode"],
+            VideoFormats = ["mp4", "webm", "mkv", "mov", "gif", "frames", "mp3", "wav", "flac", "aac", "m4a", "opus", "reencode"],
             AudioFormats = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff", "reencode"],
             ImageFormats = ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
         };

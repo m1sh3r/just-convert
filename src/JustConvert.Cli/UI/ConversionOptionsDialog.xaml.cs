@@ -23,7 +23,6 @@ public partial class ConversionOptionsDialog : FluentWindow
     public VideoQualitySetting SelectedVideoQuality { get; } = new();
     public int SelectedAudioBitrate { get; private set; } = 192;
     public int SelectedImageQuality { get; private set; } = 90;
-    public RemuxSetting SelectedRemuxSetting { get; private set; } = new();
     public FramesSetting SelectedFramesSetting { get; private set; } = new();
     public string SelectedFramesImageFormat => SelectedFramesSetting.ImageFormat;
     public string SelectedFramesTargetFormat => $"frames-{SelectedFramesSetting.ImageFormat}";
@@ -130,7 +129,6 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelVideoOptions.Visibility = Visibility.Visible;
             PanelAudioOptions.Visibility = Visibility.Collapsed;
             PanelImageOptions.Visibility = Visibility.Collapsed;
-            PanelRemuxOptions.Visibility = Visibility.Collapsed;
             PanelFramesOptions.Visibility = Visibility.Collapsed;
 
             var videoSetting = (initialSetting as VideoQualitySetting) ?? new VideoQualitySetting();
@@ -181,76 +179,12 @@ public partial class ConversionOptionsDialog : FluentWindow
                 TxtSourceInfo.Visibility = Visibility.Collapsed;
             }
         }
-        else if (_category == "remux")
-        {
-            IconCategory.Symbol = Wpf.Ui.Controls.SymbolRegular.ArrowRepeatAll24;
-            TxtFormatPrompt.Text = I18n.T("RemuxPrompt");
-            PanelVideoOptions.Visibility = Visibility.Collapsed;
-            PanelAudioOptions.Visibility = Visibility.Collapsed;
-            PanelImageOptions.Visibility = Visibility.Collapsed;
-            PanelRemuxOptions.Visibility = Visibility.Visible;
-            PanelFramesOptions.Visibility = Visibility.Collapsed;
-
-            PopulateRemuxContainers();
-
-            var remuxSetting = (initialSetting as RemuxSetting) ?? new RemuxSetting();
-            SelectedRemuxSetting = new RemuxSetting
-            {
-                TargetContainer = remuxSetting.TargetContainer,
-                CopyVideo = remuxSetting.CopyVideo,
-                CopyAudio = remuxSetting.CopyAudio,
-                CopySubtitles = remuxSetting.CopySubtitles,
-                FastStart = remuxSetting.FastStart,
-                IsRemembered = remuxSetting.IsRemembered
-            };
-
-            for (int i = 0; i < CmbRemuxContainer.Items.Count; i++)
-            {
-                if (CmbRemuxContainer.Items[i] is CodecItem item && item.Id.Equals(SelectedRemuxSetting.TargetContainer, StringComparison.OrdinalIgnoreCase))
-                {
-                    CmbRemuxContainer.SelectedIndex = i;
-                    break;
-                }
-            }
-            if (CmbRemuxContainer.SelectedIndex < 0 && CmbRemuxContainer.Items.Count > 0)
-            {
-                CmbRemuxContainer.SelectedIndex = 0;
-            }
-
-            ChkRemuxVideo.IsChecked = SelectedRemuxSetting.CopyVideo;
-            ChkRemuxAudio.IsChecked = SelectedRemuxSetting.CopyAudio;
-            ChkRemuxSubtitles.IsChecked = SelectedRemuxSetting.CopySubtitles;
-            ChkRemuxFastStart.IsChecked = SelectedRemuxSetting.FastStart;
-
-            if (_mediaInfo?.Video != null)
-            {
-                var v = _mediaInfo.Video;
-                var fps = v.FrameRateFps > 0 ? v.FrameRateFps : 30;
-                var sizeStr = QualityEstimator.FormatFileSize(_mediaInfo.FileSizeBytes);
-                var vCodec = QualityEstimator.FormatCodecName(v.Codec);
-                var aCodec = QualityEstimator.FormatCodecName(_mediaInfo.Audio?.Codec);
-                var codecSummary = !string.IsNullOrEmpty(aCodec) ? $"{vCodec} / {aCodec}" : vCodec;
-                TxtSourceInfo.Text = string.Format(I18n.T("LabelSourceMedia"), Path.GetFileName(_mediaInfo.FilePath ?? ""), codecSummary, v.Width, v.Height, fps, sizeStr);
-            }
-            else if (_mediaInfo?.Audio != null)
-            {
-                var a = _mediaInfo.Audio;
-                var aCodec = QualityEstimator.FormatCodecName(a.Codec);
-                var sizeStr = QualityEstimator.FormatFileSize(_mediaInfo.FileSizeBytes);
-                TxtSourceInfo.Text = string.Format(I18n.T("LabelSourceRemux"), Path.GetFileName(_mediaInfo.FilePath ?? ""), aCodec, sizeStr);
-            }
-            else
-            {
-                TxtSourceInfo.Visibility = Visibility.Collapsed;
-            }
-        }
         else if (_category == "audio")
         {
             IconCategory.Symbol = Wpf.Ui.Controls.SymbolRegular.MusicNote224;
             PanelVideoOptions.Visibility = Visibility.Collapsed;
             PanelAudioOptions.Visibility = Visibility.Visible;
             PanelImageOptions.Visibility = Visibility.Collapsed;
-            PanelRemuxOptions.Visibility = Visibility.Collapsed;
             PanelFramesOptions.Visibility = Visibility.Collapsed;
 
             var isBatch = _batchCount > 1;
@@ -305,7 +239,6 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelVideoOptions.Visibility = Visibility.Collapsed;
             PanelAudioOptions.Visibility = Visibility.Collapsed;
             PanelImageOptions.Visibility = Visibility.Collapsed;
-            PanelRemuxOptions.Visibility = Visibility.Collapsed;
             PanelFramesOptions.Visibility = Visibility.Visible;
 
             PopulateFramesFormats();
@@ -357,7 +290,6 @@ public partial class ConversionOptionsDialog : FluentWindow
             PanelVideoOptions.Visibility = Visibility.Collapsed;
             PanelAudioOptions.Visibility = Visibility.Collapsed;
             PanelImageOptions.Visibility = Visibility.Visible;
-            PanelRemuxOptions.Visibility = Visibility.Collapsed;
             PanelFramesOptions.Visibility = Visibility.Collapsed;
 
             var isSvg = string.Equals(_sourceFormat, "svg", StringComparison.OrdinalIgnoreCase);
@@ -731,38 +663,6 @@ public partial class ConversionOptionsDialog : FluentWindow
         UpdatePreview();
     }
 
-    private void PopulateRemuxContainers()
-    {
-        var containers = new List<CodecItem>
-        {
-            new("mp4", "MP4 (.mp4)"),
-            new("mkv", "MKV (.mkv)"),
-            new("mov", "MOV (.mov)"),
-            new("webm", "WEBM (.webm)")
-        };
-
-        CmbRemuxContainer.ItemsSource = containers;
-        CmbRemuxContainer.DisplayMemberPath = nameof(CodecItem.DisplayName);
-        CmbRemuxContainer.SelectedValuePath = nameof(CodecItem.Id);
-
-        var match = containers.FirstOrDefault(c => string.Equals(c.Id, SelectedRemuxSetting.TargetContainer, StringComparison.OrdinalIgnoreCase)) ?? containers[0];
-        CmbRemuxContainer.SelectedItem = match;
-    }
-
-    private void OnRemuxOptionChanged(object sender, RoutedEventArgs e)
-    {
-        if (_isUpdating || CmbRemuxContainer == null || ChkRemuxVideo == null || ChkRemuxAudio == null || ChkRemuxSubtitles == null || ChkRemuxFastStart == null) return;
-        if (CmbRemuxContainer.SelectedItem is CodecItem item)
-        {
-            SelectedRemuxSetting.TargetContainer = item.Id;
-        }
-        SelectedRemuxSetting.CopyVideo = ChkRemuxVideo.IsChecked == true;
-        SelectedRemuxSetting.CopyAudio = ChkRemuxAudio.IsChecked == true;
-        SelectedRemuxSetting.CopySubtitles = ChkRemuxSubtitles.IsChecked == true;
-        SelectedRemuxSetting.FastStart = ChkRemuxFastStart.IsChecked == true;
-        UpdatePreview();
-    }
-
     private void UpdatePreview()
     {
         if (_isUpdating || TxtFormatPrompt == null || TxtEstimatedSize == null) return;
@@ -796,26 +696,6 @@ public partial class ConversionOptionsDialog : FluentWindow
             );
 
             UpdateEstimatedSizeText(estimatedBytes);
-        }
-        else if (_category == "remux")
-        {
-            var sourceBytes = (_batchCount > 1 && _totalBatchSizeBytes.HasValue)
-                ? _totalBatchSizeBytes.Value
-                : (_mediaInfo?.FileSizeBytes ?? 0L);
-            if (_batchCount > 1 && !_totalBatchSizeBytes.HasValue && _mediaInfo?.FileSizeBytes.HasValue == true)
-            {
-                sourceBytes = _mediaInfo.FileSizeBytes.Value * _batchCount;
-            }
-            if (sourceBytes > 0)
-            {
-                var formatted = QualityEstimator.FormatFileSize(sourceBytes);
-                TxtEstimatedSize.Text = string.Format(I18n.T("EstimatedSizeRemux"), formatted);
-            }
-            else
-            {
-                var key = _batchCount > 1 ? "EstimatedBatchSizeLabel" : "EstimatedFileSizeLabel";
-                TxtEstimatedSize.Text = $"{I18n.T(key).Split('~')[0].TrimEnd()}: —";
-            }
         }
         else if (_category == "audio")
         {
@@ -1057,10 +937,6 @@ public partial class ConversionOptionsDialog : FluentWindow
             {
                 SelectedVideoQuality.AudioBitrateKbps = abItem.Value;
             }
-        }
-        else if (_category == "remux")
-        {
-            SelectedRemuxSetting.IsRemembered = RememberChoice;
         }
         else if (_category == "frames")
         {

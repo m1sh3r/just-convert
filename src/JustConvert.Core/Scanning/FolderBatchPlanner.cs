@@ -171,17 +171,6 @@ public static class FolderBatchPlanner
                         return (suffix, $".{fmt}", false);
                     }
 
-                    if (fmt == "remux")
-                    {
-                        var remuxSetting = AppSettings.Load().GetEffectiveRemuxSetting();
-                        return (suffix, $".{remuxSetting.TargetContainer.TrimStart('.')}", false);
-                    }
-
-                    if (fmt.StartsWith("remux-"))
-                    {
-                        return (suffix, $".{fmt[6..]}", false);
-                    }
-
                     if (fmt is "gif")
                     {
                         return (suffix, ".gif", false);

@@ -19,7 +19,7 @@ public class VideoConverter : IFormatConverter
 
     private static readonly HashSet<string> VideoTargetFormats = new(StringComparer.OrdinalIgnoreCase)
     {
-        "mp4", "webm", "mkv", "mov", "gif", "frames", "frames-png", "frames-jpg", "frames-webp", "frames-bmp", "frames-tiff", "remux", "remux-mp4", "remux-mkv",
+        "mp4", "webm", "mkv", "mov", "gif", "frames", "frames-png", "frames-jpg", "frames-webp", "frames-bmp", "frames-tiff",
         "mp3", "wav", "flac", "aac", "ogg", "m4a", "opus", "aiff"
     };
 
@@ -33,7 +33,7 @@ public class VideoConverter : IFormatConverter
         var src = sourceExtension.TrimStart('.').ToLowerInvariant();
         var tgt = targetExtension.TrimStart('.').ToLowerInvariant();
 
-        if (tgt is "reencode" or "remux")
+        if (tgt is "reencode")
         {
             return VideoFormats.Contains(src);
         }
@@ -54,7 +54,7 @@ public class VideoConverter : IFormatConverter
 
         return
         [
-            "mp4", "webm", "mkv", "mov", "gif", "frames", "remux",
+            "mp4", "webm", "mkv", "mov", "gif", "frames",
             "mp3", "wav", "flac", "aac", "m4a", "opus",
             "reencode"
         ];
@@ -85,7 +85,6 @@ public class VideoConverter : IFormatConverter
         var sourceExt = Path.GetExtension(inputPath).TrimStart('.').ToLowerInvariant();
         var rawTargetExt = targetExtension.TrimStart('.').ToLowerInvariant();
         var isReencode = rawTargetExt == "reencode";
-        var isRemux = rawTargetExt == "remux";
         var targetExt = isReencode ? sourceExt : rawTargetExt;
 
         var isExtractFrames = targetExt is "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff";
@@ -94,17 +93,9 @@ public class VideoConverter : IFormatConverter
         var settings = AppSettings.Load();
         CustomPreset? preset = null;
         VideoQualitySetting videoSetting;
-        RemuxSetting? remuxSetting = null;
 
         string outputExt;
-        if (isRemux)
-        {
-            remuxSetting = settings.GetEffectiveRemuxSetting();
-            var container = remuxSetting.TargetContainer.TrimStart('.').ToLowerInvariant();
-            outputExt = $".{container}";
-            videoSetting = settings.GetEffectiveVideoQuality(container);
-        }
-        else if (targetExt.StartsWith("preset:"))
+        if (targetExt.StartsWith("preset:"))
         {
             var presetId = targetExt[7..];
             preset = settings.FindPreset(presetId);
@@ -130,9 +121,7 @@ public class VideoConverter : IFormatConverter
         }
         else
         {
-            if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy") outputExt = ".mp4";
-            else if (targetExt is "remux-mkv" or "mkv-remux" or "mkv-copy") outputExt = ".mkv";
-            else if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase) && targetExt != "mp4-av1") outputExt = ".mp4";
+            if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase) && targetExt != "mp4-av1") outputExt = ".mp4";
             else if (targetExt.StartsWith("mov", StringComparison.OrdinalIgnoreCase)) outputExt = ".mov";
             else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase) || targetExt is "vp9" or "av1") outputExt = ".webm";
             else if (targetExt.StartsWith("mkv", StringComparison.OrdinalIgnoreCase)) outputExt = ".mkv";
@@ -178,16 +167,17 @@ public class VideoConverter : IFormatConverter
             }
         }
 
-        if (isExtractFrames && !string.IsNullOrEmpty(outputPath) && !Directory.Exists(outputPath))
+        var targetDir = isExtractFrames ? outputPath : Path.GetDirectoryName(outputPath);
+        if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
         {
-            Directory.CreateDirectory(outputPath);
+            Directory.CreateDirectory(targetDir);
         }
 
         try
         {
             var arguments = (preset != null && preset.IsCustomCommand && !string.IsNullOrWhiteSpace(preset.CustomArguments))
                 ? $"-y -i \"{inputPath}\" {preset.CustomArguments} \"{outputPath}\""
-                : BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting, remuxSetting);
+                : BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting);
             AppLogger.Info($"[VideoConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
             AppLogger.Info($"[VideoConverter] Command: ffmpeg {arguments}");
 
@@ -219,7 +209,7 @@ public class VideoConverter : IFormatConverter
                     AudioBitrateKbps = videoSetting.AudioBitrateKbps,
                     IsRemembered = videoSetting.IsRemembered
                 } : null;
-                arguments = BuildVideoArguments(inputPath, outputPath, fallbackTargetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, fallbackSetting, remuxSetting);
+                arguments = BuildVideoArguments(inputPath, outputPath, fallbackTargetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, fallbackSetting);
 
                 AppLogger.Info($"[VideoConverter] Fallback Command: ffmpeg {arguments}");
                 (exitCode, logs) = await ExecuteFfmpegAsync(ffmpeg, arguments, progress, controller, ct, isCompress, isExtractFrames);
@@ -306,6 +296,8 @@ public class VideoConverter : IFormatConverter
             UseShellExecute = false,
             RedirectStandardError = true,
             RedirectStandardOutput = true,
+            StandardErrorEncoding = Encoding.UTF8,
+            StandardOutputEncoding = Encoding.UTF8,
             CreateNoWindow = true
         };
 
@@ -378,28 +370,8 @@ public class VideoConverter : IFormatConverter
         return (proc.ExitCode, logs);
     }
 
-    public static string BuildRemuxArguments(string input, string output, RemuxSetting? setting = null)
+    internal static string BuildVideoArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false, VideoStreamInfo? videoInfo = null, VideoQualitySetting? videoSetting = null)
     {
-        var s = setting ?? new RemuxSetting();
-        var outExt = Path.GetExtension(output).TrimStart('.').ToLowerInvariant();
-        var sb = new StringBuilder();
-        sb.Append("-y -i \"").Append(input).Append("\"");
-        if (s.CopyVideo) sb.Append(" -map 0:v?");
-        if (s.CopyAudio) sb.Append(" -map 0:a?");
-        if (s.CopySubtitles && outExt is "mkv" or "mp4") sb.Append(" -map 0:s?");
-        sb.Append(" -c copy");
-        if (s.FastStart && outExt is "mp4" or "mov") sb.Append(" -movflags +faststart");
-        sb.Append(" -map_metadata 0 \"").Append(output).Append("\"");
-        return sb.ToString();
-    }
-
-    internal static string BuildVideoArguments(string input, string output, string targetExt, AudioStreamInfo? audioInfo = null, bool isReencode = false, VideoStreamInfo? videoInfo = null, VideoQualitySetting? videoSetting = null, RemuxSetting? remuxSetting = null)
-    {
-        if (targetExt == "remux")
-        {
-            return BuildRemuxArguments(input, output, remuxSetting);
-        }
-
         if (AudioExtractionTargets.Contains(targetExt))
         {
             return AudioConverter.BuildAudioArguments(input, output, targetExt, audioInfo, isReencode);
@@ -449,15 +421,6 @@ public class VideoConverter : IFormatConverter
                 : $"-y -i \"{input}\" {tonemapFilter}\"{pattern}\"";
         }
 
-        if (targetExt is "remux-mp4" or "mp4-remux" or "mp4-copy")
-        {
-            return $"-y -i \"{input}\" -map 0:v? -map 0:a? -c copy -movflags +faststart -map_metadata 0 \"{output}\"";
-        }
-
-        if (targetExt is "remux-mkv" or "mkv-remux" or "mkv-copy")
-        {
-            return $"-y -i \"{input}\" -map 0:v? -map 0:a? -map 0:s? -c copy -map_metadata 0 \"{output}\"";
-        }
 
         if (targetExt is "compress" or "compressed")
         {

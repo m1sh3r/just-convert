@@ -75,7 +75,7 @@ public class ConverterRegistry
 
         var isVideoSameFormat = VideoExtensions.Contains(sourceExt) && VideoExtensions.Contains(targetExt);
 
-        if (!isVideoSameFormat && targetExt != "reencode" && targetExt != "remux" && IsSameFormat(sourceExt, targetExt) && !targetExt.StartsWith("frames"))
+        if (!isVideoSameFormat && targetExt != "reencode" && IsSameFormat(sourceExt, targetExt) && !targetExt.StartsWith("frames"))
         {
             var msg = I18n.T("StatusSkippedAlreadyTarget");
             AppLogger.Info($"[Registry] Skipped (already target format): \"{inputPath}\" ({sourceExt})");
@@ -96,6 +96,22 @@ public class ConverterRegistry
 
             AppLogger.Error($"[Registry] No converter found: \"{inputPath}\" ({sourceExt} -> {targetExt})");
             return new ConversionResult(false, null, I18n.T("NoConverterFound", sourceExt, targetExt));
+        }
+
+        if (!string.IsNullOrEmpty(outputPath))
+        {
+            var targetDir = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(targetDir) && !Directory.Exists(targetDir))
+            {
+                try
+                {
+                    Directory.CreateDirectory(targetDir);
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Warn($"[Registry] Failed to pre-create directory \"{targetDir}\": {ex.Message}");
+                }
+            }
         }
 
         AppLogger.Info($"[Registry] Dispatching to {converter.Name}: \"{inputPath}\" -> {targetExt}");

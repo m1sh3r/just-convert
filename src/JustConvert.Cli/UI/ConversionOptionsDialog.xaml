@@ -301,60 +301,6 @@
                     </StackPanel>
                 </StackPanel>
 
-                <StackPanel x:Name="PanelRemuxOptions" Visibility="Collapsed" d:Visibility="Collapsed">
-                    <Grid Margin="0,0,0,10">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="140"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Text="{core:Loc LabelRemuxContainer}"
-                                   d:Text="Целевой контейнер:"
-                                   VerticalAlignment="Center"
-                                   FontSize="13"/>
-                        <ComboBox x:Name="CmbRemuxContainer"
-                                  Grid.Column="1"
-                                  Height="32"
-                                  SelectionChanged="OnRemuxOptionChanged"/>
-                    </Grid>
-
-                    <TextBlock Text="{core:Loc RemuxDescription}"
-                               d:Text="Прямое копирование потоков без потери качества"
-                               FontSize="12"
-                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                               Margin="0,0,0,10"/>
-
-                    <CheckBox x:Name="ChkRemuxVideo"
-                              Content="{core:Loc LabelCopyVideo}"
-                              d:Content="Копировать видеопоток"
-                              IsChecked="True"
-                              Checked="OnRemuxOptionChanged"
-                              Unchecked="OnRemuxOptionChanged"
-                              Margin="0,0,0,6"/>
-
-                    <CheckBox x:Name="ChkRemuxAudio"
-                              Content="{core:Loc LabelCopyAudio}"
-                              d:Content="Копировать аудиопоток"
-                              IsChecked="True"
-                              Checked="OnRemuxOptionChanged"
-                              Unchecked="OnRemuxOptionChanged"
-                              Margin="0,0,0,6"/>
-
-                    <CheckBox x:Name="ChkRemuxSubtitles"
-                              Content="{core:Loc LabelCopySubtitles}"
-                              d:Content="Копировать субтитры"
-                              IsChecked="True"
-                              Checked="OnRemuxOptionChanged"
-                              Unchecked="OnRemuxOptionChanged"
-                              Margin="0,0,0,6"/>
-
-                    <CheckBox x:Name="ChkRemuxFastStart"
-                              Content="{core:Loc LabelRemuxFastStart}"
-                              d:Content="Оптимизация для веб (faststart)"
-                              IsChecked="True"
-                              Checked="OnRemuxOptionChanged"
-                              Unchecked="OnRemuxOptionChanged"
-                              Margin="0,0,0,6"/>
-                </StackPanel>
 
                 <StackPanel x:Name="PanelFramesOptions" Visibility="Collapsed">
                     <Grid Margin="0,0,0,10">

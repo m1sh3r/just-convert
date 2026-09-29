@@ -31,7 +31,8 @@ public static class CustomPresetValidator
             Arguments = $"-v error {dummyInput} {customArguments} -f null -",
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardError = true
+            RedirectStandardError = true,
+            StandardErrorEncoding = System.Text.Encoding.UTF8
         };
 
         try

@@ -101,7 +101,7 @@ public static class QualityEstimator
         var dur = durationSeconds > 0 ? durationSeconds : 60.0;
         var c = videoCodec.ToLowerInvariant();
 
-        if (c is "copy" or "remux")
+        if (c is "copy")
         {
             if (sourceFileSizeBytes.HasValue && sourceFileSizeBytes.Value > 0)
             {

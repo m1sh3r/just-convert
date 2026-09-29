@@ -6,7 +6,7 @@ public class I18nLocalizationTests
 {
     private static readonly string[] AllFormatIdentifiers =
     [
-        "mp4", "webm", "mkv", "mov", "gif", "frames", "remux", "reencode",
+        "mp4", "webm", "mkv", "mov", "gif", "frames", "reencode",
         "mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff",
         "png", "jpg", "webp", "ico", "bmp", "jp2", "tiff", "tga", "pcx", "ppm", "avif"
     ];

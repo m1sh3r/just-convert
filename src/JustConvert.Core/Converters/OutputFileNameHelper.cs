@@ -11,7 +11,6 @@ public static class OutputFileNameHelper
 
         var fmt = targetFormat.ToLowerInvariant();
         if (fmt == "reencode") return "Reencode";
-        if (fmt is "remux-mp4" or "remux-mkv" or "remux") return "Remux";
         if (fmt is "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff") return "Frames";
         if (fmt is "compress" or "compress-video") return "H.264 - CRF 28";
         if (fmt == "gif") return null;
@@ -89,7 +88,6 @@ public static class OutputFileNameHelper
             "mov-prores422" or "prores422" => "ProRes 422",
             "mov-prores4444" or "prores4444" => "ProRes 4444",
 
-            "remux-mp4" or "remux-mkv" or "remux" => "Remux",
             "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" => "Frames",
             "compress" or "compress-video" => "H.264 - CRF 28",
             "gif" => null,
@@ -156,10 +154,25 @@ public static class OutputFileNameHelper
         };
     }
 
+    public static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var chars = name.ToCharArray();
+        for (int i = 0; i < chars.Length; i++)
+        {
+            if (Array.IndexOf(invalid, chars[i]) >= 0)
+            {
+                chars[i] = '-';
+            }
+        }
+        return new string(chars).Trim();
+    }
+
     public static string GetUniquePath(string directory, string baseFileName, string? suffix, string extension, bool isDirectory = false)
     {
         var hasSuffix = !string.IsNullOrWhiteSpace(suffix);
-        var baseName = hasSuffix ? $"{baseFileName} [{suffix}]" : baseFileName;
+        var cleanSuffix = hasSuffix ? SanitizeFileName(suffix!) : null;
+        var baseName = !string.IsNullOrWhiteSpace(cleanSuffix) ? $"{baseFileName} [{cleanSuffix}]" : baseFileName;
         var candidate = Path.Combine(directory, isDirectory ? baseName : $"{baseName}{extension}");
 
         if (!File.Exists(candidate) && !Directory.Exists(candidate))

@@ -119,40 +119,6 @@ public class UiSettingsWindowTests
     }
 
     [Fact]
-    public void RemuxControls_UpdateRemuxSetting()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var settings = new AppSettings();
-            var window = new SettingsWindow(settings);
-
-            window.CmbSettingsRemuxContainer.SelectedItem = "mkv";
-            window.ChkSettingsRemuxFastStart.IsChecked = false;
-            window.ChkSettingsRemuxSubtitles.IsChecked = true;
-
-            Assert.Equal("mkv", window.CurrentSettings.RemuxSetting.TargetContainer);
-            Assert.False(window.CurrentSettings.RemuxSetting.FastStart);
-            Assert.True(window.CurrentSettings.RemuxSetting.CopySubtitles);
-        });
-    }
-
-    [Fact]
-    public void ResetRemuxButton_ClearsRemuxSetting()
-    {
-        StaTestRunner.Run(() =>
-        {
-            var settings = new AppSettings();
-            settings.SetRemuxSetting(new RemuxSetting { TargetContainer = "mkv", IsRemembered = true });
-
-            var window = new SettingsWindow(settings);
-            window.BtnResetRemux.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
-
-            Assert.False(window.CurrentSettings.RemuxSetting.IsRemembered);
-            Assert.Equal(I18n.T("QualityStatusAsk"), window.TxtRemuxStatus.Text);
-        });
-    }
-
-    [Fact]
     public void AppendQualitySuffixCheckbox_TogglesSetting()
     {
         StaTestRunner.Run(() =>

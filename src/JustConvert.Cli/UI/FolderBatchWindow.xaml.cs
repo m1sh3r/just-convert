@@ -78,7 +78,7 @@ public partial class FolderBatchWindow : FluentWindow
             ["jpg", "png", "webp", "avif", "gif", "ico", "bmp", "tiff"],
             result?.Images?.UniqueExtensions);
 
-        var videoCandidateFormats = new[] { "mp4", "mkv", "mov", "webm", "gif", "remux", "frames" };
+        var videoCandidateFormats = new[] { "mp4", "mkv", "mov", "webm", "gif", "frames" };
         var videoAvailable = ClassicContextMenuManager.FilterAvailableFormats(videoCandidateFormats);
         UpdateCategoryComboBox(
             CmbVideoFormats,

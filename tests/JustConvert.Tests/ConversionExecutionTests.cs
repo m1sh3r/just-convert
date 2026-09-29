@@ -91,7 +91,6 @@ public class ConversionExecutionTests : IDisposable
     [InlineData("mkv")]
     [InlineData("mov")]
     [InlineData("gif")]
-    [InlineData("remux")]
     [InlineData("frames")]
     [InlineData("mp3")]
     [InlineData("wav")]
@@ -340,5 +339,122 @@ public class ConversionExecutionTests : IDisposable
         Assert.Contains("-minrate 6000k", args);
         Assert.Contains("-maxrate 6000k", args);
         Assert.DoesNotContain("-crf", args);
+    }
+
+    [Fact]
+    public async Task ConvertVideo_WithNestedNonExistentOutputDirectory_CreatesDirectoryAndSucceeds()
+    {
+        var ffmpeg = ToolLocator.FindFfmpegPath();
+        if (ffmpeg == null) return;
+
+        var inputMp4 = Path.Combine(_tempDir, "input_nested_dir.mp4");
+        if (!CreateSyntheticMp4File(ffmpeg, inputMp4)) return;
+
+        var targetNestedFile = Path.Combine(_tempDir, "nested", "folder", "structure", "output.mp4");
+        var result = await _registry.ConvertFileAsync(inputMp4, "mp4", targetNestedFile);
+
+        Assert.True(result.Success, $"Conversion failed: {result.ErrorMessage}");
+        Assert.NotNull(result.OutputPath);
+        Assert.True(File.Exists(result.OutputPath));
+        Assert.True(Directory.Exists(Path.GetDirectoryName(targetNestedFile)));
+    }
+
+    [Fact]
+    public async Task ConvertVideo_FramesWithNestedNonExistentOutputDirectory_CreatesDirectoryAndSucceeds()
+    {
+        var ffmpeg = ToolLocator.FindFfmpegPath();
+        if (ffmpeg == null) return;
+
+        var inputMp4 = Path.Combine(_tempDir, "input_nested_frames.mp4");
+        if (!CreateSyntheticMp4File(ffmpeg, inputMp4)) return;
+
+        var targetNestedDir = Path.Combine(_tempDir, "frames_nested", "sub_level", "png_frames");
+        var result = await _registry.ConvertFileAsync(inputMp4, "frames", targetNestedDir);
+
+        Assert.True(result.Success, $"Conversion failed: {result.ErrorMessage}");
+        Assert.NotNull(result.OutputPath);
+        Assert.True(Directory.Exists(targetNestedDir));
+        Assert.NotEmpty(Directory.GetFiles(targetNestedDir, "*.png"));
+    }
+
+    [Fact]
+    public async Task ConvertAudio_WithNestedNonExistentOutputDirectory_CreatesDirectoryAndSucceeds()
+    {
+        var ffmpeg = ToolLocator.FindFfmpegPath();
+        if (ffmpeg == null) return;
+
+        var inputWav = Path.Combine(_tempDir, "input_nested_audio.wav");
+        CreateSyntheticWavFile(inputWav);
+
+        var targetNestedFile = Path.Combine(_tempDir, "audio_nested", "sub", "output.mp3");
+        var result = await _registry.ConvertFileAsync(inputWav, "mp3", targetNestedFile);
+
+        Assert.True(result.Success, $"Conversion failed: {result.ErrorMessage}");
+        Assert.NotNull(result.OutputPath);
+        Assert.True(File.Exists(result.OutputPath));
+        Assert.True(Directory.Exists(Path.GetDirectoryName(targetNestedFile)));
+    }
+
+    [Fact]
+    public async Task ConvertVideo_WithAllSpecialCharactersInPathAndFilename_Succeeds()
+    {
+        var ffmpeg = ToolLocator.FindFfmpegPath();
+        if (ffmpeg == null) return;
+
+        var specialDir = Path.Combine(_tempDir, "Special !@#$^&()_+~=;, ' 🎵 音楽 тест [2026]");
+        Directory.CreateDirectory(specialDir);
+
+        var inputMp4 = Path.Combine(specialDir, "source [video] (sample) #%20&!+='@,; 🎵 тест.mp4");
+        if (!CreateSyntheticMp4File(ffmpeg, inputMp4)) return;
+
+        var outputMp4 = Path.Combine(specialDir, "out [h264] (converted) #%20&!+='@,; 🎵 результат.mp4");
+        var result = await _registry.ConvertFileAsync(inputMp4, "mp4", outputMp4);
+
+        Assert.True(result.Success, $"Conversion failed: {result.ErrorMessage}");
+        Assert.NotNull(result.OutputPath);
+        Assert.True(File.Exists(result.OutputPath));
+        Assert.True(new FileInfo(result.OutputPath).Length > 0);
+    }
+
+    [Fact]
+    public async Task ConvertAudio_WithAllSpecialCharactersInPathAndFilename_Succeeds()
+    {
+        var ffmpeg = ToolLocator.FindFfmpegPath();
+        if (ffmpeg == null) return;
+
+        var specialDir = Path.Combine(_tempDir, "Special Audio !@#$^&()_+~=;, ' 🎵 音楽 тест [2026]");
+        Directory.CreateDirectory(specialDir);
+
+        var inputWav = Path.Combine(specialDir, "source [audio] (sample) #%20&!+='@,; 🎵 тест.wav");
+        CreateSyntheticWavFile(inputWav);
+
+        var outputMp3 = Path.Combine(specialDir, "out [320k] (converted) #%20&!+='@,; 🎵 результат.mp3");
+        var result = await _registry.ConvertFileAsync(inputWav, "mp3", outputMp3);
+
+        Assert.True(result.Success, $"Conversion failed: {result.ErrorMessage}");
+        Assert.NotNull(result.OutputPath);
+        Assert.True(File.Exists(result.OutputPath));
+        Assert.True(new FileInfo(result.OutputPath).Length > 0);
+    }
+
+    [Fact]
+    public async Task ConvertImage_WithAllSpecialCharactersInPathAndFilename_Succeeds()
+    {
+        var magick = ToolLocator.FindMagickPath();
+        if (magick == null) return;
+
+        var specialDir = Path.Combine(_tempDir, "Special Image !@#$^&()_+~=;, ' 🎵 音楽 тест [2026]");
+        Directory.CreateDirectory(specialDir);
+
+        var inputBmp = Path.Combine(specialDir, "source #%20&!+='@,; 🎵 тест [0].bmp");
+        CreateSyntheticBmpFile(inputBmp);
+
+        var outputPng = Path.Combine(specialDir, "out [q95] (converted) #%20&!+='@,; 🎵 результат.png");
+        var result = await _registry.ConvertFileAsync(inputBmp, "png", outputPng);
+
+        Assert.True(result.Success, $"Conversion failed: {result.ErrorMessage}");
+        Assert.NotNull(result.OutputPath);
+        Assert.True(File.Exists(result.OutputPath));
+        Assert.True(new FileInfo(result.OutputPath).Length > 0);
     }
 }

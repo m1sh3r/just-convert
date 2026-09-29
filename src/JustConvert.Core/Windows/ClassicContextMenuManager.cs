@@ -48,7 +48,7 @@ public class ClassicContextMenuManager
     {
         return
         [
-            "mp4", "webm", "mkv", "mov", "gif", "frames", "remux",
+            "mp4", "webm", "mkv", "mov", "gif", "frames",
             "mp3", "wav", "flac", "aac", "m4a", "opus",
             "reencode"
         ];
@@ -206,7 +206,7 @@ public class ClassicContextMenuManager
 
         if (tgt.StartsWith("preset:")) return false;
 
-        if (tgt is "reencode" or "frames" or "compress" or "remux")
+        if (tgt is "reencode" or "frames" or "compress")
         {
             return false;
         }
@@ -249,7 +249,6 @@ public class ClassicContextMenuManager
         {
             "mp4" or "mkv" or "mov" or "webm" or "gif" => 1,
             "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" => 10,
-            "remux" or "remux-mp4" or "remux-mkv" or "mp4-remux" or "mkv-remux" => 15,
             "mp3" or "m4a" or "aac" or "wav" or "flac" or "opus" or "ogg" or "aiff" or "aif" => 20,
             "jpg" or "jpeg" or "png" or "webp" or "avif" => 30,
             "ico" or "bmp" => 31,

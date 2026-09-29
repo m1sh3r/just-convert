@@ -131,7 +131,7 @@ public class Program
             var categoryPlans = new Dictionary<MediaCategory, BatchCategoryPlan>();
             var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
 
-            if (Registry.FindConverter("mp4", fmt) != null || fmt is "remux" or "remux-mp4" or "remux-mkv" or "frames" or "gif")
+            if (Registry.FindConverter("mp4", fmt) != null || fmt is "frames" or "gif")
             {
                 categoryPlans[MediaCategory.Video] = new BatchCategoryPlan(MediaCategory.Video, true, fmt);
             }
@@ -386,7 +386,7 @@ public class Program
             ? Path.GetExtension(firstInputFilePath).TrimStart('.').ToLowerInvariant()
             : null;
 
-        if (fmt is "reencode" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" or "remux-mp4" or "remux-mkv" || (fmt == "gif" && sourceExt != "svg")) return true;
+        if (fmt is "reencode" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" || (fmt == "gif" && sourceExt != "svg")) return true;
 
         var settings = AppSettings.Load();
         var ffmpeg = ToolLocator.FindFfmpegPath();
@@ -512,32 +512,6 @@ public class Program
             var selected = dialog.SelectedVideoQuality;
             selected.IsRemembered = dialog.RememberChoice;
             settings.SetVideoQuality(effectiveFmt, selected);
-            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
-            settings.Save();
-            return true;
-        }
-
-        if (fmt == "remux")
-        {
-            if (settings.RemuxSetting.IsRemembered && batchCount <= 1) return true;
-
-            var dialog = new ConversionOptionsDialog(
-                "remux",
-                "remux",
-                settings.GetEffectiveRemuxSetting(),
-                null,
-                settings.AppendQualitySuffix,
-                batchCount,
-                totalBatchSizeBytes
-            );
-            onDialogCreated?.Invoke(dialog);
-            StartBackgroundProbe(dialog);
-
-            var res = dialog.ShowDialog();
-            if (res != true) return false;
-
-            chosenTargetFormat = dialog.SelectedRemuxSetting.TargetContainer;
-            settings.SetRemuxSetting(dialog.SelectedRemuxSetting);
             settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
             settings.Save();
             return true;
