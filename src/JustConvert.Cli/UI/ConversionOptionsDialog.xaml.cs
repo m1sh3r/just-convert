@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using JustConvert.Core;
 using JustConvert.Core.Converters.Tools;
 using Wpf.Ui.Appearance;
@@ -24,6 +25,8 @@ public partial class ConversionOptionsDialog : FluentWindow
     public int SelectedAudioBitrate { get; private set; } = 192;
     public int SelectedImageQuality { get; private set; } = 90;
     public FramesSetting SelectedFramesSetting { get; private set; } = new();
+    public bool IsResetRequested { get; private set; }
+
     public string SelectedFramesImageFormat => SelectedFramesSetting.ImageFormat;
     public string SelectedFramesTargetFormat => $"frames-{SelectedFramesSetting.ImageFormat}";
     public string SelectedRateControl => (CmbRateControl?.SelectedItem as RateControlItem)?.Id ?? "cq";
@@ -75,9 +78,10 @@ public partial class ConversionOptionsDialog : FluentWindow
         object? initialSetting,
         MediaStreamInfo? mediaInfo,
         bool appendQualitySuffix,
-        int batchCount,
-        long? totalBatchSizeBytes,
-        string? sourceFormat = null)
+        int batchCount = 1,
+        long? totalBatchSizeBytes = null,
+        string? sourceFormat = null,
+        bool isSettingsMode = false)
     {
         _isUpdating = true;
         _targetFormat = targetFormat.TrimStart('.').ToLowerInvariant();
@@ -97,7 +101,6 @@ public partial class ConversionOptionsDialog : FluentWindow
             TxtFormatPrompt.Text = I18n.T("ConversionOptionsTitle");
             TxtSourceInfo.Text = "1920x1080, 30 fps, 45 MB";
             TxtEstimatedSize.Text = string.Format(I18n.T("EstimatedFileSizeLabel"), "14.2 MB");
-            BtnSaveAsPreset.Content = I18n.T("BtnSaveAsPreset");
             BtnCancel.Content = I18n.T("BtnCancel");
             BtnConvert.Content = I18n.T("BtnConvert");
             ChkMatchOriginalBitrate.Content = I18n.T("OptionMatchOriginalBitrateBatch");
@@ -114,6 +117,18 @@ public partial class ConversionOptionsDialog : FluentWindow
         ChkAppendSuffix.IsChecked = appendQualitySuffix;
 
         InitCategoryUI(initialSetting);
+
+        if (isSettingsMode)
+        {
+            BtnConvert.Content = I18n.T("BtnSave");
+            BtnReset.Visibility = Visibility.Visible;
+            ChkRemember.IsChecked = true;
+            ChkRemember.Visibility = Visibility.Collapsed;
+            TxtSourceInfo.Visibility = Visibility.Collapsed;
+            BorderEstimatedSize.Visibility = Visibility.Collapsed;
+            Grid.SetColumn(PanelOptionsCheckboxes, 0);
+            Grid.SetColumnSpan(PanelOptionsCheckboxes, 3);
+        }
     }
 
     private void InitCategoryUI(object? initialSetting)
@@ -140,7 +155,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             SelectedVideoQuality.AudioCodec = videoSetting.AudioCodec;
             SelectedVideoQuality.AudioBitrateKbps = videoSetting.AudioBitrateKbps;
 
-            if (_mediaInfo?.Audio != null)
+            if (videoSetting.AudioBitrateKbps > 0 && _mediaInfo?.Audio != null)
             {
                 SelectedVideoQuality.AudioBitrateKbps = MediaProbe.ResolveAudioBitrate(_mediaInfo.Audio, videoSetting.AudioBitrateKbps, 320);
             }
@@ -319,8 +334,6 @@ public partial class ConversionOptionsDialog : FluentWindow
             }
         }
 
-        BtnSaveAsPreset.Visibility = (_category is "video" or "audio" or "image") ? Visibility.Visible : Visibility.Collapsed;
-
         _isUpdating = false;
         UpdatePreview();
     }
@@ -418,7 +431,7 @@ public partial class ConversionOptionsDialog : FluentWindow
         CmbAudioBitrate.SelectedValuePath = nameof(BitrateItem.Value);
 
         var match = bitrates.FirstOrDefault(b => b.Value == SelectedVideoQuality.AudioBitrateKbps)
-            ?? (_batchCount > 1 ? bitrates[0] : bitrates[2]);
+            ?? bitrates[0];
         CmbAudioBitrate.SelectedItem = match;
     }
 
@@ -804,7 +817,7 @@ public partial class ConversionOptionsDialog : FluentWindow
 
     private void UpdateEstimatedSizeText(long estimatedBytes)
     {
-        if (TxtEstimatedSize == null) return;
+        if (TxtEstimatedSize == null || BorderEstimatedSize?.Visibility == Visibility.Collapsed) return;
 
         var key = _batchCount > 1 ? "EstimatedBatchSizeLabel" : "EstimatedFileSizeLabel";
 
@@ -940,36 +953,20 @@ public partial class ConversionOptionsDialog : FluentWindow
         Close();
     }
 
-    private void BtnSaveAsPreset_Click(object sender, RoutedEventArgs e)
+    private void BtnReset_Click(object sender, RoutedEventArgs e)
     {
-        var settings = AppSettings.Load();
-        var preset = CustomPreset.CreateFromCurrentSettings(settings, _category, _targetFormat);
+        IsResetRequested = true;
+        try { DialogResult = true; } catch (InvalidOperationException) { }
+        Close();
+    }
 
-        if (_category == "video")
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!e.Handled && e.Key == Key.Escape)
         {
-            preset.VideoCodec = (CmbVideoCodec.SelectedItem as CodecItem)?.Id ?? SelectedVideoQuality.VideoCodec;
-            preset.Encoder = (CmbEncoder.SelectedItem as EncoderItem)?.Id ?? SelectedVideoQuality.Encoder;
-            preset.RateControl = SelectedRateControl;
-            preset.VideoQualityCq = (int)SliderVideoCq.Value;
-            preset.VideoBitrateKbps = (int)SliderVideoBitrate.Value;
-            preset.AudioBitrateKbps = (CmbAudioBitrate.SelectedItem as BitrateItem)?.Value ?? SelectedVideoQuality.AudioBitrateKbps;
-        }
-        else if (_category == "audio")
-        {
-            preset.AudioBitrateKbps = SelectedAudioBitrate;
-        }
-        else if (_category == "image")
-        {
-            preset.ImageQuality = SelectedImageQuality;
-            preset.SvgWidth = SelectedSvgWidth;
-        }
-        preset.AppendSuffix = AppendQualitySuffix;
-
-        var dlg = new PresetEditorDialog(preset, isNew: true) { Owner = this };
-        if (dlg.ShowDialog() == true)
-        {
-            settings.AddPreset(dlg.Preset);
-            settings.Save();
+            BtnCancel_Click(this, new RoutedEventArgs());
+            e.Handled = true;
         }
     }
 

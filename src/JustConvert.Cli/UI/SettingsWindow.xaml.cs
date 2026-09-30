@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using JustConvert.Core;
 using JustConvert.Core.Windows;
 using Microsoft.Win32;
@@ -36,6 +37,13 @@ public partial class SettingsWindow : FluentWindow
 
     internal AppSettings CurrentSettings => _settings;
 
+    public Wpf.Ui.Controls.MenuItem BtnRename => MenuRename;
+    public Wpf.Ui.Controls.MenuItem BtnDelete => MenuDelete;
+    public Wpf.Ui.Controls.MenuItem BtnResetDefaults => MenuResetDefaults;
+    public Wpf.Ui.Controls.MenuItem BtnDuplicate => MenuDuplicate;
+    public Wpf.Ui.Controls.MenuItem BtnExport => MenuExport;
+    public Wpf.Ui.Controls.MenuItem BtnImport => MenuImport;
+
     public SettingsWindow() : this(AppSettings.Load())
     {
     }
@@ -44,9 +52,10 @@ public partial class SettingsWindow : FluentWindow
     {
         _settings = settings;
         _settings.EnsureDefaultProfile();
-        _suppressQualityEvents = true;
 
         InitializeComponent();
+
+        CmbProfiles.ContextMenu = BtnProfileMenu.ContextMenu;
 
         Title = I18n.T("SettingsTitle");
         AppTitleBar.Title = Title;
@@ -59,32 +68,15 @@ public partial class SettingsWindow : FluentWindow
             SystemThemeWatcher.Watch(this);
 
             RefreshProfilesList();
-            RefreshQualityControls();
-            RefreshPresetsList();
-            _suppressQualityEvents = false;
+            ChkAppendQualitySuffix.IsChecked = _settings.AppendQualitySuffix;
         }
         else
         {
             _settings = new AppSettings();
-            PopulateFormatList(PanelVideoFormats, ["mp4", "webm", "mkv"], ["mp4"], false);
-            PopulateFormatList(PanelAudioFormats, ["mp3", "wav", "flac"], ["mp3"], false);
-            PopulateFormatList(PanelImageFormats, ["png", "jpg", "webp"], ["png"], false);
-            TxtQualityStatusJpg.Text = string.Format(I18n.T("QualityStatusRemembered"), 92);
-            TxtQualityStatusWebp.Text = I18n.T("QualityStatusAsk");
-            TxtQualityStatusAvif.Text = I18n.T("QualityStatusAsk");
-            TxtQualityStatusJp2.Text = I18n.T("QualityStatusAsk");
-            BtnResetQualityJpg.Content = I18n.T("BtnResetQuality");
-            BtnResetQualityWebp.Content = I18n.T("BtnResetQuality");
-            BtnResetQualityAvif.Content = I18n.T("BtnResetQuality");
-            BtnResetQualityJp2.Content = I18n.T("BtnResetQuality");
-            BtnCreatePreset.Content = I18n.T("BtnCreatePreset");
-            BtnEditPreset.Content = I18n.T("BtnEditPreset");
-            BtnDeletePreset.Content = I18n.T("BtnDeletePreset");
-            ListPresets.ItemsSource = new List<CustomPreset>
-            {
-                new() { Name = "YouTube 1080p (MP4)", Category = "video", ContainerFormat = "mp4" },
-                new() { Name = "Podcast Audio (MP3)", Category = "audio", ContainerFormat = "mp3" }
-            };
+            PopulateFormatList(PanelVideoFormats, "video", ["mp4", "webm", "mkv"], ["mp4"]);
+            PopulateFormatList(PanelAudioFormats, "audio", ["mp3", "wav", "flac"], ["mp3"]);
+            PopulateFormatList(PanelImageFormats, "image", ["png", "jpg", "webp"], ["png"]);
+            MenuResetDefaults.Header = I18n.T("BtnResetDefaults");
         }
     }
 
@@ -95,28 +87,36 @@ public partial class SettingsWindow : FluentWindow
         CmbProfiles.SelectedItem = _settings.GetActiveProfile();
     }
 
+    private void OnProfileMenuClick(object sender, RoutedEventArgs e)
+    {
+        if (BtnProfileMenu.ContextMenu != null)
+        {
+            BtnProfileMenu.ContextMenu.PlacementTarget = BtnProfileMenu;
+            BtnProfileMenu.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            BtnProfileMenu.ContextMenu.IsOpen = true;
+        }
+    }
+
     private void OnProfileSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_settings == null || CmbProfiles.SelectedItem is not MenuProfile profile) return;
 
         _settings.ActiveProfileId = profile.Id;
 
-        var isReadOnly = profile.IsReadOnly;
-        BtnRename.IsEnabled = !isReadOnly;
-        BtnDelete.IsEnabled = !isReadOnly;
-        TxtProfileNotice.Text = isReadOnly ? I18n.T("ProfileReadOnlyNotice") : I18n.T("ProfileCustomNotice");
-
+        var isDefault = profile.Id == "default";
+        MenuRename.IsEnabled = !isDefault;
+        MenuDelete.IsEnabled = !isDefault && _settings.Profiles.Count > 1;
         PopulateCategoryPanels(profile);
     }
 
     private void PopulateCategoryPanels(MenuProfile profile)
     {
-        PopulateFormatList(PanelVideoFormats, AllVideoFormats, profile.VideoFormats, profile.IsReadOnly);
-        PopulateFormatList(PanelAudioFormats, AllAudioFormats, profile.AudioFormats, profile.IsReadOnly);
-        PopulateFormatList(PanelImageFormats, AllImageFormats, profile.ImageFormats, profile.IsReadOnly);
+        PopulateFormatList(PanelVideoFormats, "video", AllVideoFormats, profile.VideoFormats);
+        PopulateFormatList(PanelAudioFormats, "audio", AllAudioFormats, profile.AudioFormats);
+        PopulateFormatList(PanelImageFormats, "image", AllImageFormats, profile.ImageFormats);
     }
 
-    private void PopulateFormatList(StackPanel targetPanel, string[] allFormats, List<string> activeFormats, bool isReadOnly)
+    private void PopulateFormatList(Panel targetPanel, string category, string[] allFormats, List<string> activeFormats)
     {
         targetPanel.Children.Clear();
 
@@ -124,18 +124,31 @@ public partial class SettingsWindow : FluentWindow
 
         foreach (var format in available)
         {
+            var isConfigurable = HasConfigurableSettings(category, format);
+
+            var row = new Grid
+            {
+                Margin = new Thickness(0, 3, 8, 3)
+            };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var contentStack = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+
             var checkBox = new System.Windows.Controls.CheckBox
             {
                 Content = I18n.GetSubMenuTitle(format),
                 IsChecked = activeFormats.Contains(format, StringComparer.OrdinalIgnoreCase),
-                IsEnabled = !isReadOnly,
-                Margin = new Thickness(0, 4, 0, 4),
                 Tag = format
             };
 
             checkBox.Checked += (s, _) =>
             {
-                if (!isReadOnly && !activeFormats.Contains(format, StringComparer.OrdinalIgnoreCase))
+                if (!activeFormats.Contains(format, StringComparer.OrdinalIgnoreCase))
                 {
                     activeFormats.Add(format);
                 }
@@ -143,18 +156,83 @@ public partial class SettingsWindow : FluentWindow
 
             checkBox.Unchecked += (s, _) =>
             {
-                if (!isReadOnly)
-                {
-                    activeFormats.RemoveAll(f => string.Equals(f, format, StringComparison.OrdinalIgnoreCase));
-                }
+                activeFormats.RemoveAll(f => string.Equals(f, format, StringComparison.OrdinalIgnoreCase));
             };
 
-            targetPanel.Children.Add(checkBox);
+            contentStack.Children.Add(checkBox);
+
+            System.Windows.Controls.TextBlock? statusText = null;
+            if (isConfigurable)
+            {
+                statusText = new System.Windows.Controls.TextBlock
+                {
+                    Text = GetFormatStatus(category, format),
+                    FontSize = 11,
+                    Foreground = (TryFindResource("TextFillColorSecondaryBrush") as System.Windows.Media.Brush) ?? System.Windows.Media.Brushes.Gray,
+                    Margin = new Thickness(26, 2, 0, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Tag = format
+                };
+                contentStack.Children.Add(statusText);
+            }
+
+            Grid.SetColumn(contentStack, 0);
+            row.Children.Add(contentStack);
+
+            if (isConfigurable)
+            {
+                var editButton = new Wpf.Ui.Controls.Button
+                {
+                    Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Edit20 },
+                    ToolTip = I18n.T("BtnEditFormatSettings"),
+                    Padding = new Thickness(6, 4, 6, 4),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Tag = format
+                };
+                editButton.Click += (s, _) =>
+                {
+                    OnEditFormatSettings(category, format, statusText);
+                };
+                Grid.SetColumn(editButton, 1);
+                row.Children.Add(editButton);
+            }
+
+            targetPanel.Children.Add(row);
+        }
+    }
+
+    private void OnNavItemClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is NavigationViewItem item && int.TryParse(item.Tag?.ToString(), out var index))
+        {
+            TabsCategory.SelectedIndex = index;
+        }
+    }
+
+    private void OnNavViewSelectionChanged(NavigationView sender, RoutedEventArgs args)
+    {
+        if (TabsCategory == null) return;
+        if (sender.SelectedItem is NavigationViewItem item && int.TryParse(item.Tag?.ToString(), out var index))
+        {
+            if (TabsCategory.SelectedIndex != index)
+            {
+                TabsCategory.SelectedIndex = index;
+            }
         }
     }
 
     private void OnCategoryTabChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (e.Source != TabsCategory) return;
+        if (NavView?.MenuItems == null) return;
+        var index = TabsCategory.SelectedIndex;
+        for (var i = 0; i < NavView.MenuItems.Count; i++)
+        {
+            if (NavView.MenuItems[i] is NavigationViewItem item)
+            {
+                item.IsActive = (i == index);
+            }
+        }
     }
 
     private void OnDuplicateProfileClick(object sender, RoutedEventArgs e)
@@ -176,7 +254,7 @@ public partial class SettingsWindow : FluentWindow
 
     private void OnRenameProfileClick(object sender, RoutedEventArgs e)
     {
-        if (CmbProfiles.SelectedItem is not MenuProfile current || current.IsReadOnly) return;
+        if (CmbProfiles.SelectedItem is not MenuProfile current || current.Id == "default") return;
 
         var result = InputDialog.Show(this, I18n.T("PromptRenameProfile"), I18n.T("SettingsTitle"), current.Name);
         if (!string.IsNullOrWhiteSpace(result) && result != current.Name)
@@ -189,21 +267,35 @@ public partial class SettingsWindow : FluentWindow
 
     private void OnDeleteProfileClick(object sender, RoutedEventArgs e)
     {
-        if (CmbProfiles.SelectedItem is not MenuProfile current || current.IsReadOnly) return;
+        if (CmbProfiles.SelectedItem is not MenuProfile current || current.Id == "default" || _settings.Profiles.Count <= 1) return;
 
-        var confirm = System.Windows.MessageBox.Show(
-            string.Format(I18n.T("ConfirmDeleteProfile"), current.Name),
-            I18n.T("SettingsTitle"),
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Question);
-
-        if (confirm == System.Windows.MessageBoxResult.Yes)
+        var message = string.Format(I18n.T("ConfirmDeleteProfile"), current.Name);
+        if (MessageDialog.ShowConfirm(this, message, I18n.T("SettingsTitle")))
         {
             _settings.Profiles.Remove(current);
             _settings.ActiveProfileId = "default";
             _settings.Save();
             RefreshProfilesList();
         }
+    }
+
+    private void OnResetDefaultsClick(object sender, RoutedEventArgs e)
+    {
+        if (CmbProfiles.SelectedItem is not MenuProfile current) return;
+
+        if (!MessageDialog.ShowConfirm(this, I18n.T("ConfirmResetDefaults"), I18n.T("SettingsTitle"))) return;
+
+        ResetProfileToDefaults(current);
+    }
+
+    internal void ResetProfileToDefaults(MenuProfile profile)
+    {
+        var factoryDefault = AppSettings.CreateDefaultProfile();
+        profile.VideoFormats = [.. factoryDefault.VideoFormats];
+        profile.AudioFormats = [.. factoryDefault.AudioFormats];
+        profile.ImageFormats = [.. factoryDefault.ImageFormats];
+        _settings.Save();
+        PopulateCategoryPanels(profile);
     }
 
     private void OnExportClick(object sender, RoutedEventArgs e)
@@ -224,7 +316,7 @@ public partial class SettingsWindow : FluentWindow
             }
             catch (Exception ex)
             {
-                System.Windows.MessageBox.Show(ex.Message, I18n.T("TitleError"), System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                MessageDialog.ShowError(this, ex.Message, I18n.T("TitleError"));
             }
         }
     }
@@ -245,104 +337,283 @@ public partial class SettingsWindow : FluentWindow
                 _settings = imported;
                 _settings.Save();
                 RefreshProfilesList();
-                RefreshQualityControls();
+                ChkAppendQualitySuffix.IsChecked = _settings.AppendQualitySuffix;
                 ApplySettingsToSystem();
                 TxtApplyStatus.Text = I18n.T("SettingsImportSuccess");
             }
             catch
             {
-                System.Windows.MessageBox.Show(I18n.T("SettingsImportError"), I18n.T("TitleError"), System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                MessageDialog.ShowError(this, I18n.T("SettingsImportError"), I18n.T("TitleError"));
             }
-        }
-    }
-
-    private bool _suppressQualityEvents;
-
-    private void RefreshQualityControls()
-    {
-        _suppressQualityEvents = true;
-        try
-        {
-            ChkAppendQualitySuffix.IsChecked = _settings.AppendQualitySuffix;
-            UpdateQualityRow("jpg", SliderQualityJpg, TxtQualityStatusJpg);
-            UpdateQualityRow("webp", SliderQualityWebp, TxtQualityStatusWebp);
-            UpdateQualityRow("avif", SliderQualityAvif, TxtQualityStatusAvif);
-            UpdateQualityRow("jp2", SliderQualityJp2, TxtQualityStatusJp2);
-        }
-        finally
-        {
-            _suppressQualityEvents = false;
-        }
-    }
-
-    private void UpdateQualityRow(string format, Slider slider, System.Windows.Controls.TextBlock statusBlock)
-    {
-        var isSaved = _settings.TryGetSavedQuality(format, out var quality);
-        slider.Value = quality;
-        statusBlock.Text = isSaved
-            ? string.Format(I18n.T("QualityStatusRemembered"), quality)
-            : I18n.T("QualityStatusAsk");
-    }
-
-    private void OnQualitySliderValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
-    {
-        if (_suppressQualityEvents || sender is not Slider slider || slider.Tag is not string format) return;
-
-        var val = (int)e.NewValue;
-        _settings.SetQuality(format, val, true);
-
-        var statusBlock = GetQualityStatusBlock(format);
-        if (statusBlock != null)
-        {
-            statusBlock.Text = string.Format(I18n.T("QualityStatusRemembered"), val);
-        }
-    }
-
-    private void OnResetQualityClick(object sender, RoutedEventArgs e)
-    {
-        if (sender is not FrameworkElement el || el.Tag is not string format) return;
-
-        _settings.ResetQuality(format);
-        var defaultVal = AppSettings.GetDefaultQuality(format);
-
-        _suppressQualityEvents = true;
-        try
-        {
-            var slider = GetQualitySlider(format);
-            if (slider != null) slider.Value = defaultVal;
-
-            var statusBlock = GetQualityStatusBlock(format);
-            if (statusBlock != null) statusBlock.Text = I18n.T("QualityStatusAsk");
-        }
-        finally
-        {
-            _suppressQualityEvents = false;
         }
     }
 
     private void OnAppendQualitySuffixChanged(object sender, RoutedEventArgs e)
     {
-        if (_suppressQualityEvents) return;
         _settings.AppendQualitySuffix = ChkAppendQualitySuffix.IsChecked == true;
     }
 
-    private Slider? GetQualitySlider(string format) => format switch
+    private static bool HasConfigurableSettings(string category, string format)
     {
-        "jpg" => SliderQualityJpg,
-        "webp" => SliderQualityWebp,
-        "avif" => SliderQualityAvif,
-        "jp2" => SliderQualityJp2,
-        _ => null
+        var fmt = format.TrimStart('.').ToLowerInvariant();
+        if (category == "video")
+        {
+            return fmt is "mp4" or "webm" or "mkv" or "mov" or "reencode" or "frames" or "mp3" or "aac" or "m4a" or "opus";
+        }
+        if (category == "audio")
+        {
+            return fmt is "mp3" or "aac" or "m4a" or "ogg" or "opus" or "reencode";
+        }
+        if (category == "image")
+        {
+            return AppSettings.SupportsQuality(fmt);
+        }
+        return false;
+    }
+
+    private static string GetCodecDisplayName(string codec) => codec.ToLowerInvariant() switch
+    {
+        "h264" => I18n.T("CodecH264"),
+        "h265" => I18n.T("CodecH265"),
+        "vp9" => I18n.T("CodecVp9"),
+        "av1" => I18n.T("CodecAv1"),
+        "prores422" => I18n.T("CodecProRes"),
+        "copy" => I18n.T("CodecCopy"),
+        _ => codec.ToUpperInvariant()
     };
 
-    private System.Windows.Controls.TextBlock? GetQualityStatusBlock(string format) => format switch
+    internal string GetFormatStatus(string category, string format)
     {
-        "jpg" => TxtQualityStatusJpg,
-        "webp" => TxtQualityStatusWebp,
-        "avif" => TxtQualityStatusAvif,
-        "jp2" => TxtQualityStatusJp2,
-        _ => null
+        var fmt = format.TrimStart('.').ToLowerInvariant();
+
+        if (category == "video")
+        {
+            if (fmt == "frames")
+            {
+                return _settings.FramesSetting.IsRemembered
+                    ? string.Format(I18n.T("FramesStatusRemembered"), _settings.FramesSetting.ImageFormat.ToUpperInvariant())
+                    : I18n.T("QualityStatusAsk");
+            }
+            if (fmt is "mp3" or "aac" or "m4a" or "opus")
+            {
+                if (_settings.TryGetSavedAudioQuality(fmt, out var bitrate))
+                {
+                    return bitrate <= 0
+                        ? I18n.T("QualityStatusAudioAuto")
+                        : string.Format(I18n.T("QualityStatusAudio"), bitrate);
+                }
+                return I18n.T("QualityStatusAsk");
+            }
+            if (_settings.TryGetSavedVideoQuality(fmt, out var vq))
+            {
+                var codecName = GetCodecDisplayName(vq.VideoCodec);
+                if (string.Equals(vq.VideoCodec, "copy", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Format(I18n.T("QualityStatusVideoCopy"), codecName);
+                }
+                if (string.Equals(vq.RateControl, "cbr", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Format(I18n.T("QualityStatusVideoCbr"), codecName, vq.VideoBitrateKbps);
+                }
+                if (string.Equals(vq.RateControl, "vbr", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Format(I18n.T("QualityStatusVideoVbr"), codecName, vq.VideoBitrateKbps);
+                }
+                return string.Format(I18n.T("QualityStatusVideo"), codecName, vq.VideoQualityCq);
+            }
+            return I18n.T("QualityStatusAsk");
+        }
+
+        if (category == "audio")
+        {
+            if (_settings.TryGetSavedAudioQuality(fmt, out var bitrate))
+            {
+                return bitrate <= 0
+                    ? I18n.T("QualityStatusAudioAuto")
+                    : string.Format(I18n.T("QualityStatusAudio"), bitrate);
+            }
+            return I18n.T("QualityStatusAsk");
+        }
+
+        if (category == "image")
+        {
+            if (_settings.TryGetSavedQuality(fmt, out var quality))
+            {
+                return string.Format(I18n.T("QualityStatusRemembered"), quality);
+            }
+            return I18n.T("QualityStatusAsk");
+        }
+
+        return string.Empty;
+    }
+
+    private void OnEditFormatSettings(string category, string format, System.Windows.Controls.TextBlock? statusBlock)
+    {
+        var fmt = format.TrimStart('.').ToLowerInvariant();
+        ConversionOptionsDialog dialog;
+
+        if (category == "video")
+        {
+            if (fmt == "frames")
+            {
+                dialog = new ConversionOptionsDialog("frames", "frames", _settings.GetEffectiveFramesSetting(), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+            }
+            else if (fmt is "mp3" or "aac" or "m4a" or "opus")
+            {
+                dialog = new ConversionOptionsDialog(fmt, "audio", _settings.GetEffectiveAudioQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+            }
+            else
+            {
+                dialog = new ConversionOptionsDialog(fmt, "video", _settings.GetEffectiveVideoQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+            }
+        }
+        else if (category == "audio")
+        {
+            dialog = new ConversionOptionsDialog(fmt, "audio", _settings.GetEffectiveAudioQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+        }
+        else
+        {
+            dialog = new ConversionOptionsDialog(fmt, "image", _settings.GetEffectiveQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+        }
+
+        dialog.Owner = this;
+        if (dialog.ShowDialog() == true)
+        {
+            ApplyDialogResult(category, fmt, dialog);
+            if (statusBlock != null)
+            {
+                statusBlock.Text = GetFormatStatus(category, fmt);
+            }
+        }
+    }
+
+    internal void ApplyDialogResult(string category, string fmt, ConversionOptionsDialog dialog)
+    {
+        if (category == "video")
+        {
+            if (fmt == "frames")
+            {
+                if (dialog.IsResetRequested || !dialog.RememberChoice)
+                {
+                    _settings.ResetFramesSetting();
+                }
+                else
+                {
+                    var s = dialog.SelectedFramesSetting;
+                    s.IsRemembered = true;
+                    _settings.SetFramesSetting(s);
+                }
+            }
+            else if (fmt is "mp3" or "aac" or "m4a" or "opus")
+            {
+                if (dialog.IsResetRequested || !dialog.RememberChoice)
+                {
+                    _settings.ResetAudioQuality(fmt);
+                }
+                else
+                {
+                    _settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, true);
+                }
+            }
+            else
+            {
+                if (dialog.IsResetRequested || !dialog.RememberChoice)
+                {
+                    _settings.ResetVideoQuality(fmt);
+                }
+                else
+                {
+                    var s = dialog.SelectedVideoQuality;
+                    s.IsRemembered = true;
+                    _settings.SetVideoQuality(fmt, s);
+                }
+            }
+        }
+        else if (category == "audio")
+        {
+            if (dialog.IsResetRequested || !dialog.RememberChoice)
+            {
+                _settings.ResetAudioQuality(fmt);
+            }
+            else
+            {
+                _settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, true);
+            }
+        }
+        else if (category == "image")
+        {
+            if (dialog.IsResetRequested || !dialog.RememberChoice)
+            {
+                _settings.ResetQuality(fmt);
+            }
+            else
+            {
+                _settings.SetQuality(fmt, dialog.SelectedImageQuality, true);
+            }
+        }
+
+        _settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+        ChkAppendQualitySuffix.IsChecked = _settings.AppendQualitySuffix;
+        _settings.Save();
+    }
+
+    internal void EditFormatSettings(string category, string format, ConversionOptionsDialog dialog)
+    {
+        ApplyDialogResult(category, format, dialog);
+        var panel = GetCategoryPanel(category);
+        var statusBlock = FindFormatStatusBlock(panel, format);
+        if (statusBlock != null)
+        {
+            statusBlock.Text = GetFormatStatus(category, format);
+        }
+    }
+
+    internal Panel GetCategoryPanel(string category) => category switch
+    {
+        "video" => PanelVideoFormats,
+        "audio" => PanelAudioFormats,
+        _ => PanelImageFormats
     };
+
+    internal System.Windows.Controls.CheckBox? FindFormatCheckBox(Panel panel, string format)
+    {
+        return FindDescendants<System.Windows.Controls.CheckBox>(panel)
+            .FirstOrDefault(cb => string.Equals(cb.Tag as string, format, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal Wpf.Ui.Controls.Button? FindFormatEditButton(Panel panel, string format)
+    {
+        return FindDescendants<Wpf.Ui.Controls.Button>(panel)
+            .FirstOrDefault(b => string.Equals(b.Tag as string, format, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal System.Windows.Controls.TextBlock? FindFormatStatusBlock(Panel panel, string format)
+    {
+        return FindDescendants<System.Windows.Controls.TextBlock>(panel)
+            .FirstOrDefault(tb => string.Equals(tb.Tag as string, format, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static IEnumerable<T> FindDescendants<T>(DependencyObject parent) where T : DependencyObject
+    {
+        if (parent is Panel panel)
+        {
+            foreach (UIElement child in panel.Children)
+            {
+                if (child is T match) yield return match;
+                foreach (var desc in FindDescendants<T>(child)) yield return desc;
+            }
+        }
+        else if (parent is ContentControl cc && cc.Content is DependencyObject contentChild)
+        {
+            if (contentChild is T match) yield return match;
+            foreach (var desc in FindDescendants<T>(contentChild)) yield return desc;
+        }
+        else if (parent is Decorator dec && dec.Child is DependencyObject decChild)
+        {
+            if (decChild is T match) yield return match;
+            foreach (var desc in FindDescendants<T>(decChild)) yield return desc;
+        }
+    }
 
     private void OnApplyClick(object sender, RoutedEventArgs e)
     {
@@ -361,111 +632,13 @@ public partial class SettingsWindow : FluentWindow
         catch { }
     }
 
-    private void RefreshPresetsList()
+    protected override void OnKeyDown(KeyEventArgs e)
     {
-        ListPresets.ItemsSource = null;
-        ListPresets.ItemsSource = _settings.CustomPresets;
-        UpdatePresetButtonStates();
-    }
-
-    private void UpdatePresetButtonStates()
-    {
-        var index = ListPresets.SelectedIndex;
-        var hasSelection = index >= 0 && ListPresets.SelectedItem is CustomPreset;
-        BtnEditPreset.IsEnabled = hasSelection;
-        BtnDeletePreset.IsEnabled = hasSelection;
-        BtnMoveUpPreset.IsEnabled = hasSelection && index > 0;
-        BtnMoveDownPreset.IsEnabled = hasSelection && index < _settings.CustomPresets.Count - 1;
-    }
-
-    private void OnPresetSelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        UpdatePresetButtonStates();
-    }
-
-    private void OnPresetDoubleClick(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (ListPresets.SelectedItem is CustomPreset)
+        base.OnKeyDown(e);
+        if (!e.Handled && e.Key == Key.Escape)
         {
-            OnEditPresetClick(sender, e);
-        }
-    }
-
-    private void OnMoveUpPresetClick(object sender, RoutedEventArgs e)
-    {
-        var index = ListPresets.SelectedIndex;
-        if (index <= 0 || index >= _settings.CustomPresets.Count) return;
-
-        var item = _settings.CustomPresets[index];
-        _settings.CustomPresets.RemoveAt(index);
-        _settings.CustomPresets.Insert(index - 1, item);
-
-        for (int i = 0; i < _settings.CustomPresets.Count; i++)
-        {
-            _settings.CustomPresets[i].Order = i;
-        }
-
-        _settings.Save();
-        RefreshPresetsList();
-        ListPresets.SelectedIndex = index - 1;
-        ListPresets.ScrollIntoView(item);
-    }
-
-    private void OnMoveDownPresetClick(object sender, RoutedEventArgs e)
-    {
-        var index = ListPresets.SelectedIndex;
-        if (index < 0 || index >= _settings.CustomPresets.Count - 1) return;
-
-        var item = _settings.CustomPresets[index];
-        _settings.CustomPresets.RemoveAt(index);
-        _settings.CustomPresets.Insert(index + 1, item);
-
-        for (int i = 0; i < _settings.CustomPresets.Count; i++)
-        {
-            _settings.CustomPresets[i].Order = i;
-        }
-
-        _settings.Save();
-        RefreshPresetsList();
-        ListPresets.SelectedIndex = index + 1;
-        ListPresets.ScrollIntoView(item);
-    }
-
-    private void OnCreatePresetClick(object sender, RoutedEventArgs e)
-    {
-        var dialog = new PresetEditorDialog(null) { Owner = this };
-        if (dialog.ShowDialog() == true)
-        {
-            _settings.AddPreset(dialog.Preset);
-            _settings.Save();
-            RefreshPresetsList();
-        }
-    }
-
-    private void OnEditPresetClick(object sender, RoutedEventArgs e)
-    {
-        if (ListPresets.SelectedItem is not CustomPreset selected) return;
-
-        var dialog = new PresetEditorDialog(selected) { Owner = this };
-        if (dialog.ShowDialog() == true)
-        {
-            _settings.UpdatePreset(dialog.Preset);
-            _settings.Save();
-            RefreshPresetsList();
-        }
-    }
-
-    private void OnDeletePresetClick(object sender, RoutedEventArgs e)
-    {
-        if (ListPresets.SelectedItem is not CustomPreset selected) return;
-
-        var msg = string.Format(I18n.T("ConfirmDeletePreset"), selected.Name);
-        var result = System.Windows.MessageBox.Show(this, msg, I18n.T("BtnDeletePreset"), System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
-        if (result == System.Windows.MessageBoxResult.Yes)
-        {
-            _settings.DeletePreset(selected.Id);
-            _settings.Save();
-            RefreshPresetsList();
+            Close();
+            e.Handled = true;
         }
     }
 

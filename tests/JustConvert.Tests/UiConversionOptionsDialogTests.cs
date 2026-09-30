@@ -1,5 +1,6 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Input;
 using JustConvert.Cli.UI;
 using JustConvert.Core;
 using JustConvert.Core.Converters.Tools;
@@ -147,6 +148,17 @@ public class UiConversionOptionsDialogTests
             Assert.Contains("3", dialog.TxtFormatPrompt.Text);
             Assert.Contains("3", dialog.TxtSourceInfo.Text);
             Assert.Equal(Visibility.Visible, dialog.TxtSourceInfo.Visibility);
+        });
+    }
+
+    [Fact]
+    public void Construct_Video_DefaultsToMatchingOriginalAudioBitrate()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("mp4", "video", new VideoQualitySetting(), null, false);
+            Assert.Equal(0, dialog.SelectedVideoQuality.AudioBitrateKbps);
+            Assert.Equal(0, (int)dialog.CmbAudioBitrate.SelectedValue);
         });
     }
 
@@ -345,6 +357,52 @@ public class UiConversionOptionsDialogTests
             Assert.Equal(Visibility.Visible, dialog.PanelImageOptions.Visibility);
             Assert.Equal(Visibility.Collapsed, dialog.PanelSvgOptions.Visibility);
             Assert.Equal(Visibility.Visible, dialog.PanelImageQuality.Visibility);
+        });
+    }
+
+    [Fact]
+    public void ConversionOptionsDialog_BtnCancel_HasIsCancelSet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("mp4", "video", null, null, true);
+            Assert.True(dialog.BtnCancel.IsCancel);
+        });
+    }
+
+    [Fact]
+    public void ConversionOptionsDialog_PressEscape_HandlesEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("mp4", "video", null, null, true);
+            var keyArgs = new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                new System.Windows.Interop.HwndSource(0, 0, 0, 0, 0, "", IntPtr.Zero),
+                0,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.KeyDownEvent
+            };
+            dialog.RaiseEvent(keyArgs);
+            Assert.True(keyArgs.Handled);
+        });
+    }
+
+    [Fact]
+    public void ConversionOptionsDialog_SettingsMode_HidesEstimatedSizeAndShowsReset()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var dialog = new ConversionOptionsDialog("mp4", "video", null, null, true, isSettingsMode: true);
+            Assert.Equal(Visibility.Collapsed, dialog.BorderEstimatedSize.Visibility);
+            Assert.Equal(Visibility.Collapsed, dialog.TxtSourceInfo.Visibility);
+            Assert.Equal(Visibility.Collapsed, dialog.ChkRemember.Visibility);
+            Assert.True(dialog.ChkRemember.IsChecked);
+            Assert.Equal(Visibility.Visible, dialog.BtnReset.Visibility);
+            Assert.Equal(I18n.T("BtnSave"), dialog.BtnConvert.Content);
+            Assert.Equal(0, System.Windows.Controls.Grid.GetColumn(dialog.PanelOptionsCheckboxes));
+            Assert.Equal(3, System.Windows.Controls.Grid.GetColumnSpan(dialog.PanelOptionsCheckboxes));
         });
     }
 }
