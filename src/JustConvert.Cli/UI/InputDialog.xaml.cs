@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Windows;
+using System.Windows.Input;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -43,6 +44,16 @@ public partial class InputDialog : FluentWindow
     {
         try { DialogResult = true; } catch (InvalidOperationException) { }
         Close();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!e.Handled && e.Key == Key.Escape)
+        {
+            OnCancelClick(this, new RoutedEventArgs());
+            e.Handled = true;
+        }
     }
 
     private void OnCancelClick(object sender, RoutedEventArgs e)
