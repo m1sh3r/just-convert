@@ -155,6 +155,7 @@ public partial class InstallerWindow : FluentWindow
             return;
         }
 
+        _isWorking = true;
         VisualStateManager.GoToElementState(RootGrid, "ProgressState", false);
 
         var progress = new Progress<(double? Percent, string Status)>(update =>
@@ -173,17 +174,21 @@ public partial class InstallerWindow : FluentWindow
                 Program.UninstallCore(installDir, scope, progress);
             });
 
-            VisualStateManager.GoToElementState(RootGrid, "SuccessState", false);
+            _isWorking = false;
+            VisualStateManager.GoToElementState(RootGrid, "UninstallSuccessState", false);
             InfoBarSuccess.Title = I18n.T("SetupUninstallSuccessHeader");
             TxtSuccessText.Text = I18n.T("SetupUninstallSuccessText");
             BtnClose.Content = I18n.T("BtnClose");
+            BtnClose.IsDefault = true;
         }
         catch (Exception ex)
         {
+            _isWorking = false;
             VisualStateManager.GoToElementState(RootGrid, "ErrorState", false);
             InfoBarError.Title = I18n.T("SetupErrorHeader");
             TxtErrorLog.Text = ex.Message + "\n" + ex.StackTrace;
             BtnClose.Content = I18n.T("BtnClose");
+            BtnClose.IsDefault = true;
         }
     }
 
