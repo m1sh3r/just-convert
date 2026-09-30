@@ -48,6 +48,7 @@ public class Program
         string? outputPath = null;
         bool isSilent = false;
         bool isBatch = false;
+        bool recursive = true;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -90,6 +91,14 @@ public class Program
             {
                 isBatch = true;
             }
+            else if (arg is "--no-subfolders" or "--no-recursive")
+            {
+                recursive = false;
+            }
+            else if (arg is "--recursive" or "-r" or "/recursive" or "/r")
+            {
+                recursive = true;
+            }
             else if (!arg.StartsWith('-') && !arg.StartsWith('/'))
             {
                 if (targetFormat == null && inputFiles.Count == 1 && !File.Exists(arg) && !Directory.Exists(arg))
@@ -127,32 +136,32 @@ public class Program
                 return 0;
             }
 
-            var scan = FolderScanner.Scan(folderPath, recursive: false);
-            var categoryPlans = new Dictionary<MediaCategory, BatchCategoryPlan>();
-            var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
-
-            if (Registry.FindConverter("mp4", fmt) != null || fmt is "frames" or "gif")
-            {
-                categoryPlans[MediaCategory.Video] = new BatchCategoryPlan(MediaCategory.Video, true, fmt);
-            }
-            if (Registry.FindConverter("mp3", fmt) != null)
-            {
-                categoryPlans[MediaCategory.Audio] = new BatchCategoryPlan(MediaCategory.Audio, true, fmt);
-            }
-            if (Registry.FindConverter("png", fmt) != null)
-            {
-                categoryPlans[MediaCategory.Image] = new BatchCategoryPlan(MediaCategory.Image, true, fmt);
-            }
-
-            var plannedItems = FolderBatchPlanner.Plan(scan, categoryPlans, DestinationMode.InPlace);
-            if (plannedItems.Count == 0)
-            {
-                if (isSilent) Console.Error.WriteLine(I18n.T("NoSupportedFiles"));
-                return 1;
-            }
-
             if (isSilent)
             {
+                var scan = FolderScanner.Scan(folderPath, recursive: recursive);
+                var categoryPlans = new Dictionary<MediaCategory, BatchCategoryPlan>();
+                var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
+
+                if (Registry.FindConverter("mp4", fmt) != null || fmt is "frames" or "gif")
+                {
+                    categoryPlans[MediaCategory.Video] = new BatchCategoryPlan(MediaCategory.Video, true, fmt);
+                }
+                if (Registry.FindConverter("mp3", fmt) != null)
+                {
+                    categoryPlans[MediaCategory.Audio] = new BatchCategoryPlan(MediaCategory.Audio, true, fmt);
+                }
+                if (Registry.FindConverter("png", fmt) != null)
+                {
+                    categoryPlans[MediaCategory.Image] = new BatchCategoryPlan(MediaCategory.Image, true, fmt);
+                }
+
+                var plannedItems = FolderBatchPlanner.Plan(scan, categoryPlans, DestinationMode.InPlace);
+                if (plannedItems.Count == 0)
+                {
+                    Console.Error.WriteLine(I18n.T("NoSupportedFiles"));
+                    return 1;
+                }
+
                 int failureCount = 0;
                 foreach (var item in plannedItems)
                 {
@@ -166,7 +175,67 @@ public class Program
                 return failureCount > 0 ? 1 : 0;
             }
 
-            return RunWindow(() => new ConversionProgressWindow(plannedItems));
+            return RunWindow(() =>
+            {
+                var processingWindow = new QueueProcessingWindow();
+                processingWindow.UpdateProgress(0, 0, I18n.T("QueueProcessingScanningFolder"));
+
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        var scan = FolderScanner.Scan(folderPath, recursive: recursive);
+                        if (processingWindow.IsCancelled)
+                        {
+                            processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                            return;
+                        }
+
+                        processingWindow.Dispatcher.Invoke(() => processingWindow.UpdateProgress(0, 0, I18n.T("QueueProcessingPlanning")));
+
+                        var categoryPlans = new Dictionary<MediaCategory, BatchCategoryPlan>();
+                        var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
+
+                        if (Registry.FindConverter("mp4", fmt) != null || fmt is "frames" or "gif")
+                        {
+                            categoryPlans[MediaCategory.Video] = new BatchCategoryPlan(MediaCategory.Video, true, fmt);
+                        }
+                        if (Registry.FindConverter("mp3", fmt) != null)
+                        {
+                            categoryPlans[MediaCategory.Audio] = new BatchCategoryPlan(MediaCategory.Audio, true, fmt);
+                        }
+                        if (Registry.FindConverter("png", fmt) != null)
+                        {
+                            categoryPlans[MediaCategory.Image] = new BatchCategoryPlan(MediaCategory.Image, true, fmt);
+                        }
+
+                        var plannedItems = FolderBatchPlanner.Plan(scan, categoryPlans, DestinationMode.InPlace);
+                        if (plannedItems.Count == 0 || processingWindow.IsCancelled)
+                        {
+                            processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                            return;
+                        }
+
+                        processingWindow.Dispatcher.Invoke(() =>
+                        {
+                            var progressWindow = new ConversionProgressWindow(plannedItems);
+                            if (Application.Current != null)
+                            {
+                                Application.Current.MainWindow = progressWindow;
+                            }
+                            progressWindow.Show();
+                            processingWindow.Close();
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        AppLogger.Error("Error in folder batch queue processing", ex);
+                        processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                    }
+                });
+
+                return processingWindow;
+            });
         }
 
         if (inputFiles.Count == 0 || string.IsNullOrWhiteSpace(targetFormat))
@@ -226,6 +295,7 @@ public class Program
 
         ConversionProgressWindow? window = null;
         ConversionOptionsDialog? activeDialog = null;
+        QueueProcessingWindow? activeProcessingWindow = null;
         var pendingMessages = new System.Collections.Concurrent.ConcurrentQueue<QueueIpcMessage>();
         var batchFiles = new List<string>(inputFiles);
         var batchLock = new object();
@@ -240,6 +310,20 @@ public class Program
                 }
                 catch { }
 
+                lock (batchLock)
+                {
+                    foreach (var file in msg.Files)
+                    {
+                        if (!batchFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+                        {
+                            batchFiles.Add(file);
+                        }
+                    }
+                }
+            }
+            else if (activeProcessingWindow != null)
+            {
+                activeProcessingWindow.AddBatchFiles(msg.Files);
                 lock (batchLock)
                 {
                     foreach (var file in msg.Files)
@@ -353,8 +437,111 @@ public class Program
                 runFiles = [.. batchFiles];
             }
 
-            window = new ConversionProgressWindow(runFiles, effectiveTargetFormat, outputPath, isBatch || runFiles.Count > 1);
-            return window;
+            if (!isBatch && runFiles.Count <= 1)
+            {
+                window = new ConversionProgressWindow(runFiles, effectiveTargetFormat, outputPath, false);
+                return window;
+            }
+
+            var processingWindow = new QueueProcessingWindow();
+            activeProcessingWindow = processingWindow;
+
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    var lastActivity = Stopwatch.StartNew();
+                    var collectedFiles = new List<string>(runFiles);
+
+                    while (lastActivity.ElapsedMilliseconds < 150 && !processingWindow.IsCancelled)
+                    {
+                        await Task.Delay(30, processingWindow.CancellationToken);
+                        var incoming = processingWindow.DrainIncomingFiles();
+                        if (incoming.Count > 0)
+                        {
+                            foreach (var f in incoming)
+                            {
+                                if (!collectedFiles.Contains(f, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    collectedFiles.Add(f);
+                                }
+                            }
+                            lastActivity.Restart();
+                            processingWindow.UpdateProgress(0, collectedFiles.Count, I18n.T("QueueProcessingCollecting"));
+                        }
+
+                        while (pendingMessages.TryDequeue(out var pending))
+                        {
+                            foreach (var file in pending.Files)
+                            {
+                                if (!collectedFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+                                {
+                                    collectedFiles.Add(file);
+                                }
+                            }
+                            lastActivity.Restart();
+                            processingWindow.UpdateProgress(0, collectedFiles.Count, I18n.T("QueueProcessingCollecting"));
+                        }
+                    }
+
+                    if (processingWindow.IsCancelled)
+                    {
+                        processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                        return;
+                    }
+
+                    var validFiles = new List<string>(collectedFiles.Count);
+                    for (int i = 0; i < collectedFiles.Count; i++)
+                    {
+                        if (processingWindow.IsCancelled)
+                        {
+                            processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                            return;
+                        }
+
+                        var file = collectedFiles[i];
+                        if (File.Exists(file))
+                        {
+                            validFiles.Add(file);
+                        }
+                        processingWindow.UpdateProgress(i + 1, collectedFiles.Count, I18n.T("QueueProcessingPreparing"));
+                    }
+
+                    if (processingWindow.IsCancelled || validFiles.Count == 0)
+                    {
+                        processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                        return;
+                    }
+
+                    processingWindow.Dispatcher.Invoke(() =>
+                    {
+                        processingWindow.UpdateProgress(validFiles.Count, validFiles.Count, I18n.T("QueueProcessingStarting"));
+                        window = new ConversionProgressWindow(validFiles, effectiveTargetFormat, outputPath, true);
+                        if (Application.Current != null)
+                        {
+                            Application.Current.MainWindow = window;
+                        }
+                        window.Show();
+                        activeProcessingWindow = null;
+                        processingWindow.Close();
+                    });
+                }
+                catch (OperationCanceledException)
+                {
+                    processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                }
+                catch (Exception ex)
+                {
+                    AppLogger.Error("Error during queue processing", ex);
+                    processingWindow.Dispatcher.Invoke(processingWindow.Close);
+                }
+                finally
+                {
+                    activeProcessingWindow = null;
+                }
+            });
+
+            return processingWindow;
         });
 
         try
@@ -418,73 +605,6 @@ public class Program
                     catch { }
                 });
             }
-        }
-
-        if (fmt.StartsWith("preset:"))
-        {
-            var preset = settings.FindPreset(fmt[7..]);
-            if (preset == null || string.Equals(preset.PresetType, "quick", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            ConversionOptionsDialog dialog;
-            if (preset.Category == "video")
-            {
-                var vq = new VideoQualitySetting
-                {
-                    VideoCodec = preset.VideoCodec,
-                    Encoder = preset.Encoder,
-                    RateControl = preset.RateControl,
-                    VideoQualityCq = preset.VideoQualityCq,
-                    VideoBitrateKbps = preset.VideoBitrateKbps,
-                    AudioCodec = preset.AudioCodec,
-                    AudioBitrateKbps = preset.AudioBitrateKbps
-                };
-                dialog = new ConversionOptionsDialog(preset.ContainerFormat, "video", vq, null, preset.AppendSuffix, batchCount, totalBatchSizeBytes);
-            }
-            else if (preset.Category == "audio")
-            {
-                var aq = new AudioQualitySetting
-                {
-                    AudioBitrateKbps = preset.AudioBitrateKbps
-                };
-                dialog = new ConversionOptionsDialog(preset.ContainerFormat, "audio", aq, null, preset.AppendSuffix, batchCount, totalBatchSizeBytes);
-            }
-            else
-            {
-                dialog = new ConversionOptionsDialog(preset.ContainerFormat, "image", preset.ImageQuality, null, preset.AppendSuffix, batchCount, totalBatchSizeBytes);
-            }
-
-            onDialogCreated?.Invoke(dialog);
-            StartBackgroundProbe(dialog);
-
-            var res = dialog.ShowDialog();
-            if (res != true) return false;
-
-            if (preset.Category == "video")
-            {
-                var selected = dialog.SelectedVideoQuality;
-                selected.IsRemembered = dialog.RememberChoice;
-                settings.SetVideoQuality(dialog.SelectedTargetFormat, selected);
-                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
-                settings.Save();
-            }
-            else if (preset.Category == "audio")
-            {
-                settings.SetAudioQuality(dialog.SelectedTargetFormat, dialog.SelectedAudioBitrate, dialog.RememberChoice);
-                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
-                settings.Save();
-            }
-            else if (preset.Category == "image")
-            {
-                settings.SetQuality(dialog.SelectedTargetFormat, dialog.SelectedImageQuality, dialog.RememberChoice);
-                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
-                settings.Save();
-            }
-
-            chosenTargetFormat = dialog.SelectedTargetFormat;
-            return true;
         }
 
         if (fmt is "mp4" or "webm" or "mkv" or "mov")

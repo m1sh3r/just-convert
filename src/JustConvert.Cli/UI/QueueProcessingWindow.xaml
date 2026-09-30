@@ -1,0 +1,106 @@
+<ui:FluentWindow x:Class="JustConvert.Cli.UI.QueueProcessingWindow"
+                  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+                  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+                  xmlns:core="clr-namespace:JustConvert.Core;assembly=JustConvert.Core"
+                  mc:Ignorable="d"
+                  Title="{core:Loc QueueProcessingTitle}"
+                  d:Title="Обработка очереди"
+                  Height="190"
+                  Width="460"
+                  MinHeight="190"
+                  MaxHeight="190"
+                  MinWidth="460"
+                  MaxWidth="460"
+                  WindowStartupLocation="CenterScreen"
+                  ResizeMode="NoResize"
+                  ExtendsContentIntoTitleBar="True"
+                  WindowBackdropType="Mica"
+                  Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+
+    <ui:FluentWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ui:ThemesDictionary Theme="Light"/>
+                <ui:ControlsDictionary/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </ui:FluentWindow.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0"
+                     x:Name="AppTitleBar"
+                     Title="{core:Loc QueueProcessingTitle}"
+                     d:Title="Обработка очереди"
+                     ShowMaximize="False"
+                     ShowMinimize="False"
+                     Height="36"/>
+
+        <Grid Grid.Row="1"
+              Margin="24,8,24,14">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ui:SymbolIcon x:Name="IconProcessing"
+                           Grid.Column="0"
+                           Symbol="ArrowSync24"
+                           FontSize="28"
+                           Margin="0,0,16,0"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                           RenderTransformOrigin="0.5,0.5">
+                <ui:SymbolIcon.RenderTransform>
+                    <RotateTransform x:Name="IconRotateTransform" Angle="0"/>
+                </ui:SymbolIcon.RenderTransform>
+            </ui:SymbolIcon>
+
+            <StackPanel Grid.Column="1"
+                        VerticalAlignment="Center">
+                <TextBlock x:Name="TxtStatus"
+                           Text="{core:Loc QueueProcessingPreparing}"
+                           d:Text="Подготовка файлов..."
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                           TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="TxtCount"
+                           Text="{core:Loc QueueProcessingCollecting}"
+                           d:Text="Сбор файлов..."
+                           FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                           TextTrimming="CharacterEllipsis"
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+        </Grid>
+
+        <ProgressBar Grid.Row="2"
+                     x:Name="ProgressBar"
+                     IsIndeterminate="True"
+                     Height="3"
+                     Margin="24,0,24,0"
+                     Foreground="{DynamicResource AccentFillColorDefaultBrush}"/>
+
+        <Grid Grid.Row="3"
+              Margin="24,12,24,16"
+              VerticalAlignment="Bottom">
+            <ui:Button x:Name="BtnCancel"
+                       HorizontalAlignment="Right"
+                       Content="{core:Loc BtnCancel}"
+                       d:Content="Отмена"
+                       Appearance="Secondary"
+                       IsCancel="True"
+                       Click="BtnCancel_Click"/>
+        </Grid>
+    </Grid>
+</ui:FluentWindow>

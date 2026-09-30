@@ -2,7 +2,9 @@ using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using JustConvert.Core;
+using JustConvert.Core.Logging;
 using JustConvert.Core.Scanning;
 using JustConvert.Core.Windows;
 using Wpf.Ui.Appearance;
@@ -201,6 +203,16 @@ public partial class FolderBatchWindow : FluentWindow
         }
     }
 
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!e.Handled && e.Key == Key.Escape)
+        {
+            Close();
+            e.Handled = true;
+        }
+    }
+
     private void BtnCancel_Click(object sender, RoutedEventArgs e)
     {
         Close();
@@ -219,7 +231,7 @@ public partial class FolderBatchWindow : FluentWindow
             var (isValid, errorMessage) = FolderBatchPlanner.ValidateDestinationDirectory(customDir ?? "");
             if (!isValid)
             {
-                System.Windows.MessageBox.Show(this, errorMessage ?? I18n.T("ErrorFolderInvalid", ""), I18n.T("ConversionOptionsTitle"), System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                MessageDialog.ShowWarning(this, errorMessage ?? I18n.T("ErrorFolderInvalid", ""), I18n.T("ConversionOptionsTitle"));
                 return;
             }
             destMode = DestinationMode.CustomFolder;
@@ -396,17 +408,47 @@ public partial class FolderBatchWindow : FluentWindow
 
         if (categoryPlans.Count == 0) return;
 
-        var items = FolderBatchPlanner.Plan(_scanResult, categoryPlans, destMode, customDir);
+        var processingWindow = new QueueProcessingWindow();
+        processingWindow.Show();
+        Hide();
 
-        if (items.Count == 0) return;
-
-        var progressWindow = new ConversionProgressWindow(items);
-        if (Application.Current != null)
+        _ = Task.Run(() =>
         {
-            Application.Current.MainWindow = progressWindow;
-        }
-        progressWindow.Show();
-        Close();
+            try
+            {
+                var items = FolderBatchPlanner.Plan(_scanResult, categoryPlans, destMode, customDir);
+                if (items.Count == 0 || processingWindow.IsCancelled)
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        processingWindow.Close();
+                        Close();
+                    });
+                    return;
+                }
+
+                Dispatcher.Invoke(() =>
+                {
+                    var progressWindow = new ConversionProgressWindow(items);
+                    if (Application.Current != null)
+                    {
+                        Application.Current.MainWindow = progressWindow;
+                    }
+                    progressWindow.Show();
+                    processingWindow.Close();
+                    Close();
+                });
+            }
+            catch (Exception ex)
+            {
+                AppLogger.Error("Error planning batch in FolderBatchWindow", ex);
+                Dispatcher.Invoke(() =>
+                {
+                    processingWindow.Close();
+                    Close();
+                });
+            }
+        });
     }
 
     private static long? CalculateCategoryTotalSizeBytes(CategoryScanResult? category)

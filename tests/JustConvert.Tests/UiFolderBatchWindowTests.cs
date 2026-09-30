@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Input;
 using JustConvert.Cli.UI;
 using JustConvert.Core;
 using JustConvert.Core.Scanning;
@@ -20,6 +21,7 @@ public class UiFolderBatchWindowTests
             Assert.True(window.RbInPlace.IsChecked);
             Assert.False(window.RbSubfolder.IsChecked);
             Assert.False(window.RbCustomFolder.IsChecked);
+            Assert.True(window.ChkIncludeSubfolders.IsChecked);
             Assert.Equal(Visibility.Collapsed, window.PanelCustomFolder.Visibility);
 
             var imageItems = window.CmbImageFormats.ItemsSource as IReadOnlyList<FormatChoice>;
@@ -140,6 +142,35 @@ public class UiFolderBatchWindowTests
             Assert.True(window.ChkVideo.IsChecked);
             Assert.True(window.ChkAudio.IsChecked);
             Assert.True(window.BtnStart.IsEnabled);
+        });
+    }
+
+    [Fact]
+    public void FolderBatchWindow_BtnCancel_HasIsCancelSet()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var window = new FolderBatchWindow();
+            Assert.True(window.BtnCancel.IsCancel);
+        });
+    }
+
+    [Fact]
+    public void FolderBatchWindow_PressEscape_HandlesEvent()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var window = new FolderBatchWindow();
+            var keyArgs = new KeyEventArgs(
+                Keyboard.PrimaryDevice,
+                new System.Windows.Interop.HwndSource(0, 0, 0, 0, 0, "", IntPtr.Zero),
+                0,
+                Key.Escape)
+            {
+                RoutedEvent = Keyboard.KeyDownEvent
+            };
+            window.RaiseEvent(keyArgs);
+            Assert.True(keyArgs.Handled);
         });
     }
 }
