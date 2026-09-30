@@ -90,30 +90,35 @@ public class ClassicContextMenuManager
 
         foreach (var ext in KnownExtensions)
         {
+            string category;
             IReadOnlyList<string> baseTargets;
             if (ImageExtensions.Contains(ext))
             {
+                category = "image";
                 baseTargets = imageTargets;
             }
             else if (AudioExtensions.Contains(ext))
             {
+                category = "audio";
                 baseTargets = audioTargets;
             }
             else if (VideoExtensions.Contains(ext))
             {
+                category = "video";
                 baseTargets = videoTargets;
             }
             else
             {
+                category = string.Empty;
                 baseTargets = _registry.GetAvailableTargetFormats(ext);
             }
 
-            var targets = baseTargets.Where(t => !IsSameFormat(ext, t)).ToList();
+            var targets = baseTargets.Where(t => IsSeparator(t) || !IsSameFormat(ext, t)).ToList();
 
-            if (targets.Count == 0) continue;
+            if (targets.Count(t => !IsSeparator(t)) == 0) continue;
 
             var cleanExt = "." + ext.TrimStart('.').ToLowerInvariant();
-            RegisterKey(classesRoot, $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}", targets, executablePath);
+            RegisterKey(classesRoot, $@"SystemFileAssociations\{cleanExt}\shell\{VerbRoot}", targets, executablePath, category);
         }
 
         RegisterFolderMenu(classesRoot, executablePath);
@@ -127,7 +132,13 @@ public class ClassicContextMenuManager
         return formats.Select(f => f.TrimStart('.').ToLowerInvariant()).ToList();
     }
 
-    private static void RegisterKey(RegistryKey classesRoot, string shellPath, IReadOnlyList<string> targetFormats, string exePath)
+    public static bool IsSeparator(string format)
+    {
+        var fmt = format.TrimStart('.').ToLowerInvariant();
+        return fmt is "separator" || fmt.StartsWith("separator:", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void RegisterKey(RegistryKey classesRoot, string shellPath, IReadOnlyList<string> targetFormats, string exePath, string? category = null)
     {
         using (var key = classesRoot.CreateSubKey(shellPath, true))
         {
@@ -146,12 +157,27 @@ public class ClassicContextMenuManager
         catch { }
 
         var subCommandsRoot = $@"{shellPath}\Shell";
+        var hasExplicitSeparators = targetFormats.Any(IsSeparator);
+        var pendingSeparator = false;
         int? previousGroup = null;
+        var itemIndex = 0;
+
         for (int i = 0; i < targetFormats.Count; i++)
         {
             var target = targetFormats[i];
+            if (IsSeparator(target))
+            {
+                if (itemIndex > 0)
+                {
+                    pendingSeparator = true;
+                }
+                continue;
+            }
+
             var safeTarget = target.Replace(':', '_').ToUpperInvariant();
-            var verbKey = $@"{subCommandsRoot}\{i:D2}_To_{safeTarget}";
+            var verbKey = $@"{subCommandsRoot}\{itemIndex:D2}_To_{safeTarget}";
+            itemIndex++;
+
             using var subKey = classesRoot.CreateSubKey(verbKey, true);
             if (subKey == null) continue;
 
@@ -160,13 +186,25 @@ public class ClassicContextMenuManager
             subKey.SetValue("MUIVerb", title);
             subKey.SetValue("MultiSelectModel", "Player");
 
-            var currentGroup = GetFormatGroup(target);
-            if (previousGroup.HasValue && currentGroup != previousGroup.Value)
+            if (hasExplicitSeparators)
             {
-                subKey.SetValue("SeparatorBefore", "");
-                subKey.SetValue("CommandFlags", 0x20, RegistryValueKind.DWord);
+                if (pendingSeparator)
+                {
+                    subKey.SetValue("SeparatorBefore", "");
+                    subKey.SetValue("CommandFlags", 0x20, RegistryValueKind.DWord);
+                    pendingSeparator = false;
+                }
             }
-            previousGroup = currentGroup;
+            else
+            {
+                var currentGroup = GetFormatGroup(target, category);
+                if (previousGroup.HasValue && currentGroup != previousGroup.Value)
+                {
+                    subKey.SetValue("SeparatorBefore", "");
+                    subKey.SetValue("CommandFlags", 0x20, RegistryValueKind.DWord);
+                }
+                previousGroup = currentGroup;
+            }
 
             using var commandKey = subKey.CreateSubKey("command", true);
             commandKey?.SetValue("", $"\"{exePath}\" convert \"%1\" --to {target}");
@@ -188,6 +226,7 @@ public class ClassicContextMenuManager
 
     public static bool IsSameFormat(string sourceExt, string targetFormat)
     {
+        if (IsSeparator(targetFormat)) return false;
         var src = sourceExt.TrimStart('.').ToLowerInvariant();
         var tgt = targetFormat.TrimStart('.').ToLowerInvariant();
 
@@ -211,17 +250,22 @@ public class ClassicContextMenuManager
         return false;
     }
 
-    private static int GetFormatGroup(string format)
+    public static int GetFormatGroup(string format, string? category = null)
     {
         var fmt = format.TrimStart('.').ToLowerInvariant();
+        if (category == "image" && fmt == "gif")
+        {
+            return 31;
+        }
+
         return fmt switch
         {
             "mp4" or "mkv" or "mov" or "webm" or "gif" => 1,
             "frames" or "frames-png" or "frames-jpg" or "frames-webp" or "frames-bmp" or "frames-tiff" => 10,
             "mp3" or "m4a" or "aac" or "wav" or "flac" or "opus" or "ogg" or "aiff" or "aif" => 20,
-            "jpg" or "jpeg" or "png" or "webp" or "avif" => 30,
+            "jpg" or "jpeg" or "png" or "webp" => 30,
             "ico" or "bmp" => 31,
-            "tiff" or "tif" or "jp2" or "jpeg2000" or "tga" or "pcx" or "ppm" or "heic" => 32,
+            "tiff" or "tif" or "jp2" or "jpeg2000" or "tga" or "pcx" or "ppm" or "heic" or "avif" => 32,
             "reencode" => 40,
             _ => 99
         };
