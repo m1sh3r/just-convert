@@ -58,7 +58,7 @@ public static class FolderScanner
         "svg", "psd", "dng", "cr2", "cr3", "nef", "arw"
     };
 
-    public static FolderScanResult Scan(string rootDirectory, bool recursive = false)
+    public static FolderScanResult Scan(string rootDirectory, bool recursive = true)
     {
         if (!Directory.Exists(rootDirectory))
         {

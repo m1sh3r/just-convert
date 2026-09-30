@@ -55,6 +55,20 @@ public class FolderScanningTests : IDisposable
     }
 
     [Fact]
+    public void Scan_DefaultParameter_IsRecursive()
+    {
+        File.WriteAllText(Path.Combine(_testRoot, "root.png"), "");
+        var subDir = Path.Combine(_testRoot, "sub");
+        Directory.CreateDirectory(subDir);
+        File.WriteAllText(Path.Combine(subDir, "nested.png"), "");
+
+        var result = FolderScanner.Scan(_testRoot);
+
+        Assert.Equal(2, result.TotalCount);
+        Assert.True(result.Recursive);
+    }
+
+    [Fact]
     public void Scan_Recursive_FindsNestedMediaAndIgnoresExcludedFolders()
     {
         File.WriteAllText(Path.Combine(_testRoot, "root.png"), "");
