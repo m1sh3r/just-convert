@@ -11,7 +11,7 @@ public class AppSettingsAndProfilesTests
         var profile = AppSettings.CreateDefaultProfile();
 
         Assert.Equal("default", profile.Id);
-        Assert.True(profile.IsReadOnly);
+        Assert.False(profile.IsReadOnly);
         Assert.NotEmpty(profile.VideoFormats);
         Assert.NotEmpty(profile.AudioFormats);
         Assert.NotEmpty(profile.ImageFormats);
@@ -109,6 +109,14 @@ public class AppSettingsAndProfilesTests
     }
 
     [Fact]
+    public void GetEffectiveVideoQuality_DefaultsToMatchingOriginalAudioBitrate()
+    {
+        var settings = new AppSettings();
+        var videoQuality = settings.GetEffectiveVideoQuality("mp4");
+        Assert.Equal(0, videoQuality.AudioBitrateKbps);
+    }
+
+    [Fact]
     public void SetAudioQuality_AllowsZeroForAutoMatching()
     {
         var settings = new AppSettings();
@@ -150,5 +158,20 @@ public class AppSettingsAndProfilesTests
         var effective = settings.GetEffectiveSvgSetting();
         Assert.Equal(1024, effective.Width);
         Assert.True(effective.IsRemembered);
+    }
+
+    [Fact]
+    public void EnsureDefaultProfile_PreservesCustomizedFormats()
+    {
+        var settings = new AppSettings();
+        settings.EnsureDefaultProfile();
+        var defaultProfile = settings.Profiles.First(p => p.Id == "default");
+        defaultProfile.VideoFormats.Clear();
+        defaultProfile.VideoFormats.Add("mp4");
+
+        settings.EnsureDefaultProfile();
+
+        Assert.Single(defaultProfile.VideoFormats);
+        Assert.Equal("mp4", defaultProfile.VideoFormats[0]);
     }
 }

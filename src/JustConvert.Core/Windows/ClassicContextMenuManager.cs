@@ -77,7 +77,6 @@ public class ClassicContextMenuManager
         var videoTargets = FilterAvailableFormats(activeProfile.VideoFormats);
         var audioTargets = FilterAvailableFormats(activeProfile.AudioFormats);
         var imageTargets = FilterAvailableFormats(activeProfile.ImageFormats);
-        var sortedPresets = settings.CustomPresets.OrderBy(p => p.Order).ToList();
 
         foreach (var category in CategoryTargetFormats.Keys)
         {
@@ -91,37 +90,25 @@ public class ClassicContextMenuManager
 
         foreach (var ext in KnownExtensions)
         {
-            string cat;
             IReadOnlyList<string> baseTargets;
             if (ImageExtensions.Contains(ext))
             {
-                cat = "image";
                 baseTargets = imageTargets;
             }
             else if (AudioExtensions.Contains(ext))
             {
-                cat = "audio";
                 baseTargets = audioTargets;
             }
             else if (VideoExtensions.Contains(ext))
             {
-                cat = "video";
                 baseTargets = videoTargets;
             }
             else
             {
-                cat = string.Empty;
                 baseTargets = _registry.GetAvailableTargetFormats(ext);
             }
 
-            var applicablePresets = sortedPresets
-                .Where(p => string.Equals(p.Category, cat, StringComparison.OrdinalIgnoreCase) && IsPresetApplicableToExtension(p, ext))
-                .Select(p => $"preset:{p.Id}")
-                .ToList();
-
-            var targets = applicablePresets
-                .Concat(baseTargets.Where(t => !IsSameFormat(ext, t)))
-                .ToList();
+            var targets = baseTargets.Where(t => !IsSameFormat(ext, t)).ToList();
 
             if (targets.Count == 0) continue;
 
@@ -204,8 +191,6 @@ public class ClassicContextMenuManager
         var src = sourceExt.TrimStart('.').ToLowerInvariant();
         var tgt = targetFormat.TrimStart('.').ToLowerInvariant();
 
-        if (tgt.StartsWith("preset:")) return false;
-
         if (tgt is "reencode" or "frames" or "compress")
         {
             return false;
@@ -226,25 +211,9 @@ public class ClassicContextMenuManager
         return false;
     }
 
-    public static bool IsPresetApplicableToExtension(CustomPreset preset, string ext)
-    {
-        if (string.IsNullOrWhiteSpace(preset.InputExtensions))
-        {
-            return true;
-        }
-
-        var cleanExt = ext.TrimStart('.').ToLowerInvariant();
-        var allowed = preset.InputExtensions
-            .Split(new[] { ',', ';', ' ', '|' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(e => e.TrimStart('.').ToLowerInvariant());
-
-        return allowed.Contains(cleanExt);
-    }
-
     private static int GetFormatGroup(string format)
     {
         var fmt = format.TrimStart('.').ToLowerInvariant();
-        if (fmt.StartsWith("preset:")) return 0;
         return fmt switch
         {
             "mp4" or "mkv" or "mov" or "webm" or "gif" => 1,

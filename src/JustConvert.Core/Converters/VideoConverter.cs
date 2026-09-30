@@ -39,11 +39,6 @@ public class VideoConverter : IFormatConverter
         }
 
         if (!VideoFormats.Contains(src)) return false;
-        if (tgt.StartsWith("preset:"))
-        {
-            var preset = AppSettings.Load().FindPreset(tgt[7..]);
-            return preset == null || preset.Category == "video";
-        }
         return VideoTargetFormats.Contains(tgt);
     }
 
@@ -91,47 +86,16 @@ public class VideoConverter : IFormatConverter
         var isCompress = targetExt is "compress" or "compressed";
 
         var settings = AppSettings.Load();
-        CustomPreset? preset = null;
-        VideoQualitySetting videoSetting;
-
         string outputExt;
-        if (targetExt.StartsWith("preset:"))
-        {
-            var presetId = targetExt[7..];
-            preset = settings.FindPreset(presetId);
-            if (preset != null)
-            {
-                outputExt = $".{preset.ContainerFormat.TrimStart('.').ToLowerInvariant()}";
-                videoSetting = new VideoQualitySetting
-                {
-                    VideoCodec = preset.VideoCodec,
-                    Encoder = preset.Encoder,
-                    RateControl = preset.RateControl,
-                    VideoQualityCq = preset.VideoQualityCq,
-                    VideoBitrateKbps = preset.VideoBitrateKbps,
-                    AudioCodec = preset.AudioCodec,
-                    AudioBitrateKbps = preset.AudioBitrateKbps
-                };
-            }
-            else
-            {
-                outputExt = ".mp4";
-                videoSetting = settings.GetEffectiveVideoQuality("mp4");
-            }
-        }
-        else
-        {
-            if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase) && targetExt != "mp4-av1") outputExt = ".mp4";
-            else if (targetExt.StartsWith("mov", StringComparison.OrdinalIgnoreCase)) outputExt = ".mov";
-            else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase) || targetExt is "vp9" or "av1") outputExt = ".webm";
-            else if (targetExt.StartsWith("mkv", StringComparison.OrdinalIgnoreCase)) outputExt = ".mkv";
-            else if (targetExt is "h264" or "h265" or "hevc" or "mp4-av1" or "compress" or "compressed") outputExt = ".mp4";
-            else outputExt = $".{targetExt}";
+        if (targetExt.StartsWith("mp4", StringComparison.OrdinalIgnoreCase) && targetExt != "mp4-av1") outputExt = ".mp4";
+        else if (targetExt.StartsWith("mov", StringComparison.OrdinalIgnoreCase)) outputExt = ".mov";
+        else if (targetExt.StartsWith("webm", StringComparison.OrdinalIgnoreCase) || targetExt is "vp9" or "av1") outputExt = ".webm";
+        else if (targetExt.StartsWith("mkv", StringComparison.OrdinalIgnoreCase)) outputExt = ".mkv";
+        else if (targetExt is "h264" or "h265" or "hevc" or "mp4-av1" or "compress" or "compressed") outputExt = ".mp4";
+        else outputExt = $".{targetExt}";
 
-            videoSetting = settings.GetEffectiveVideoQuality(targetExt);
-        }
-
-        var appendSuffix = preset != null ? preset.AppendSuffix : settings.AppendQualitySuffix;
+        var videoSetting = settings.GetEffectiveVideoQuality(targetExt);
+        var appendSuffix = settings.AppendQualitySuffix;
 
         MediaStreamInfo? mediaInfo = null;
         try
@@ -147,7 +111,7 @@ public class VideoConverter : IFormatConverter
 
             var suffix = AudioExtractionTargets.Contains(targetExt)
                 ? OutputFileNameHelper.BuildAudioSuffix(targetExt, mediaInfo?.Audio, appendSuffix: appendSuffix)
-                : (preset != null && appendSuffix ? preset.Name : OutputFileNameHelper.BuildVideoSuffix(targetExt, videoSetting, appendSuffix: appendSuffix));
+                : OutputFileNameHelper.BuildVideoSuffix(targetExt, videoSetting, appendSuffix: appendSuffix);
 
             if (isExtractFrames)
             {
@@ -175,9 +139,7 @@ public class VideoConverter : IFormatConverter
 
         try
         {
-            var arguments = (preset != null && preset.IsCustomCommand && !string.IsNullOrWhiteSpace(preset.CustomArguments))
-                ? $"-y -i \"{inputPath}\" {preset.CustomArguments} \"{outputPath}\""
-                : BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting);
+            var arguments = BuildVideoArguments(inputPath, outputPath, targetExt, mediaInfo?.Audio, isReencode, mediaInfo?.Video, videoSetting);
             AppLogger.Info($"[VideoConverter] Conversion starting: \"{inputPath}\" -> \"{outputPath}\" (target: {targetExt})");
             AppLogger.Info($"[VideoConverter] Command: ffmpeg {arguments}");
 
@@ -427,7 +389,7 @@ public class VideoConverter : IFormatConverter
             return $"-y -i \"{input}\" -map 0:v:0 -map 0:a? {tonemapFilter}-c:v libx264 -crf 28 -preset medium -c:a aac -b:a 128k -movflags +faststart -sws_flags spline+accurate_rnd+full_chroma_int -map_metadata 0 \"{output}\"";
         }
 
-        if (videoSetting != null && (targetExt is "mp4" or "webm" or "mkv" or "mov" || targetExt.StartsWith("preset:")))
+        if (videoSetting != null && targetExt is "mp4" or "webm" or "mkv" or "mov")
         {
             return BuildSettingBasedVideoArguments(input, output, targetExt, videoSetting, tonemapFilter, audioInfo);
         }
@@ -580,7 +542,7 @@ public class VideoConverter : IFormatConverter
     {
         var codecArg = BuildVideoCodecArgument(setting);
         var audioArg = BuildAudioCodecArgument(setting, audioInfo);
-        var container = targetExt.StartsWith("preset:") ? Path.GetExtension(output).TrimStart('.').ToLowerInvariant() : targetExt;
+        var container = targetExt;
         var movflags = (container is "mp4" or "mov")
             ? "-movflags +faststart "
             : "";

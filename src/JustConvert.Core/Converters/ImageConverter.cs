@@ -37,13 +37,6 @@ public class ImageConverter : IFormatConverter
             return SupportedFormats.Contains(src) && src is not "heic" and not "svg" and not "psd" && !RawFormats.Contains(src);
         }
 
-        if (tgt.StartsWith("preset:"))
-        {
-            if (!SupportedFormats.Contains(src)) return false;
-            var preset = AppSettings.Load().FindPreset(tgt[7..]);
-            return preset == null || preset.Category == "image";
-        }
-
         return SupportedFormats.Contains(src) && FormatsOrder.Contains(tgt, StringComparer.OrdinalIgnoreCase) && !src.Equals(tgt, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -97,17 +90,6 @@ public class ImageConverter : IFormatConverter
         var targetExt = isReencode ? sourceExt : targetExtension.TrimStart('.').ToLowerInvariant();
 
         var settings = AppSettings.Load();
-        CustomPreset? preset = null;
-        if (targetExtension.TrimStart('.').StartsWith("preset:"))
-        {
-            var presetId = targetExtension.TrimStart('.')[7..];
-            preset = settings.FindPreset(presetId);
-            if (preset != null)
-            {
-                targetExt = preset.ContainerFormat.TrimStart('.').ToLowerInvariant();
-            }
-        }
-
         var outputExt = targetExt switch
         {
             "jpeg" => "jpg",
@@ -116,9 +98,9 @@ public class ImageConverter : IFormatConverter
             _ => targetExt
         };
 
-        var effectiveQuality = preset != null ? preset.ImageQuality : settings.GetEffectiveQuality(targetExt);
-        var effectiveSvgWidth = preset != null && preset.SvgWidth > 0 ? preset.SvgWidth : settings.GetEffectiveSvgSetting().Width;
-        var appendQualitySuffix = preset != null ? preset.AppendSuffix : settings.AppendQualitySuffix;
+        var effectiveQuality = settings.GetEffectiveQuality(targetExt);
+        var effectiveSvgWidth = settings.GetEffectiveSvgSetting().Width;
+        var appendQualitySuffix = settings.AppendQualitySuffix;
 
         if (string.IsNullOrWhiteSpace(outputPath))
         {
@@ -156,6 +138,8 @@ public class ImageConverter : IFormatConverter
                 UseShellExecute = false,
                 RedirectStandardError = true,
                 RedirectStandardOutput = true,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
                 CreateNoWindow = true
             };
 

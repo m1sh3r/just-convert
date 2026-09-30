@@ -47,7 +47,7 @@ public class VideoQualitySetting
     public int VideoQualityCq { get; set; } = 23;
     public int VideoBitrateKbps { get; set; } = 15000;
     public string AudioCodec { get; set; } = "aac";
-    public int AudioBitrateKbps { get; set; } = 192;
+    public int AudioBitrateKbps { get; set; } = 0;
     public bool IsRemembered { get; set; }
 }
 
@@ -63,85 +63,6 @@ public class FramesSetting
     public bool IsRemembered { get; set; }
 }
 
-public class CustomPreset
-{
-    public string Id { get; set; } = Guid.NewGuid().ToString("N");
-    public string Name { get; set; } = string.Empty;
-    public string Category { get; set; } = "video";
-    public string ContainerFormat { get; set; } = "mp4";
-    public string PresetType { get; set; } = "quick";
-    public bool IsCustomCommand { get; set; }
-    public string CustomArguments { get; set; } = string.Empty;
-    public string InputExtensions { get; set; } = string.Empty;
-    public int Order { get; set; }
-    public string VideoCodec { get; set; } = "h264";
-    public string Encoder { get; set; } = "auto";
-    public string RateControl { get; set; } = "cq";
-    public int VideoQualityCq { get; set; } = 23;
-    public int VideoBitrateKbps { get; set; } = 15000;
-    public string AudioCodec { get; set; } = "aac";
-    public int AudioBitrateKbps { get; set; } = 192;
-    public int ImageQuality { get; set; } = 90;
-    public int SvgWidth { get; set; } = 0;
-    public bool AppendSuffix { get; set; } = true;
-
-    [JsonIgnore]
-    public string PresetTypeDisplayName => string.Equals(PresetType, "template", StringComparison.OrdinalIgnoreCase)
-        ? I18n.T("PresetBadgeTemplate")
-        : I18n.T("PresetBadgeQuick");
-
-    [JsonIgnore]
-    public string PresetBadgeText => IsCustomCommand
-        ? $"{PresetTypeDisplayName} • {I18n.T("PresetBadgeCustomCommand")}"
-        : PresetTypeDisplayName;
-
-    public static CustomPreset CreateFromCurrentSettings(AppSettings settings, string category, string containerFormat)
-    {
-        var cleanCat = string.IsNullOrWhiteSpace(category) ? "video" : category.Trim().ToLowerInvariant();
-        var cleanContainer = string.IsNullOrWhiteSpace(containerFormat)
-            ? (cleanCat == "audio" ? "mp3" : cleanCat == "image" ? "jpg" : "mp4")
-            : containerFormat.TrimStart('.').ToLowerInvariant();
-
-        var preset = new CustomPreset
-        {
-            Category = cleanCat,
-            ContainerFormat = cleanContainer,
-            PresetType = "quick",
-            AppendSuffix = settings.AppendQualitySuffix
-        };
-
-        if (cleanCat == "video")
-        {
-            var vs = settings.GetEffectiveVideoQuality(cleanContainer);
-            preset.VideoCodec = vs.VideoCodec;
-            preset.Encoder = vs.Encoder;
-            preset.RateControl = vs.RateControl;
-            preset.VideoQualityCq = vs.VideoQualityCq;
-            preset.VideoBitrateKbps = vs.VideoBitrateKbps;
-            preset.AudioCodec = vs.AudioCodec;
-            preset.AudioBitrateKbps = vs.AudioBitrateKbps;
-        }
-        else if (cleanCat == "audio")
-        {
-            preset.AudioBitrateKbps = settings.GetEffectiveAudioQuality(cleanContainer);
-        }
-        else if (cleanCat == "image")
-        {
-            if (settings.TryGetSavedQuality(cleanContainer, out var q))
-            {
-                preset.ImageQuality = q;
-            }
-            else
-            {
-                preset.ImageQuality = AppSettings.GetDefaultQuality(cleanContainer);
-            }
-            preset.SvgWidth = settings.SvgSetting.Width;
-        }
-
-        return preset;
-    }
-}
-
 public class AppSettings
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -153,7 +74,6 @@ public class AppSettings
     public string ActiveProfileId { get; set; } = "default";
     public List<MenuProfile> Profiles { get; set; } = [];
     public bool AppendQualitySuffix { get; set; } = true;
-    public List<CustomPreset> CustomPresets { get; set; } = [];
     public Dictionary<string, VideoQualitySetting> VideoQualitySettings { get; set; } = [];
     public Dictionary<string, AudioQualitySetting> AudioQualitySettings { get; set; } = [];
     public Dictionary<string, ImageQualitySetting> ImageQualitySettings { get; set; } = [];
@@ -274,7 +194,7 @@ public class AppSettings
             VideoQualityCq = 23,
             VideoBitrateKbps = 15000,
             AudioCodec = fmt == "webm" ? "opus" : "aac",
-            AudioBitrateKbps = fmt == "webm" ? 128 : 192
+            AudioBitrateKbps = 0
         };
     }
 
@@ -372,38 +292,6 @@ public class AppSettings
         FramesSetting = new FramesSetting();
     }
 
-    public void AddPreset(CustomPreset preset)
-    {
-        if (preset.Order == 0 && CustomPresets.Count > 0)
-        {
-            preset.Order = CustomPresets.Max(p => p.Order) + 1;
-        }
-        CustomPresets.Add(preset);
-    }
-
-    public void UpdatePreset(CustomPreset preset)
-    {
-        var idx = CustomPresets.FindIndex(p => p.Id == preset.Id);
-        if (idx >= 0)
-        {
-            CustomPresets[idx] = preset;
-        }
-        else
-        {
-            CustomPresets.Add(preset);
-        }
-    }
-
-    public void DeletePreset(string presetId)
-    {
-        CustomPresets.RemoveAll(p => p.Id == presetId);
-    }
-
-    public CustomPreset? FindPreset(string presetId)
-    {
-        return CustomPresets.FirstOrDefault(p => p.Id == presetId);
-    }
-
     public static string? CustomSettingsFilePath { get; set; }
 
     public static string SettingsFilePath => CustomSettingsFilePath ?? Path.Combine(
@@ -471,7 +359,7 @@ public class AppSettings
     public MenuProfile GetActiveProfile()
     {
         return Profiles.FirstOrDefault(p => p.Id == ActiveProfileId)
-            ?? Profiles.FirstOrDefault(p => p.IsReadOnly)
+            ?? Profiles.FirstOrDefault(p => p.Id == "default")
             ?? Profiles.First();
     }
 
@@ -486,18 +374,14 @@ public class AppSettings
         }
         else
         {
-            defaultProfile.IsReadOnly = true;
+            defaultProfile.IsReadOnly = false;
             defaultProfile.Name = I18n.T("ProfileDefaultName");
-            defaultProfile.VideoFormats = factoryDefault.VideoFormats;
-            defaultProfile.AudioFormats = factoryDefault.AudioFormats;
-            defaultProfile.ImageFormats = factoryDefault.ImageFormats;
         }
 
         foreach (var profile in Profiles)
         {
             profile.VideoFormats.RemoveAll(f => f.Equals("remux", StringComparison.OrdinalIgnoreCase));
         }
-        CustomPresets.RemoveAll(p => string.Equals(p.ContainerFormat, "remux", StringComparison.OrdinalIgnoreCase));
 
         if (string.IsNullOrEmpty(ActiveProfileId) || !Profiles.Any(p => p.Id == ActiveProfileId))
         {
@@ -511,7 +395,7 @@ public class AppSettings
         {
             Id = "default",
             Name = I18n.T("ProfileDefaultName"),
-            IsReadOnly = true,
+            IsReadOnly = false,
             VideoFormats = ["mp4", "webm", "mkv", "mov", "gif", "frames", "mp3", "wav", "flac", "aac", "m4a", "opus", "reencode"],
             AudioFormats = ["mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff", "reencode"],
             ImageFormats = ["png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"]
