@@ -188,6 +188,21 @@ public static class I18n
             ["BtnSave"] = "Save",
             ["BtnReset"] = "Reset",
             ["BtnEditFormatSettings"] = "Format settings",
+            ["BtnAddMenu"] = "Add",
+            ["MenuAddFormat"] = "Format",
+            ["MenuAddAction"] = "Action",
+            ["MenuAddSeparator"] = "Separator",
+            ["TooltipDeleteFormat"] = "Remove from list",
+            ["MenuDeleteFormat"] = "Remove from list",
+            ["MenuAllFormatsAdded"] = "All formats added",
+            ["MenuAllActionsAdded"] = "All actions added",
+            ["BtnAddSeparator"] = "Add separator",
+            ["TooltipDeleteSeparator"] = "Delete separator",
+            ["MenuAddSeparatorAfter"] = "Add separator after",
+            ["MenuDeleteSeparator"] = "Delete separator",
+            ["TooltipDragToReorder"] = "Drag to reorder",
+            ["TooltipDragSeparator"] = "Drag to move separator",
+            ["DragSeparatorLabel"] = "Separator",
             ["QualityStatusRemembered"] = "Saved: {0}%",
             ["QualityStatusAsk"] = "Ask on conversion",
             ["BtnConvert"] = "Convert",
@@ -437,6 +452,21 @@ public static class I18n
             ["BtnSave"] = "Сохранить",
             ["BtnReset"] = "Сбросить",
             ["BtnEditFormatSettings"] = "Параметры формата",
+            ["BtnAddMenu"] = "Добавить",
+            ["MenuAddFormat"] = "Формат",
+            ["MenuAddAction"] = "Действие",
+            ["MenuAddSeparator"] = "Разделитель",
+            ["TooltipDeleteFormat"] = "Удалить из списка",
+            ["MenuDeleteFormat"] = "Удалить из списка",
+            ["MenuAllFormatsAdded"] = "Все форматы добавлены",
+            ["MenuAllActionsAdded"] = "Все действия добавлены",
+            ["BtnAddSeparator"] = "Добавить разделитель",
+            ["TooltipDeleteSeparator"] = "Удалить разделитель",
+            ["MenuAddSeparatorAfter"] = "Добавить разделитель после",
+            ["MenuDeleteSeparator"] = "Удалить разделитель",
+            ["TooltipDragToReorder"] = "Потяните для изменения порядка",
+            ["TooltipDragSeparator"] = "Потяните для перемещения разделителя",
+            ["DragSeparatorLabel"] = "Разделитель",
             ["QualityStatusRemembered"] = "Сохранено: {0}%",
             ["QualityStatusAsk"] = "Спрашивать при конвертации",
             ["BtnConvert"] = "Конвертировать",
@@ -541,6 +571,11 @@ public static class I18n
     public static string GetSubMenuTitle(string targetFormat)
     {
         var fmt = targetFormat.TrimStart('.').ToLowerInvariant();
+        if (fmt is "separator" || fmt.StartsWith("separator:", StringComparison.OrdinalIgnoreCase))
+        {
+            return T("DragSeparatorLabel");
+        }
+
         return fmt switch
         {
             "reencode" => T("MenuReencode"),
