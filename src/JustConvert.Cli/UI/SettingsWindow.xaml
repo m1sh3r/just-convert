@@ -67,96 +67,81 @@
                 BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                 Background="{DynamicResource ControlFillColorDefaultBrush}">
             <Grid>
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                <Grid Grid.Row="0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+                <TextBlock Text="{core:Loc SettingsProfilesHeader}"
+                           d:Text="Профиль контекстного меню:"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Margin="0,0,12,0"
+                           Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
 
-                    <TextBlock Text="{core:Loc SettingsProfilesHeader}"
-                               d:Text="Профиль контекстного меню:"
-                               FontSize="13"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               Margin="0,0,12,0"
-                               Foreground="{DynamicResource TextFillColorPrimaryBrush}"/>
+                <ComboBox x:Name="CmbProfiles"
+                          Grid.Column="1"
+                          VerticalAlignment="Center"
+                          Height="32"
+                          ContextMenu="{Binding ElementName=BtnProfileMenu, Path=ContextMenu}"
+                          SelectionChanged="OnProfileSelectionChanged">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate>
+                            <TextBlock Text="{Binding Name}"
+                                       VerticalAlignment="Center"/>
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
 
-                    <ComboBox x:Name="CmbProfiles"
-                              Grid.Column="1"
-                              VerticalAlignment="Center"
-                              Height="32"
-                              ContextMenu="{Binding ElementName=BtnProfileMenu, Path=ContextMenu}"
-                              SelectionChanged="OnProfileSelectionChanged">
-                        <ComboBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Name}"
-                                           VerticalAlignment="Center"/>
-                            </DataTemplate>
-                        </ComboBox.ItemTemplate>
-                    </ComboBox>
-
-                    <ui:Button x:Name="BtnProfileMenu"
-                               Grid.Column="2"
-                               Icon="{ui:SymbolIcon MoreHorizontal24}"
-                               Width="34"
-                               Height="32"
-                               Margin="6,0,0,0"
-                               Padding="0"
-                               ToolTip="{core:Loc ProfileMenuTooltip}"
-                               d:ToolTip="Действия с профилем"
-                               Click="OnProfileMenuClick">
-                        <ui:Button.ContextMenu>
-                            <ContextMenu x:Name="ProfileContextMenu">
-                                <ui:MenuItem x:Name="MenuDuplicate"
-                                             Header="{core:Loc BtnDuplicate}"
-                                             d:Header="Дублировать"
-                                             Icon="{ui:SymbolIcon Copy24}"
-                                             Click="OnDuplicateProfileClick"/>
-                                <ui:MenuItem x:Name="MenuRename"
-                                             Header="{core:Loc BtnRename}"
-                                             d:Header="Переименовать"
-                                             Icon="{ui:SymbolIcon Edit24}"
-                                             Click="OnRenameProfileClick"/>
-                                <ui:MenuItem x:Name="MenuDelete"
-                                             Header="{core:Loc BtnDelete}"
-                                             d:Header="Удалить"
-                                             Icon="{ui:SymbolIcon Delete24}"
-                                             Click="OnDeleteProfileClick"/>
-                                <Separator/>
-                                <ui:MenuItem x:Name="MenuResetDefaults"
-                                             Header="{core:Loc BtnResetDefaults}"
-                                             d:Header="Сбросить к стандартным"
-                                             Icon="{ui:SymbolIcon ArrowReset24}"
-                                             Click="OnResetDefaultsClick"/>
-                                <Separator/>
-                                <ui:MenuItem x:Name="MenuExport"
-                                             Header="{core:Loc BtnExport}"
-                                             d:Header="Экспорт..."
-                                             Icon="{ui:SymbolIcon ArrowDownload24}"
-                                             Click="OnExportClick"/>
-                                <ui:MenuItem x:Name="MenuImport"
-                                             Header="{core:Loc BtnImport}"
-                                             d:Header="Импорт..."
-                                             Icon="{ui:SymbolIcon ArrowUpload24}"
-                                             Click="OnImportClick"/>
-                            </ContextMenu>
-                        </ui:Button.ContextMenu>
-                    </ui:Button>
-                </Grid>
-
-                <CheckBox x:Name="ChkAppendQualitySuffix"
-                          Grid.Row="1"
-                          Content="{core:Loc ChkAppendQualitySuffix}"
-                          d:Content="Добавлять суффикс формата и заданных настроек в имя файла"
-                          Margin="0,6,0,0"
-                          Checked="OnAppendQualitySuffixChanged"
-                          Unchecked="OnAppendQualitySuffixChanged"/>
+                <ui:Button x:Name="BtnProfileMenu"
+                           Grid.Column="2"
+                           Icon="{ui:SymbolIcon MoreHorizontal24}"
+                           Width="34"
+                           Height="32"
+                           Margin="6,0,0,0"
+                           Padding="0"
+                           ToolTip="{core:Loc ProfileMenuTooltip}"
+                           d:ToolTip="Действия с профилем"
+                           Click="OnProfileMenuClick">
+                    <ui:Button.ContextMenu>
+                        <ContextMenu x:Name="ProfileContextMenu">
+                            <ui:MenuItem x:Name="MenuDuplicate"
+                                         Header="{core:Loc BtnDuplicate}"
+                                         d:Header="Дублировать"
+                                         Icon="{ui:SymbolIcon Copy24}"
+                                         Click="OnDuplicateProfileClick"/>
+                            <ui:MenuItem x:Name="MenuRename"
+                                         Header="{core:Loc BtnRename}"
+                                         d:Header="Переименовать"
+                                         Icon="{ui:SymbolIcon Edit24}"
+                                         Click="OnRenameProfileClick"/>
+                            <ui:MenuItem x:Name="MenuDelete"
+                                         Header="{core:Loc BtnDelete}"
+                                         d:Header="Удалить"
+                                         Icon="{ui:SymbolIcon Delete24}"
+                                         Click="OnDeleteProfileClick"/>
+                            <Separator/>
+                            <ui:MenuItem x:Name="MenuResetDefaults"
+                                         Header="{core:Loc BtnResetDefaults}"
+                                         d:Header="Сбросить к стандартным"
+                                         Icon="{ui:SymbolIcon ArrowReset24}"
+                                         Click="OnResetDefaultsClick"/>
+                            <Separator/>
+                            <ui:MenuItem x:Name="MenuExport"
+                                         Header="{core:Loc BtnExport}"
+                                         d:Header="Экспорт..."
+                                         Icon="{ui:SymbolIcon ArrowDownload24}"
+                                         Click="OnExportClick"/>
+                            <ui:MenuItem x:Name="MenuImport"
+                                         Header="{core:Loc BtnImport}"
+                                         d:Header="Импорт..."
+                                         Icon="{ui:SymbolIcon ArrowUpload24}"
+                                         Click="OnImportClick"/>
+                        </ContextMenu>
+                    </ui:Button.ContextMenu>
+                </ui:Button>
             </Grid>
         </Border>
 
@@ -217,36 +202,84 @@
                         SelectedIndex="0"
                         SelectionChanged="OnCategoryTabChanged">
                 <TabItem Header="{core:Loc CategoryVideo}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              PanningMode="VerticalOnly"
-                              CanContentScroll="False"
-                              Margin="0,4,8,4">
-                        <StackPanel x:Name="PanelVideoFormats"
-                                Margin="0,0,8,12"/>
-                    </ScrollViewer>
+                    <Grid Margin="0,4,8,4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <ui:Button x:Name="BtnAddVideo"
+                                   Grid.Row="0"
+                                   Content="{core:Loc BtnAddMenu}"
+                                   d:Content="Добавить"
+                                   Icon="{ui:SymbolIcon Add20}"
+                                   Appearance="Secondary"
+                                   HorizontalAlignment="Left"
+                                   Margin="0,0,0,8"
+                                   Tag="video"
+                                   Click="OnAddMenuClick"/>
+                        <ScrollViewer Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PanningMode="VerticalOnly"
+                                      CanContentScroll="False">
+                            <StackPanel x:Name="PanelVideoFormats"
+                                        Margin="0,0,8,12"/>
+                        </ScrollViewer>
+                    </Grid>
                 </TabItem>
 
                 <TabItem Header="{core:Loc CategoryAudio}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              PanningMode="VerticalOnly"
-                              CanContentScroll="False"
-                              Margin="0,4,8,4">
-                        <StackPanel x:Name="PanelAudioFormats"
-                                Margin="0,0,8,12"/>
-                    </ScrollViewer>
+                    <Grid Margin="0,4,8,4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <ui:Button x:Name="BtnAddAudio"
+                                   Grid.Row="0"
+                                   Content="{core:Loc BtnAddMenu}"
+                                   d:Content="Добавить"
+                                   Icon="{ui:SymbolIcon Add20}"
+                                   Appearance="Secondary"
+                                   HorizontalAlignment="Left"
+                                   Margin="0,0,0,8"
+                                   Tag="audio"
+                                   Click="OnAddMenuClick"/>
+                        <ScrollViewer Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PanningMode="VerticalOnly"
+                                      CanContentScroll="False">
+                            <StackPanel x:Name="PanelAudioFormats"
+                                        Margin="0,0,8,12"/>
+                        </ScrollViewer>
+                    </Grid>
                 </TabItem>
 
                 <TabItem Header="{core:Loc CategoryImages}">
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled"
-                              PanningMode="VerticalOnly"
-                              CanContentScroll="False"
-                              Margin="0,4,8,4">
-                        <StackPanel x:Name="PanelImageFormats"
-                                Margin="0,0,8,12"/>
-                    </ScrollViewer>
+                    <Grid Margin="0,4,8,4">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <ui:Button x:Name="BtnAddImage"
+                                   Grid.Row="0"
+                                   Content="{core:Loc BtnAddMenu}"
+                                   d:Content="Добавить"
+                                   Icon="{ui:SymbolIcon Add20}"
+                                   Appearance="Secondary"
+                                   HorizontalAlignment="Left"
+                                   Margin="0,0,0,8"
+                                   Tag="image"
+                                   Click="OnAddMenuClick"/>
+                        <ScrollViewer Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled"
+                                      PanningMode="VerticalOnly"
+                                      CanContentScroll="False">
+                            <StackPanel x:Name="PanelImageFormats"
+                                        Margin="0,0,8,12"/>
+                        </ScrollViewer>
+                    </Grid>
                 </TabItem>
             </TabControl>
         </Grid>
