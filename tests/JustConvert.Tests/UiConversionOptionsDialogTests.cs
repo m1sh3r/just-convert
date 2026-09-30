@@ -260,14 +260,12 @@ public class UiConversionOptionsDialogTests
             Assert.Equal(Visibility.Collapsed, dialog.PanelVideoCq.Visibility);
             Assert.Equal(Visibility.Visible, dialog.PanelVideoBitrate.Visibility);
             Assert.Contains("15000", dialog.TxtVideoBitrateValue.Text);
-            Assert.Contains("15", dialog.TxtVideoBitrateDescription.Text);
 
             dialog.CmbRateControl.SelectedValue = "cbr";
             Assert.Equal("cbr", dialog.SelectedVideoQuality.RateControl);
             Assert.Equal(Visibility.Collapsed, dialog.PanelVideoCq.Visibility);
             Assert.Equal(Visibility.Visible, dialog.PanelVideoBitrate.Visibility);
             Assert.Contains("15000", dialog.TxtVideoBitrateValue.Text);
-            Assert.Contains("15", dialog.TxtVideoBitrateDescription.Text);
 
             dialog.CmbRateControl.SelectedValue = "cq";
             Assert.Equal("cq", dialog.SelectedVideoQuality.RateControl);
@@ -289,7 +287,6 @@ public class UiConversionOptionsDialogTests
             dialog.SliderVideoBitrate.Value = 8000;
             Assert.Equal(8000, dialog.SelectedVideoQuality.VideoBitrateKbps);
             Assert.Contains("8000", dialog.TxtVideoBitrateValue.Text);
-            Assert.Contains("8", dialog.TxtVideoBitrateDescription.Text);
         });
     }
 

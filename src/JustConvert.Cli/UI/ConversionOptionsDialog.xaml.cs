@@ -523,12 +523,6 @@ public partial class ConversionOptionsDialog : FluentWindow
         {
             TxtVideoBitrateValue.Text = $"{kbps} {I18n.T("BitrateUnitKbps")}";
         }
-
-        if (TxtVideoBitrateDescription != null)
-        {
-            var mbps = kbps / 1000.0;
-            TxtVideoBitrateDescription.Text = $"{mbps:F1} {I18n.T("BitrateUnitMbps")}";
-        }
     }
 
     private void OnVideoBitrateValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

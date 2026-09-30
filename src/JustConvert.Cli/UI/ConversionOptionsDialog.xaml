@@ -160,7 +160,7 @@
                         <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="{core:Loc LabelVideoBitrate}"
                                        d:Text="Битрейт видео:"
@@ -182,12 +182,7 @@
                                 TickFrequency="250"
                                 IsSnapToTickEnabled="True"
                                 ValueChanged="OnVideoBitrateValueChanged"
-                                Margin="0,0,0,2"/>
-                        <TextBlock x:Name="TxtVideoBitrateDescription"
-                                   FontSize="12"
-                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                   Margin="0,0,0,10"
-                                   d:Text="15.0 Мбит/с"/>
+                                Margin="0,0,0,8"/>
                     </StackPanel>
 
                     <Grid Margin="0,0,0,8">
