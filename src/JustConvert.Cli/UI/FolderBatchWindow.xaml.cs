@@ -3,6 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media;
 using JustConvert.Core;
 using JustConvert.Core.Logging;
 using JustConvert.Core.Scanning;
@@ -12,7 +13,7 @@ using Wpf.Ui.Controls;
 
 namespace JustConvert.Cli.UI;
 
-public sealed record FormatChoice(string Format, string DisplayName)
+public sealed record FormatChoice(string Format, string DisplayName, bool IsSeparator = false)
 {
     public override string ToString() => DisplayName;
 }
@@ -20,17 +21,47 @@ public sealed record FormatChoice(string Format, string DisplayName)
 public partial class FolderBatchWindow : FluentWindow
 {
     private readonly string _folderPath;
+    private readonly AppSettings _settings;
+    private readonly bool _isCustomSettings;
     private FolderScanResult? _scanResult;
     private bool _isScanning;
+
+    private static readonly string[] FallbackImageFormats =
+    [
+        "png", "jpg", "webp", "ico", "bmp", "gif", "jp2", "tiff", "tga", "pcx", "ppm", "avif", "reencode"
+    ];
+
+    private static readonly string[] FallbackVideoFormats =
+    [
+        "mp4", "webm", "mkv", "mov", "gif", "frames", "mp3", "wav", "flac", "aac", "m4a", "opus", "reencode"
+    ];
+
+    private static readonly string[] FallbackAudioFormats =
+    [
+        "mp3", "aac", "m4a", "wav", "flac", "ogg", "opus", "aiff", "reencode"
+    ];
+
+    internal AppSettings CurrentSettings => _settings;
 
     public FolderBatchWindow() : this(string.Empty)
     {
     }
 
-    public FolderBatchWindow(string folderPath)
+    public FolderBatchWindow(string folderPath) : this(folderPath, AppSettings.Load(), false)
+    {
+    }
+
+    public FolderBatchWindow(string folderPath, AppSettings settings) : this(folderPath, settings, true)
+    {
+    }
+
+    private FolderBatchWindow(string folderPath, AppSettings settings, bool isCustomSettings)
     {
         InitializeComponent();
         _folderPath = folderPath;
+        _settings = settings;
+        _isCustomSettings = isCustomSettings;
+        _settings.EnsureDefaultProfile();
 
         if (DesignerProperties.GetIsInDesignMode(this))
         {
@@ -59,6 +90,13 @@ public partial class FolderBatchWindow : FluentWindow
 
         InitFormatComboBoxes();
 
+        CmbImageFormats.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnComboBoxPreviewMouseButton), true);
+        CmbImageFormats.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(OnComboBoxPreviewMouseButton), true);
+        CmbVideoFormats.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnComboBoxPreviewMouseButton), true);
+        CmbVideoFormats.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(OnComboBoxPreviewMouseButton), true);
+        CmbAudioFormats.AddHandler(UIElement.PreviewMouseLeftButtonDownEvent, new MouseButtonEventHandler(OnComboBoxPreviewMouseButton), true);
+        CmbAudioFormats.AddHandler(UIElement.PreviewMouseLeftButtonUpEvent, new MouseButtonEventHandler(OnComboBoxPreviewMouseButton), true);
+
         TxtFolderName.Text = Path.GetFileName(folderPath);
         TxtFolderPath.Text = folderPath;
 
@@ -66,6 +104,20 @@ public partial class FolderBatchWindow : FluentWindow
         ChkIncludeSubfolders.Unchecked += (_, _) => TriggerScan();
 
         Loaded += (_, _) => TriggerScan();
+        Activated += (_, _) =>
+        {
+            if (!_isCustomSettings)
+            {
+                var refreshed = AppSettings.Load();
+                refreshed.EnsureDefaultProfile();
+                var activeProfile = refreshed.GetActiveProfile();
+                var currentProfile = _settings.GetActiveProfile();
+                currentProfile.ImageFormats = [.. activeProfile.ImageFormats];
+                currentProfile.VideoFormats = [.. activeProfile.VideoFormats];
+                currentProfile.AudioFormats = [.. activeProfile.AudioFormats];
+            }
+            UpdateFormatComboBoxes(_scanResult);
+        };
     }
 
     private void InitFormatComboBoxes()
@@ -73,45 +125,196 @@ public partial class FolderBatchWindow : FluentWindow
         UpdateFormatComboBoxes(null);
     }
 
+    internal static IReadOnlyList<string> GetCategoryCandidateFormats(
+        IEnumerable<string> profileFormats,
+        IReadOnlyList<string> fallbackFormats,
+        string? category = null)
+    {
+        var profileList = profileFormats.ToList();
+        var formatsToProcess = profileList.Count > 0 ? profileList : fallbackFormats.ToList();
+        var hasExplicitSeparators = formatsToProcess.Any(ClassicContextMenuManager.IsSeparator);
+        var result = new List<string>();
+        var seenFormats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        if (hasExplicitSeparators)
+        {
+            foreach (var raw in formatsToProcess)
+            {
+                if (ClassicContextMenuManager.IsSeparator(raw))
+                {
+                    result.Add("separator");
+                    continue;
+                }
+
+                var clean = raw.TrimStart('.').ToLowerInvariant();
+                if (seenFormats.Add(clean))
+                {
+                    result.Add(clean);
+                }
+            }
+        }
+        else
+        {
+            int? prevGroup = null;
+            foreach (var raw in formatsToProcess)
+            {
+                var clean = raw.TrimStart('.').ToLowerInvariant();
+                if (seenFormats.Add(clean))
+                {
+                    if (category != null)
+                    {
+                        var group = ClassicContextMenuManager.GetFormatGroup(clean, category);
+                        if (prevGroup.HasValue && group != prevGroup.Value)
+                        {
+                            result.Add("separator");
+                        }
+                        prevGroup = group;
+                    }
+                    result.Add(clean);
+                }
+            }
+        }
+
+        return seenFormats.Count > 0 ? result : fallbackFormats;
+    }
+
     private void UpdateFormatComboBoxes(FolderScanResult? result)
     {
+        var profile = _settings.GetActiveProfile();
+
+        var imageCandidates = GetCategoryCandidateFormats(profile.ImageFormats, FallbackImageFormats, "image");
         UpdateCategoryComboBox(
             CmbImageFormats,
-            ["jpg", "png", "webp", "avif", "gif", "ico", "bmp", "tiff"],
+            imageCandidates,
             result?.Images?.UniqueExtensions);
 
-        var videoCandidateFormats = new[] { "mp4", "mkv", "mov", "webm", "gif", "frames" };
-        var videoAvailable = ClassicContextMenuManager.FilterAvailableFormats(videoCandidateFormats);
+        var videoCandidates = GetCategoryCandidateFormats(profile.VideoFormats, FallbackVideoFormats, "video");
         UpdateCategoryComboBox(
             CmbVideoFormats,
-            videoAvailable,
+            videoCandidates,
             result?.Video?.UniqueExtensions);
 
+        var audioCandidates = GetCategoryCandidateFormats(profile.AudioFormats, FallbackAudioFormats, "audio");
         UpdateCategoryComboBox(
             CmbAudioFormats,
-            ["mp3", "m4a", "aac", "wav", "flac", "opus", "ogg"],
+            audioCandidates,
             result?.Audio?.UniqueExtensions);
     }
 
     private static void UpdateCategoryComboBox(ComboBox comboBox, IReadOnlyList<string> candidates, IReadOnlyList<string>? uniqueExtensions)
     {
-        var filtered = candidates.Where(fmt =>
+        var available = new List<string>();
+        foreach (var item in candidates)
         {
-            if (uniqueExtensions == null || uniqueExtensions.Count == 0) return true;
-            return !uniqueExtensions.All(ext => ClassicContextMenuManager.IsSameFormat(ext, fmt));
-        }).ToList();
+            if (ClassicContextMenuManager.IsSeparator(item))
+            {
+                available.Add(item);
+                continue;
+            }
 
-        if (filtered.Count == 0)
+            if (uniqueExtensions == null || uniqueExtensions.Count == 0 || !uniqueExtensions.All(ext => ClassicContextMenuManager.IsSameFormat(ext, item)))
+            {
+                available.Add(item);
+            }
+        }
+
+        if (!available.Any(f => !ClassicContextMenuManager.IsSeparator(f)))
         {
-            filtered = candidates.ToList();
+            available = candidates.ToList();
+        }
+
+        var items = new List<FormatChoice>();
+        var pendingSeparator = false;
+
+        foreach (var item in available)
+        {
+            if (ClassicContextMenuManager.IsSeparator(item))
+            {
+                if (items.Count > 0)
+                {
+                    pendingSeparator = true;
+                }
+                continue;
+            }
+
+            if (pendingSeparator)
+            {
+                items.Add(new FormatChoice(string.Empty, string.Empty, IsSeparator: true));
+                pendingSeparator = false;
+            }
+
+            items.Add(new FormatChoice(item, I18n.GetSubMenuTitle(item)));
         }
 
         var previousSelected = (comboBox.SelectedItem as FormatChoice)?.Format;
-        var items = filtered.Select(f => new FormatChoice(f, I18n.GetSubMenuTitle(f))).ToList();
         comboBox.ItemsSource = items;
 
-        var newIndex = items.FindIndex(i => i.Format == previousSelected);
-        comboBox.SelectedIndex = newIndex >= 0 ? newIndex : 0;
+        var newIndex = items.FindIndex(i => !i.IsSeparator && i.Format == previousSelected);
+        if (newIndex < 0)
+        {
+            newIndex = items.FindIndex(i => !i.IsSeparator);
+        }
+        comboBox.SelectedIndex = newIndex >= 0 ? newIndex : -1;
+    }
+
+    private static void OnComboBoxPreviewMouseButton(object sender, MouseButtonEventArgs e)
+    {
+        var container = FindAncestor<ComboBoxItem>(e.OriginalSource as DependencyObject);
+        if (container?.DataContext is FormatChoice { IsSeparator: true })
+        {
+            e.Handled = true;
+        }
+    }
+
+    private static T? FindAncestor<T>(DependencyObject? current) where T : DependencyObject
+    {
+        while (current != null)
+        {
+            if (current is T match) return match;
+            var parent = current is Visual or System.Windows.Media.Media3D.Visual3D ? VisualTreeHelper.GetParent(current) : null;
+            current = parent ?? LogicalTreeHelper.GetParent(current);
+        }
+        return null;
+    }
+
+    private void OnFormatComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox comboBox) return;
+        if (comboBox.SelectedItem is not FormatChoice { IsSeparator: true }) return;
+
+        if (comboBox.ItemsSource is not IList<FormatChoice> items) return;
+
+        var oldItem = e.RemovedItems.OfType<FormatChoice>().FirstOrDefault(i => !i.IsSeparator);
+        var oldIndex = oldItem != null ? items.IndexOf(oldItem) : -1;
+        var currentIndex = comboBox.SelectedIndex;
+
+        if (oldIndex >= 0 && currentIndex > oldIndex)
+        {
+            var nextIndex = -1;
+            for (var i = currentIndex + 1; i < items.Count; i++)
+            {
+                if (!items[i].IsSeparator) { nextIndex = i; break; }
+            }
+            comboBox.SelectedIndex = nextIndex >= 0 ? nextIndex : oldIndex;
+        }
+        else if (oldIndex >= 0 && currentIndex < oldIndex)
+        {
+            var prevIndex = -1;
+            for (var i = currentIndex - 1; i >= 0; i--)
+            {
+                if (!items[i].IsSeparator) { prevIndex = i; break; }
+            }
+            comboBox.SelectedIndex = prevIndex >= 0 ? prevIndex : oldIndex;
+        }
+        else
+        {
+            var firstIndex = -1;
+            for (var i = 0; i < items.Count; i++)
+            {
+                if (!items[i].IsSeparator) { firstIndex = i; break; }
+            }
+            comboBox.SelectedIndex = firstIndex >= 0 ? firstIndex : -1;
+        }
     }
 
     private async void TriggerScan()
@@ -246,11 +449,15 @@ public partial class FolderBatchWindow : FluentWindow
         }
 
         var categoryPlans = new Dictionary<MediaCategory, BatchCategoryPlan>();
-        var settings = AppSettings.Load();
+        var settings = _settings;
 
         if (ChkImages.IsChecked == true && _scanResult.Images != null)
         {
-            var target = (CmbImageFormats.SelectedItem as FormatChoice)?.Format ?? "png";
+            var target = (CmbImageFormats.SelectedItem as FormatChoice)?.Format;
+            if (string.IsNullOrEmpty(target) || ClassicContextMenuManager.IsSeparator(target))
+            {
+                target = "png";
+            }
             var hasSvg = _scanResult.Images.UniqueExtensions.Contains("svg", StringComparer.OrdinalIgnoreCase);
             if (hasSvg && !settings.SvgSetting.IsRemembered)
             {
@@ -312,7 +519,11 @@ public partial class FolderBatchWindow : FluentWindow
 
         if (ChkVideo.IsChecked == true && _scanResult.Video != null)
         {
-            var target = (CmbVideoFormats.SelectedItem as FormatChoice)?.Format ?? "mp4";
+            var target = (CmbVideoFormats.SelectedItem as FormatChoice)?.Format;
+            if (string.IsNullOrEmpty(target) || ClassicContextMenuManager.IsSeparator(target))
+            {
+                target = "mp4";
+            }
             if (target == "frames")
             {
                 if (!settings.FramesSetting.IsRemembered)
@@ -370,13 +581,42 @@ public partial class FolderBatchWindow : FluentWindow
                     settings.Save();
                 }
             }
+            else if (target is "mp3" or "aac" or "m4a" or "ogg" or "opus")
+            {
+                if (!settings.TryGetSavedAudioQuality(target, out _))
+                {
+                    var dialog = new ConversionOptionsDialog(
+                        target,
+                        "audio",
+                        settings.GetEffectiveAudioQuality(target),
+                        null,
+                        settings.AppendQualitySuffix,
+                        _scanResult.Video.Files.Count,
+                        CalculateCategoryTotalSizeBytes(_scanResult.Video))
+                    {
+                        Owner = this
+                    };
+                    if (dialog.ShowDialog() != true)
+                    {
+                        return;
+                    }
+
+                    settings.SetAudioQuality(target, dialog.SelectedAudioBitrate, dialog.RememberChoice);
+                    settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    settings.Save();
+                }
+            }
 
             categoryPlans[MediaCategory.Video] = new BatchCategoryPlan(MediaCategory.Video, true, target);
         }
 
         if (ChkAudio.IsChecked == true && _scanResult.Audio != null)
         {
-            var target = (CmbAudioFormats.SelectedItem as FormatChoice)?.Format ?? "mp3";
+            var target = (CmbAudioFormats.SelectedItem as FormatChoice)?.Format;
+            if (string.IsNullOrEmpty(target) || ClassicContextMenuManager.IsSeparator(target))
+            {
+                target = "mp3";
+            }
             if (target is "mp3" or "aac" or "m4a" or "ogg" or "opus")
             {
                 if (!settings.TryGetSavedAudioQuality(target, out _))
