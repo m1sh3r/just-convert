@@ -173,4 +173,170 @@ public class UiFolderBatchWindowTests
             Assert.True(keyArgs.Handled);
         });
     }
+
+    [Fact]
+    public void GetCategoryCandidateFormats_PreservesSeparatorsAndOrder()
+    {
+        var input = new[] { "png", "separator:1", "webp", "SEPARATOR", "jpg", ".png" };
+        var fallback = new[] { "default" };
+
+        var result = FolderBatchWindow.GetCategoryCandidateFormats(input, fallback);
+
+        Assert.Equal(5, result.Count);
+        Assert.Equal("png", result[0]);
+        Assert.Equal("separator", result[1]);
+        Assert.Equal("webp", result[2]);
+        Assert.Equal("separator", result[3]);
+        Assert.Equal("jpg", result[4]);
+    }
+
+    [Fact]
+    public void Construct_WithCustomSettings_SyncsCandidateFormatsAndSeparatorsFromActiveProfile()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var settings = new AppSettings();
+            settings.EnsureDefaultProfile();
+            var profile = settings.GetActiveProfile();
+            profile.ImageFormats = ["webp", "separator", "png"];
+            profile.VideoFormats = ["webm", "separator", "mp4"];
+            profile.AudioFormats = ["opus", "separator", "flac"];
+
+            var window = new FolderBatchWindow(@"C:\TestFolder", settings);
+
+            var imageItems = (window.CmbImageFormats.ItemsSource as IReadOnlyList<FormatChoice>)!;
+            var videoItems = (window.CmbVideoFormats.ItemsSource as IReadOnlyList<FormatChoice>)!;
+            var audioItems = (window.CmbAudioFormats.ItemsSource as IReadOnlyList<FormatChoice>)!;
+
+            Assert.Equal(3, imageItems.Count);
+            Assert.Equal("webp", imageItems[0].Format);
+            Assert.False(imageItems[0].IsSeparator);
+            Assert.True(imageItems[1].IsSeparator);
+            Assert.Equal("png", imageItems[2].Format);
+            Assert.False(imageItems[2].IsSeparator);
+            Assert.Equal("webp", (window.CmbImageFormats.SelectedItem as FormatChoice)?.Format);
+
+            Assert.Equal(3, videoItems.Count);
+            Assert.Equal("webm", videoItems[0].Format);
+            Assert.False(videoItems[0].IsSeparator);
+            Assert.True(videoItems[1].IsSeparator);
+            Assert.Equal("mp4", videoItems[2].Format);
+            Assert.False(videoItems[2].IsSeparator);
+            Assert.Equal("webm", (window.CmbVideoFormats.SelectedItem as FormatChoice)?.Format);
+
+            Assert.Equal(3, audioItems.Count);
+            Assert.Equal("opus", audioItems[0].Format);
+            Assert.False(audioItems[0].IsSeparator);
+            Assert.True(audioItems[1].IsSeparator);
+            Assert.Equal("flac", audioItems[2].Format);
+            Assert.False(audioItems[2].IsSeparator);
+            Assert.Equal("opus", (window.CmbAudioFormats.SelectedItem as FormatChoice)?.Format);
+        });
+    }
+
+    [Fact]
+    public void UpdateScanUI_WithCustomProfile_ExcludesSameFormatAndOmitsLeadingSeparator()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var settings = new AppSettings();
+            settings.EnsureDefaultProfile();
+            var profile = settings.GetActiveProfile();
+            profile.ImageFormats = ["webp", "separator", "png", "separator", "jpg", "separator"];
+
+            var window = new FolderBatchWindow(@"C:\TestFolder", settings);
+
+            var files = new[]
+            {
+                new ScannedFile(@"C:\TestFolder\image.webp", "image.webp", "webp", MediaCategory.Image)
+            };
+            var imgResult = new CategoryScanResult(MediaCategory.Image, files, new[] { "webp" });
+            var scanResult = new FolderScanResult(@"C:\TestFolder", false, files, imgResult, null, null);
+
+            window.UpdateScanUI(scanResult);
+
+            var imageItems = (window.CmbImageFormats.ItemsSource as IReadOnlyList<FormatChoice>)!;
+            Assert.Equal(3, imageItems.Count);
+            Assert.Equal("png", imageItems[0].Format);
+            Assert.False(imageItems[0].IsSeparator);
+            Assert.True(imageItems[1].IsSeparator);
+            Assert.Equal("jpg", imageItems[2].Format);
+            Assert.False(imageItems[2].IsSeparator);
+            Assert.Equal("png", (window.CmbImageFormats.SelectedItem as FormatChoice)?.Format);
+        });
+    }
+
+    [Fact]
+    public void Construct_WithDefaultProfile_GeneratesSeparatorsBetweenGroups()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var settings = new AppSettings();
+            settings.EnsureDefaultProfile();
+
+            var window = new FolderBatchWindow(@"C:\TestFolder", settings);
+
+            var imageItems = (window.CmbImageFormats.ItemsSource as IReadOnlyList<FormatChoice>)!;
+            var videoItems = (window.CmbVideoFormats.ItemsSource as IReadOnlyList<FormatChoice>)!;
+            var audioItems = (window.CmbAudioFormats.ItemsSource as IReadOnlyList<FormatChoice>)!;
+
+            Assert.Contains(imageItems, i => i.IsSeparator);
+            Assert.Contains(videoItems, i => i.IsSeparator);
+            Assert.Contains(audioItems, i => i.IsSeparator);
+
+            Assert.False(imageItems[0].IsSeparator);
+            Assert.False(videoItems[0].IsSeparator);
+            Assert.False(audioItems[0].IsSeparator);
+        });
+    }
+
+    [Fact]
+    public void SelectionChanged_WhenSelectingSeparator_SkipsToAdjacentFormat()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var settings = new AppSettings();
+            settings.EnsureDefaultProfile();
+            var profile = settings.GetActiveProfile();
+            profile.ImageFormats = ["png", "separator", "webp"];
+
+            var window = new FolderBatchWindow(@"C:\TestFolder", settings);
+
+            Assert.Equal("png", (window.CmbImageFormats.SelectedItem as FormatChoice)?.Format);
+
+            window.CmbImageFormats.SelectedIndex = 1;
+
+            Assert.Equal("webp", (window.CmbImageFormats.SelectedItem as FormatChoice)?.Format);
+        });
+    }
+
+    [Fact]
+    public void Separator_PreviewMouseLeftButtonDown_IsHandled()
+    {
+        StaTestRunner.Run(() =>
+        {
+            var settings = new AppSettings();
+            settings.EnsureDefaultProfile();
+            var profile = settings.GetActiveProfile();
+            profile.ImageFormats = ["png", "separator", "webp"];
+
+            var window = new FolderBatchWindow(@"C:\TestFolder", settings);
+            var cmb = window.CmbImageFormats;
+            var sepChoice = ((IList<FormatChoice>)cmb.ItemsSource)[1];
+            Assert.True(sepChoice.IsSeparator);
+
+            var item = new System.Windows.Controls.ComboBoxItem { DataContext = sepChoice };
+            var childBorder = new System.Windows.Controls.Border();
+            item.Content = childBorder;
+
+            var args = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left)
+            {
+                RoutedEvent = UIElement.PreviewMouseLeftButtonDownEvent,
+                Source = childBorder
+            };
+
+            cmb.RaiseEvent(args);
+            Assert.True(args.Handled);
+        });
+    }
 }
