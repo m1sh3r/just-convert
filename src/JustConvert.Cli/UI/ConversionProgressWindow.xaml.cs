@@ -67,10 +67,7 @@ public partial class ConversionProgressWindow : FluentWindow
 
         if (!DesignerProperties.GetIsInDesignMode(this))
         {
-            ApplicationThemeManager.ApplySystemTheme();
-            ApplicationAccentColorManager.ApplySystemAccent();
-            ApplicationThemeManager.Apply(this);
-            SystemThemeWatcher.Watch(this);
+            FluentThemeService.Watch(this);
         }
 
         QueueItemsList.ItemsSource = Items;
@@ -100,10 +97,7 @@ public partial class ConversionProgressWindow : FluentWindow
 
         if (!DesignerProperties.GetIsInDesignMode(this))
         {
-            ApplicationThemeManager.ApplySystemTheme();
-            ApplicationAccentColorManager.ApplySystemAccent();
-            ApplicationThemeManager.Apply(this);
-            SystemThemeWatcher.Watch(this);
+            FluentThemeService.Watch(this);
         }
 
         QueueItemsList.ItemsSource = Items;

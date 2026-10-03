@@ -34,10 +34,7 @@ public partial class MessageDialog : FluentWindow
 
         if (!DesignerProperties.GetIsInDesignMode(this))
         {
-            ApplicationThemeManager.ApplySystemTheme();
-            ApplicationAccentColorManager.ApplySystemAccent();
-            ApplicationThemeManager.Apply(this);
-            SystemThemeWatcher.Watch(this);
+            FluentThemeService.Watch(this);
         }
 
         Title = title;

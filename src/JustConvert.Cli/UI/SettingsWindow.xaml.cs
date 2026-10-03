@@ -70,10 +70,7 @@ public partial class SettingsWindow : FluentWindow
 
         if (!DesignerProperties.GetIsInDesignMode(this))
         {
-            ApplicationThemeManager.ApplySystemTheme();
-            ApplicationAccentColorManager.ApplySystemAccent();
-            ApplicationThemeManager.Apply(this);
-            SystemThemeWatcher.Watch(this);
+            FluentThemeService.Watch(this);
 
             RefreshProfilesList();
         }
@@ -911,24 +908,24 @@ public partial class SettingsWindow : FluentWindow
         {
             if (fmt == "frames")
             {
-                dialog = new ConversionOptionsDialog("frames", "frames", _settings.GetEffectiveFramesSetting(), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+                dialog = new ConversionOptionsDialog("frames", "frames", _settings.GetEffectiveFramesSetting(), null, _settings.GetEffectiveAppendQualitySuffix("frames", "frames"), isSettingsMode: true);
             }
             else if (fmt is "mp3" or "aac" or "m4a" or "opus")
             {
-                dialog = new ConversionOptionsDialog(fmt, "audio", _settings.GetEffectiveAudioQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+                dialog = new ConversionOptionsDialog(fmt, "audio", _settings.GetEffectiveAudioQuality(fmt), null, _settings.GetEffectiveAppendQualitySuffix("audio", fmt), isSettingsMode: true);
             }
             else
             {
-                dialog = new ConversionOptionsDialog(fmt, "video", _settings.GetEffectiveVideoQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+                dialog = new ConversionOptionsDialog(fmt, "video", _settings.GetEffectiveVideoQuality(fmt), null, _settings.GetEffectiveAppendQualitySuffix("video", fmt), isSettingsMode: true);
             }
         }
         else if (category == "audio")
         {
-            dialog = new ConversionOptionsDialog(fmt, "audio", _settings.GetEffectiveAudioQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+            dialog = new ConversionOptionsDialog(fmt, "audio", _settings.GetEffectiveAudioQuality(fmt), null, _settings.GetEffectiveAppendQualitySuffix("audio", fmt), isSettingsMode: true);
         }
         else
         {
-            dialog = new ConversionOptionsDialog(fmt, "image", _settings.GetEffectiveQuality(fmt), null, _settings.AppendQualitySuffix, isSettingsMode: true);
+            dialog = new ConversionOptionsDialog(fmt, "image", _settings.GetEffectiveQuality(fmt), null, _settings.GetEffectiveAppendQualitySuffix("image", fmt), isSettingsMode: true);
         }
 
         dialog.Owner = this;
@@ -956,6 +953,7 @@ public partial class SettingsWindow : FluentWindow
                 {
                     var s = dialog.SelectedFramesSetting;
                     s.IsRemembered = true;
+                    s.AppendQualitySuffix = dialog.AppendQualitySuffix;
                     _settings.SetFramesSetting(s);
                 }
             }
@@ -967,7 +965,7 @@ public partial class SettingsWindow : FluentWindow
                 }
                 else
                 {
-                    _settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, true);
+                    _settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, true, dialog.AppendQualitySuffix);
                 }
             }
             else
@@ -980,6 +978,7 @@ public partial class SettingsWindow : FluentWindow
                 {
                     var s = dialog.SelectedVideoQuality;
                     s.IsRemembered = true;
+                    s.AppendQualitySuffix = dialog.AppendQualitySuffix;
                     _settings.SetVideoQuality(fmt, s);
                 }
             }
@@ -992,7 +991,7 @@ public partial class SettingsWindow : FluentWindow
             }
             else
             {
-                _settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, true);
+                _settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, true, dialog.AppendQualitySuffix);
             }
         }
         else if (category == "image")
@@ -1003,11 +1002,11 @@ public partial class SettingsWindow : FluentWindow
             }
             else
             {
-                _settings.SetQuality(fmt, dialog.SelectedImageQuality, true);
+                _settings.SetQuality(fmt, dialog.SelectedImageQuality, true, dialog.AppendQualitySuffix);
             }
         }
 
-        _settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+        _settings.SetAppendQualitySuffix(category, fmt, dialog.AppendQualitySuffix);
         _settings.Save();
     }
 

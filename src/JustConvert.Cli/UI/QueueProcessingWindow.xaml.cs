@@ -34,10 +34,7 @@ public partial class QueueProcessingWindow : FluentWindow
             return;
         }
 
-        ApplicationThemeManager.ApplySystemTheme();
-        ApplicationAccentColorManager.ApplySystemAccent();
-        ApplicationThemeManager.Apply(this);
-        SystemThemeWatcher.Watch(this);
+        FluentThemeService.Watch(this);
 
         Title = I18n.T("QueueProcessingTitle");
         AppTitleBar.Title = I18n.T("QueueProcessingTitle");

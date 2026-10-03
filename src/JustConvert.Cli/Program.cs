@@ -23,8 +23,6 @@ public class Program
         AppLogger.Info($"Tools: ffmpeg='{ToolLocator.FindFfmpegPath() ?? "not found"}', ffprobe='{ToolLocator.FindFfprobePath() ?? "not found"}', magick='{ToolLocator.FindMagickPath() ?? "not found"}'");
         AppLogger.Info($"Hardware Acceleration: NVENC(H264={HardwareAccelerationDetector.HasNvencH264}, HEVC={HardwareAccelerationDetector.HasNvencHevc}, AV1={HardwareAccelerationDetector.HasNvencAv1}), QSV(H264={HardwareAccelerationDetector.HasQsvH264}, HEVC={HardwareAccelerationDetector.HasQsvHevc}, VP9={HardwareAccelerationDetector.HasQsvVp9}, AV1={HardwareAccelerationDetector.HasQsvAv1}), AMF(H264={HardwareAccelerationDetector.HasAmfH264}, HEVC={HardwareAccelerationDetector.HasAmfHevc}, AV1={HardwareAccelerationDetector.HasAmfAv1})");
 
-        TouchpadScrollHelper.Initialize();
-
         if (args.Length == 0 || (args.Length == 1 && args[0] is "--settings" or "-s" or "settings"))
         {
             return RunWindow(() => new SettingsWindow());
@@ -616,7 +614,7 @@ public class Program
                 "video",
                 settings.GetEffectiveVideoQuality(fmt),
                 null,
-                settings.AppendQualitySuffix,
+                settings.GetEffectiveAppendQualitySuffix("video", fmt),
                 batchCount,
                 totalBatchSizeBytes
             );
@@ -631,8 +629,8 @@ public class Program
 
             var selected = dialog.SelectedVideoQuality;
             selected.IsRemembered = dialog.RememberChoice;
+            selected.AppendQualitySuffix = dialog.AppendQualitySuffix;
             settings.SetVideoQuality(effectiveFmt, selected);
-            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
             settings.Save();
             return true;
         }
@@ -650,7 +648,7 @@ public class Program
                 "frames",
                 settings.GetEffectiveFramesSetting(),
                 null,
-                settings.AppendQualitySuffix,
+                settings.GetEffectiveAppendQualitySuffix("frames", "frames"),
                 batchCount,
                 totalBatchSizeBytes
             );
@@ -661,8 +659,9 @@ public class Program
             if (res != true) return false;
 
             chosenTargetFormat = dialog.SelectedFramesTargetFormat;
-            settings.SetFramesSetting(dialog.SelectedFramesSetting);
-            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            var framesSetting = dialog.SelectedFramesSetting;
+            framesSetting.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.SetFramesSetting(framesSetting);
             settings.Save();
             return true;
         }
@@ -676,7 +675,7 @@ public class Program
                 "audio",
                 settings.GetEffectiveAudioQuality(fmt),
                 null,
-                settings.AppendQualitySuffix,
+                settings.GetEffectiveAppendQualitySuffix("audio", fmt),
                 batchCount,
                 totalBatchSizeBytes
             );
@@ -686,8 +685,7 @@ public class Program
             var res = dialog.ShowDialog();
             if (res != true) return false;
 
-            settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, dialog.RememberChoice);
-            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.SetAudioQuality(fmt, dialog.SelectedAudioBitrate, dialog.RememberChoice, dialog.AppendQualitySuffix);
             settings.Save();
             return true;
         }
@@ -704,7 +702,7 @@ public class Program
                 "image",
                 settings.GetEffectiveSvgSetting(),
                 null,
-                settings.AppendQualitySuffix,
+                settings.GetEffectiveAppendQualitySuffix("svg", fmt),
                 batchCount,
                 totalBatchSizeBytes,
                 sourceFormat: "svg"
@@ -717,12 +715,12 @@ public class Program
 
             var svgSet = dialog.SelectedSvgSetting;
             svgSet.IsRemembered = dialog.RememberChoice;
+            svgSet.AppendQualitySuffix = dialog.AppendQualitySuffix;
             settings.SvgSetting = svgSet;
             if (AppSettings.SupportsQuality(fmt))
             {
-                settings.SetQuality(fmt, dialog.SelectedImageQuality, dialog.RememberChoice);
+                settings.SetQuality(fmt, dialog.SelectedImageQuality, dialog.RememberChoice, dialog.AppendQualitySuffix);
             }
-            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
             settings.Save();
             return true;
         }
@@ -736,7 +734,7 @@ public class Program
                 "image",
                 settings.GetEffectiveQuality(fmt),
                 null,
-                settings.AppendQualitySuffix,
+                settings.GetEffectiveAppendQualitySuffix("image", fmt),
                 batchCount,
                 totalBatchSizeBytes
             );
@@ -746,8 +744,7 @@ public class Program
             var res = dialog.ShowDialog();
             if (res != true) return false;
 
-            settings.SetQuality(fmt, dialog.SelectedImageQuality, dialog.RememberChoice);
-            settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+            settings.SetQuality(fmt, dialog.SelectedImageQuality, dialog.RememberChoice, dialog.AppendQualitySuffix);
             settings.Save();
             return true;
         }
@@ -757,7 +754,6 @@ public class Program
 
     private static int RunWindow(Func<Window> windowFactory)
     {
-        TouchpadScrollHelper.Initialize();
         var app = Application.Current;
         if (app == null)
         {
@@ -771,7 +767,7 @@ public class Program
         }
 
         app.ShutdownMode = ShutdownMode.OnLastWindowClose;
-        Wpf.Ui.Appearance.ApplicationThemeManager.ApplySystemTheme();
+        FluentThemeService.Initialize();
         var window = windowFactory();
         app.MainWindow = window;
         window.Show();

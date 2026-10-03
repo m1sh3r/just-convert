@@ -80,10 +80,7 @@ public partial class FolderBatchWindow : FluentWindow
             return;
         }
 
-        ApplicationThemeManager.ApplySystemTheme();
-        ApplicationAccentColorManager.ApplySystemAccent();
-        ApplicationThemeManager.Apply(this);
-        SystemThemeWatcher.Watch(this);
+        FluentThemeService.Watch(this);
 
         Title = I18n.T("FolderBatchTitle");
         AppTitleBar.Title = Title;
@@ -466,7 +463,7 @@ public partial class FolderBatchWindow : FluentWindow
                     "image",
                     settings.GetEffectiveSvgSetting(),
                     null,
-                    settings.AppendQualitySuffix,
+                    settings.GetEffectiveAppendQualitySuffix("svg", target),
                     _scanResult.Images.Files.Count,
                     CalculateCategoryTotalSizeBytes(_scanResult.Images),
                     sourceFormat: "svg")
@@ -480,12 +477,13 @@ public partial class FolderBatchWindow : FluentWindow
 
                 var svgSet = dialog.SelectedSvgSetting;
                 svgSet.IsRemembered = dialog.RememberChoice;
+                svgSet.AppendQualitySuffix = dialog.AppendQualitySuffix;
                 settings.SvgSetting = svgSet;
                 if (AppSettings.SupportsQuality(target))
                 {
-                    settings.SetQuality(target, dialog.SelectedImageQuality, dialog.RememberChoice);
+                    settings.SetQuality(target, dialog.SelectedImageQuality, dialog.RememberChoice, dialog.AppendQualitySuffix);
                 }
-                settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                settings.SetAppendQualitySuffix("svg", target, dialog.AppendQualitySuffix);
                 settings.Save();
             }
             else if (AppSettings.SupportsQuality(target))
@@ -497,7 +495,7 @@ public partial class FolderBatchWindow : FluentWindow
                         "image",
                         settings.GetEffectiveQuality(target),
                         null,
-                        settings.AppendQualitySuffix,
+                        settings.GetEffectiveAppendQualitySuffix("image", target),
                         _scanResult.Images.Files.Count,
                         CalculateCategoryTotalSizeBytes(_scanResult.Images))
                     {
@@ -508,8 +506,8 @@ public partial class FolderBatchWindow : FluentWindow
                         return;
                     }
 
-                    settings.SetQuality(target, dialog.SelectedImageQuality, dialog.RememberChoice);
-                    settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    settings.SetQuality(target, dialog.SelectedImageQuality, dialog.RememberChoice, dialog.AppendQualitySuffix);
+                    settings.SetAppendQualitySuffix("image", target, dialog.AppendQualitySuffix);
                     settings.Save();
                 }
             }
@@ -533,7 +531,7 @@ public partial class FolderBatchWindow : FluentWindow
                         "frames",
                         settings.GetEffectiveFramesSetting(),
                         null,
-                        settings.AppendQualitySuffix,
+                        settings.GetEffectiveAppendQualitySuffix("frames", "frames"),
                         _scanResult.Video.Files.Count,
                         CalculateCategoryTotalSizeBytes(_scanResult.Video))
                     {
@@ -544,8 +542,10 @@ public partial class FolderBatchWindow : FluentWindow
                         return;
                     }
 
-                    settings.SetFramesSetting(dialog.SelectedFramesSetting);
-                    settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    var fs = dialog.SelectedFramesSetting;
+                    fs.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    settings.SetFramesSetting(fs);
+                    settings.SetAppendQualitySuffix("frames", "frames", dialog.AppendQualitySuffix);
                     settings.Save();
                     target = dialog.SelectedFramesTargetFormat;
                 }
@@ -563,7 +563,7 @@ public partial class FolderBatchWindow : FluentWindow
                         "video",
                         settings.GetEffectiveVideoQuality(target),
                         null,
-                        settings.AppendQualitySuffix,
+                        settings.GetEffectiveAppendQualitySuffix("video", target),
                         _scanResult.Video.Files.Count,
                         CalculateCategoryTotalSizeBytes(_scanResult.Video))
                     {
@@ -576,8 +576,9 @@ public partial class FolderBatchWindow : FluentWindow
 
                     var sel = dialog.SelectedVideoQuality;
                     sel.IsRemembered = dialog.RememberChoice;
+                    sel.AppendQualitySuffix = dialog.AppendQualitySuffix;
                     settings.SetVideoQuality(target, sel);
-                    settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    settings.SetAppendQualitySuffix("video", target, dialog.AppendQualitySuffix);
                     settings.Save();
                 }
             }
@@ -590,7 +591,7 @@ public partial class FolderBatchWindow : FluentWindow
                         "audio",
                         settings.GetEffectiveAudioQuality(target),
                         null,
-                        settings.AppendQualitySuffix,
+                        settings.GetEffectiveAppendQualitySuffix("audio", target),
                         _scanResult.Video.Files.Count,
                         CalculateCategoryTotalSizeBytes(_scanResult.Video))
                     {
@@ -601,8 +602,8 @@ public partial class FolderBatchWindow : FluentWindow
                         return;
                     }
 
-                    settings.SetAudioQuality(target, dialog.SelectedAudioBitrate, dialog.RememberChoice);
-                    settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    settings.SetAudioQuality(target, dialog.SelectedAudioBitrate, dialog.RememberChoice, dialog.AppendQualitySuffix);
+                    settings.SetAppendQualitySuffix("audio", target, dialog.AppendQualitySuffix);
                     settings.Save();
                 }
             }
@@ -626,7 +627,7 @@ public partial class FolderBatchWindow : FluentWindow
                         "audio",
                         settings.GetEffectiveAudioQuality(target),
                         null,
-                        settings.AppendQualitySuffix,
+                        settings.GetEffectiveAppendQualitySuffix("audio", target),
                         _scanResult.Audio.Files.Count,
                         CalculateCategoryTotalSizeBytes(_scanResult.Audio))
                     {
@@ -637,8 +638,8 @@ public partial class FolderBatchWindow : FluentWindow
                         return;
                     }
 
-                    settings.SetAudioQuality(target, dialog.SelectedAudioBitrate, dialog.RememberChoice);
-                    settings.AppendQualitySuffix = dialog.AppendQualitySuffix;
+                    settings.SetAudioQuality(target, dialog.SelectedAudioBitrate, dialog.RememberChoice, dialog.AppendQualitySuffix);
+                    settings.SetAppendQualitySuffix("audio", target, dialog.AppendQualitySuffix);
                     settings.Save();
                 }
             }

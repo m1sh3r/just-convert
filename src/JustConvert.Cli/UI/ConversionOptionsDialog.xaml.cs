@@ -50,7 +50,8 @@ public partial class ConversionOptionsDialog : FluentWindow
     public SvgRasterSetting SelectedSvgSetting => new()
     {
         Width = SelectedSvgWidth,
-        IsRemembered = RememberChoice
+        IsRemembered = RememberChoice,
+        AppendQualitySuffix = AppendQualitySuffix
     };
 
     private record CodecItem(string Id, string DisplayName);
@@ -107,10 +108,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             return;
         }
 
-        ApplicationThemeManager.ApplySystemTheme();
-        ApplicationAccentColorManager.ApplySystemAccent();
-        ApplicationThemeManager.Apply(this);
-        SystemThemeWatcher.Watch(this);
+        FluentThemeService.Watch(this);
 
         Title = I18n.T("ConversionOptionsTitle");
         AppTitleBar.Title = Title;
@@ -154,6 +152,7 @@ public partial class ConversionOptionsDialog : FluentWindow
             SelectedVideoQuality.VideoBitrateKbps = videoSetting.VideoBitrateKbps;
             SelectedVideoQuality.AudioCodec = videoSetting.AudioCodec;
             SelectedVideoQuality.AudioBitrateKbps = videoSetting.AudioBitrateKbps;
+            SelectedVideoQuality.AppendQualitySuffix = videoSetting.AppendQualitySuffix;
 
             if (videoSetting.AudioBitrateKbps > 0 && _mediaInfo?.Audio != null)
             {
@@ -262,7 +261,8 @@ public partial class ConversionOptionsDialog : FluentWindow
             SelectedFramesSetting = new FramesSetting
             {
                 ImageFormat = framesSetting.ImageFormat,
-                IsRemembered = framesSetting.IsRemembered
+                IsRemembered = framesSetting.IsRemembered,
+                AppendQualitySuffix = framesSetting.AppendQualitySuffix
             };
 
             for (int i = 0; i < CmbFramesFormat.Items.Count; i++)
@@ -374,9 +374,18 @@ public partial class ConversionOptionsDialog : FluentWindow
     private void PopulateEncoders()
     {
         var currentCodec = (CmbVideoCodec.SelectedItem as CodecItem)?.Id ?? SelectedVideoQuality.VideoCodec;
+        var hasHw = currentCodec switch
+        {
+            "h264" => HardwareAccelerationDetector.HasNvencH264 || HardwareAccelerationDetector.HasQsvH264 || HardwareAccelerationDetector.HasAmfH264,
+            "h265" or "hevc" => HardwareAccelerationDetector.HasNvencHevc || HardwareAccelerationDetector.HasQsvHevc || HardwareAccelerationDetector.HasAmfHevc,
+            "av1" => HardwareAccelerationDetector.HasNvencAv1 || HardwareAccelerationDetector.HasQsvAv1 || HardwareAccelerationDetector.HasAmfAv1,
+            "vp9" => HardwareAccelerationDetector.HasQsvVp9,
+            _ => false
+        };
+
         var encoders = new List<EncoderItem>
         {
-            new("auto", I18n.T("EncoderAuto")),
+            new("auto", hasHw ? I18n.T("EncoderAutoHw") : I18n.T("EncoderAutoCpu")),
             new("cpu", I18n.T("EncoderCpu"))
         };
 
@@ -944,10 +953,16 @@ public partial class ConversionOptionsDialog : FluentWindow
             {
                 SelectedVideoQuality.AudioBitrateKbps = abItem.Value;
             }
+            SelectedVideoQuality.AppendQualitySuffix = AppendQualitySuffix;
         }
         else if (_category == "frames")
         {
+            if (CmbFramesFormat.SelectedItem is CodecItem item)
+            {
+                SelectedFramesSetting.ImageFormat = item.Id;
+            }
             SelectedFramesSetting.IsRemembered = RememberChoice;
+            SelectedFramesSetting.AppendQualitySuffix = AppendQualitySuffix;
         }
         try { DialogResult = true; } catch (InvalidOperationException) { }
         Close();
