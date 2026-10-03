@@ -2,6 +2,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using SharpCompress.Archives;
+using SharpCompress.Archives.SevenZip;
+using SharpCompress.Common;
+using SharpCompress.Readers;
 
 namespace JustConvert.Core.Converters.Tools;
 
@@ -14,19 +18,22 @@ public static class ImageMagickInstaller
         IProgress<(double? Percent, string Status)>? progress = null,
         CancellationToken ct = default)
     {
+        Directory.CreateDirectory(targetDir);
+        var magickDest = Path.Combine(targetDir, "magick.exe");
+
+        if (File.Exists(magickDest))
+        {
+            return true;
+        }
+
+        string? tempArchive = null;
+        string? tempExtract = null;
+
         try
         {
-            Directory.CreateDirectory(targetDir);
-            var magickDest = Path.Combine(targetDir, "magick.exe");
-
-            if (File.Exists(magickDest))
-            {
-                return true;
-            }
-
             var downloadUrl = await ResolveDownloadUrlAsync(ct);
-            var tempArchive = Path.Combine(Path.GetTempPath(), $"imagemagick_{Guid.NewGuid():N}.7z");
-            var tempExtract = Path.Combine(Path.GetTempPath(), $"imagemagick_{Guid.NewGuid():N}");
+            tempArchive = Path.Combine(Path.GetTempPath(), $"imagemagick_{Guid.NewGuid():N}.7z");
+            tempExtract = Path.Combine(Path.GetTempPath(), $"imagemagick_{Guid.NewGuid():N}");
 
             progress?.Report((null, I18n.T("SetupDownloadingMagick")));
 
@@ -70,21 +77,46 @@ public static class ImageMagickInstaller
             progress?.Report((null, I18n.T("SetupExtractingMagick")));
             Directory.CreateDirectory(tempExtract);
 
-            var tarPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "tar.exe");
-            var tarExe = File.Exists(tarPath) ? tarPath : "tar.exe";
-
-            var psi = new ProcessStartInfo
+            var extracted = false;
+            try
             {
-                FileName = tarExe,
-                Arguments = $"-xf \"{tempArchive}\" -C \"{tempExtract}\"",
-                UseShellExecute = false,
-                CreateNoWindow = true,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true
-            };
-
-            using (var proc = Process.Start(psi))
+                using (var archive = ArchiveFactory.OpenArchive(tempArchive))
+                {
+                    using var reader = archive.ExtractAllEntries();
+                    while (reader.MoveToNextEntry())
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        if (!reader.Entry.IsDirectory)
+                        {
+                            reader.WriteEntryToDirectory(tempExtract, new ExtractionOptions
+                            {
+                                ExtractFullPath = true,
+                                Overwrite = true
+                            });
+                        }
+                    }
+                }
+                extracted = Directory.GetFiles(tempExtract, "magick.exe", SearchOption.AllDirectories).Length > 0;
+            }
+            catch
             {
+                extracted = false;
+            }
+
+            if (!extracted)
+            {
+                var tarPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "tar.exe");
+                var tarExe = File.Exists(tarPath) ? tarPath : "tar.exe";
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = tarExe,
+                    Arguments = $"-xf \"{tempArchive}\" -C \"{tempExtract}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                using var proc = Process.Start(psi);
                 if (proc != null)
                 {
                     await proc.WaitForExitAsync(ct);
@@ -132,7 +164,7 @@ public static class ImageMagickInstaller
                 }
                 catch { }
 
-                return true;
+                return File.Exists(magickDest);
             }
         }
         catch (Exception ex)
@@ -140,6 +172,15 @@ public static class ImageMagickInstaller
             Console.ForegroundColor = ConsoleColor.Red;
             Console.WriteLine(ex.Message);
             Console.ResetColor();
+        }
+        finally
+        {
+            try
+            {
+                if (File.Exists(tempArchive)) File.Delete(tempArchive);
+                if (Directory.Exists(tempExtract)) Directory.Delete(tempExtract, true);
+            }
+            catch { }
         }
 
         return false;

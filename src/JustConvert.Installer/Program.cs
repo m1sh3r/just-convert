@@ -164,7 +164,11 @@ public class Program
             var hasFfmpeg = File.Exists(Path.Combine(installDir, "ffmpeg.exe")) || ToolLocator.FindFfmpegPath() != null;
             if (!hasFfmpeg)
             {
-                await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
+                var ffmpegOk = await FfmpegInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
+                if (!ffmpegOk)
+                {
+                    throw new InvalidOperationException(I18n.T("SetupFfmpegInstallFailed"));
+                }
             }
 
             ct.ThrowIfCancellationRequested();
@@ -172,7 +176,11 @@ public class Program
             var hasMagick = File.Exists(Path.Combine(installDir, "magick.exe")) || ToolLocator.FindMagickPath() != null;
             if (!hasMagick)
             {
-                await ImageMagickInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
+                var magickOk = await ImageMagickInstaller.DownloadToDirectoryAsync(installDir, progress, ct);
+                if (!magickOk)
+                {
+                    throw new InvalidOperationException(I18n.T("SetupMagickInstallFailed"));
+                }
             }
         }
 
