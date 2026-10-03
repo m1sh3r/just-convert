@@ -100,7 +100,7 @@ public class ImageConverter : IFormatConverter
 
         var effectiveQuality = settings.GetEffectiveQuality(targetExt);
         var effectiveSvgWidth = settings.GetEffectiveSvgSetting().Width;
-        var appendQualitySuffix = settings.AppendQualitySuffix;
+        var appendQualitySuffix = settings.GetEffectiveAppendQualitySuffix(sourceExt == "svg" ? "svg" : "image", targetExt);
 
         if (string.IsNullOrWhiteSpace(outputPath))
         {

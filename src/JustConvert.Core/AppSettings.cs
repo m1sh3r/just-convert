@@ -31,12 +31,14 @@ public class ImageQualitySetting
 {
     public int Quality { get; set; }
     public bool IsRemembered { get; set; }
+    public bool AppendQualitySuffix { get; set; } = true;
 }
 
 public class SvgRasterSetting
 {
     public int Width { get; set; } = 0;
     public bool IsRemembered { get; set; }
+    public bool AppendQualitySuffix { get; set; } = true;
 }
 
 public class VideoQualitySetting
@@ -49,18 +51,21 @@ public class VideoQualitySetting
     public string AudioCodec { get; set; } = "aac";
     public int AudioBitrateKbps { get; set; } = 0;
     public bool IsRemembered { get; set; }
+    public bool AppendQualitySuffix { get; set; } = true;
 }
 
 public class AudioQualitySetting
 {
     public int AudioBitrateKbps { get; set; } = 192;
     public bool IsRemembered { get; set; }
+    public bool AppendQualitySuffix { get; set; } = true;
 }
 
 public class FramesSetting
 {
     public string ImageFormat { get; set; } = "png";
     public bool IsRemembered { get; set; }
+    public bool AppendQualitySuffix { get; set; } = true;
 }
 
 public class AppSettings
@@ -86,7 +91,8 @@ public class AppSettings
         return new SvgRasterSetting
         {
             Width = SvgSetting.Width >= 0 ? SvgSetting.Width : 0,
-            IsRemembered = SvgSetting.IsRemembered
+            IsRemembered = SvgSetting.IsRemembered,
+            AppendQualitySuffix = SvgSetting.AppendQualitySuffix
         };
     }
 
@@ -144,13 +150,15 @@ public class AppSettings
         return GetDefaultQuality(fmt);
     }
 
-    public void SetQuality(string format, int quality, bool remember)
+    public void SetQuality(string format, int quality, bool remember, bool? appendSuffix = null)
     {
         var fmt = NormalizeQualityFormat(format);
+        var existingAppend = ImageQualitySettings.TryGetValue(fmt, out var existing) ? existing.AppendQualitySuffix : AppendQualitySuffix;
         ImageQualitySettings[fmt] = new ImageQualitySetting
         {
             Quality = Math.Clamp(quality, 1, 100),
-            IsRemembered = remember
+            IsRemembered = remember,
+            AppendQualitySuffix = appendSuffix ?? existingAppend
         };
     }
 
@@ -194,7 +202,8 @@ public class AppSettings
             VideoQualityCq = 23,
             VideoBitrateKbps = 15000,
             AudioCodec = fmt == "webm" ? "opus" : "aac",
-            AudioBitrateKbps = 0
+            AudioBitrateKbps = 0,
+            AppendQualitySuffix = AppendQualitySuffix
         };
     }
 
@@ -257,13 +266,15 @@ public class AppSettings
         };
     }
 
-    public void SetAudioQuality(string format, int bitrateKbps, bool remember)
+    public void SetAudioQuality(string format, int bitrateKbps, bool remember, bool? appendSuffix = null)
     {
         var fmt = format.TrimStart('.').ToLowerInvariant();
+        var existingAppend = AudioQualitySettings.TryGetValue(fmt, out var existing) ? existing.AppendQualitySuffix : AppendQualitySuffix;
         AudioQualitySettings[fmt] = new AudioQualitySetting
         {
             AudioBitrateKbps = bitrateKbps <= 0 ? 0 : Math.Clamp(bitrateKbps, 32, 512),
-            IsRemembered = remember
+            IsRemembered = remember,
+            AppendQualitySuffix = appendSuffix ?? existingAppend
         };
     }
 
@@ -278,7 +289,8 @@ public class AppSettings
         return new FramesSetting
         {
             ImageFormat = string.IsNullOrWhiteSpace(FramesSetting.ImageFormat) ? "png" : FramesSetting.ImageFormat.TrimStart('.').ToLowerInvariant(),
-            IsRemembered = FramesSetting.IsRemembered
+            IsRemembered = FramesSetting.IsRemembered,
+            AppendQualitySuffix = FramesSetting.AppendQualitySuffix
         };
     }
 
@@ -290,6 +302,83 @@ public class AppSettings
     public void ResetFramesSetting()
     {
         FramesSetting = new FramesSetting();
+    }
+
+    public bool GetEffectiveAppendQualitySuffix(string category, string format)
+    {
+        var fmt = NormalizeQualityFormat(format);
+        var cat = category.ToLowerInvariant();
+        if (cat == "video")
+        {
+            return VideoQualitySettings.TryGetValue(fmt, out var vs) ? vs.AppendQualitySuffix : AppendQualitySuffix;
+        }
+        if (cat == "audio")
+        {
+            return AudioQualitySettings.TryGetValue(fmt, out var asetting) ? asetting.AppendQualitySuffix : AppendQualitySuffix;
+        }
+        if (cat == "image")
+        {
+            return ImageQualitySettings.TryGetValue(fmt, out var isetting) ? isetting.AppendQualitySuffix : AppendQualitySuffix;
+        }
+        if (cat is "frames" or "frame")
+        {
+            return FramesSetting.AppendQualitySuffix;
+        }
+        if (cat == "svg")
+        {
+            return SvgSetting.AppendQualitySuffix;
+        }
+        return AppendQualitySuffix;
+    }
+
+    public void SetAppendQualitySuffix(string category, string format, bool appendSuffix)
+    {
+        var fmt = NormalizeQualityFormat(format);
+        var cat = category.ToLowerInvariant();
+        if (cat == "video")
+        {
+            var vs = GetEffectiveVideoQuality(fmt);
+            vs.AppendQualitySuffix = appendSuffix;
+            VideoQualitySettings[fmt] = vs;
+        }
+        else if (cat == "audio")
+        {
+            if (AudioQualitySettings.TryGetValue(fmt, out var asetting))
+            {
+                asetting.AppendQualitySuffix = appendSuffix;
+            }
+            else
+            {
+                AudioQualitySettings[fmt] = new AudioQualitySetting
+                {
+                    AudioBitrateKbps = GetEffectiveAudioQuality(fmt),
+                    AppendQualitySuffix = appendSuffix
+                };
+            }
+        }
+        else if (cat == "image")
+        {
+            if (ImageQualitySettings.TryGetValue(fmt, out var isetting))
+            {
+                isetting.AppendQualitySuffix = appendSuffix;
+            }
+            else
+            {
+                ImageQualitySettings[fmt] = new ImageQualitySetting
+                {
+                    Quality = GetEffectiveQuality(fmt),
+                    AppendQualitySuffix = appendSuffix
+                };
+            }
+        }
+        else if (cat is "frames" or "frame")
+        {
+            FramesSetting.AppendQualitySuffix = appendSuffix;
+        }
+        else if (cat == "svg")
+        {
+            SvgSetting.AppendQualitySuffix = appendSuffix;
+        }
     }
 
     public static string? CustomSettingsFilePath { get; set; }

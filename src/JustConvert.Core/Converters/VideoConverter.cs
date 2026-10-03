@@ -95,7 +95,11 @@ public class VideoConverter : IFormatConverter
         else outputExt = $".{targetExt}";
 
         var videoSetting = settings.GetEffectiveVideoQuality(targetExt);
-        var appendSuffix = settings.AppendQualitySuffix;
+        var appendSuffix = isExtractFrames
+            ? settings.GetEffectiveAppendQualitySuffix("frames", "frames")
+            : (AudioExtractionTargets.Contains(targetExt)
+                ? settings.GetEffectiveAppendQualitySuffix("audio", targetExt)
+                : videoSetting.AppendQualitySuffix);
 
         MediaStreamInfo? mediaInfo = null;
         try

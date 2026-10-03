@@ -174,4 +174,26 @@ public class AppSettingsAndProfilesTests
         Assert.Single(defaultProfile.VideoFormats);
         Assert.Equal("mp4", defaultProfile.VideoFormats[0]);
     }
+
+    [Fact]
+    public void AppendQualitySuffix_CanBeSetIndependentlyPerFormat()
+    {
+        var settings = new AppSettings();
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("video", "mp4"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("video", "webm"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("audio", "mp3"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("image", "png"));
+
+        settings.SetAppendQualitySuffix("video", "mp4", false);
+        Assert.False(settings.GetEffectiveAppendQualitySuffix("video", "mp4"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("video", "webm"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("audio", "mp3"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("image", "png"));
+
+        settings.SetAppendQualitySuffix("audio", "mp3", false);
+        Assert.False(settings.GetEffectiveAppendQualitySuffix("video", "mp4"));
+        Assert.False(settings.GetEffectiveAppendQualitySuffix("audio", "mp3"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("video", "webm"));
+        Assert.True(settings.GetEffectiveAppendQualitySuffix("image", "png"));
+    }
 }

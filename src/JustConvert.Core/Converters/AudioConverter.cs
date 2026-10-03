@@ -92,7 +92,7 @@ public class AudioConverter : IFormatConverter
 
         var settings = AppSettings.Load();
         var effectiveBitrate = settings.GetEffectiveAudioQuality(targetExt);
-        var appendSuffix = settings.AppendQualitySuffix;
+        var appendSuffix = settings.GetEffectiveAppendQualitySuffix("audio", targetExt);
         int? customBitrate = effectiveBitrate > 0 ? effectiveBitrate : null;
         var resolvedBitrate = customBitrate ?? MediaProbe.ResolveAudioBitrate(mediaInfo?.Audio, 320, 320);
 

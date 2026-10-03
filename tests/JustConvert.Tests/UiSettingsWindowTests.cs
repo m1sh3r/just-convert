@@ -264,7 +264,8 @@ public class UiSettingsWindowTests
             var dialog = new ConversionOptionsDialog("mp4", "video", new VideoQualitySetting(), null, appendQualitySuffix: false, isSettingsMode: true);
             window.ApplyDialogResult("video", "mp4", dialog);
 
-            Assert.False(window.CurrentSettings.AppendQualitySuffix);
+            Assert.False(window.CurrentSettings.GetEffectiveAppendQualitySuffix("video", "mp4"));
+            Assert.True(window.CurrentSettings.GetEffectiveAppendQualitySuffix("video", "webm"));
         });
     }
 
